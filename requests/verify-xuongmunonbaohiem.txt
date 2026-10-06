@@ -1,2 +1,2 @@
-Verify xuongmunonbaohiem-astro@github after CI test environment fixes.
-Astro head: c3fc4dfb103fab9fc969a9c4e04d769140e65337
+Verify xuongmunonbaohiem-astro@github after Home_00 test syntax fix.
+Astro head: fff44e4aef8167a145fbc6daba26cfaa97e9241e

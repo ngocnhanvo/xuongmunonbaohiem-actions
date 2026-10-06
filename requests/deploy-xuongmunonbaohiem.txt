@@ -1,1 +1,3 @@
 Deploy current xuongmunonbaohiem-astro@master through the central Actions Hub and smoke-test production.
+Astro production head: 9acbd0e0db1d4f896087b761ef04039a44d7d413
+Purpose: expose data-tablepress-preview markers for ESC Table preview automation.

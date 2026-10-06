@@ -113,11 +113,11 @@ jobs:
           set ssl:verify-certificate no
 
           cd "$REMOTE_WP_CONTENT/plugins/github-trigger"
-          put -o vcs-build-trigger.php "source/wp-content/plugins/github-trigger/vcs-build-trigger.php"
+          put "source/wp-content/plugins/github-trigger/vcs-build-trigger.php"
           get vcs-build-trigger.php -o /tmp/vcs-build-trigger.php
 
           cd "$REMOTE_WP_CONTENT/mu-plugins"
-          put -o esc-github-trigger-config.php "source/wp-content/mu-plugins/esc-github-trigger-config.php"
+          put "source/wp-content/mu-plugins/esc-github-trigger-config.php"
           get esc-github-trigger-config.php -o /tmp/esc-github-trigger-config.php
 
           bye

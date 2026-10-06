@@ -1,5 +1,6 @@
 Deploy ESC Table production.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: 01e8ef135084bf1bc239b357a793969d865ca528
-Includes: ESC Table 1.0.0, migration guard, admin performance integration, removal of legacy TablePress directory.
+Expected source commit: b338019df317d4b6edf9281ef32c932a404431d8
+Includes: ESC Table 1.0.0, pre-slim activation migration guard, admin performance integration, removal of legacy TablePress directory.
 Requested: 2026-10-06
+Final production revision after ESC Table CI success.

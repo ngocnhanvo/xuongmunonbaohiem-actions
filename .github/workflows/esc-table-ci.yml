@@ -1,0 +1,107 @@
+name: Verify ESC Table
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/esc-table-ci.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-esc-table-ci
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Validate source token
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: test -n "$SOURCE_REPO_PAT"
+
+      - name: Checkout WordPress source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Show source revision
+        working-directory: source
+        run: echo "Verifying xuongmunonbaohiem-php@master $(git rev-parse HEAD)"
+
+      - name: Validate ESC Table distribution contract
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f wp-content/plugins/esc-table/esc-table.php
+          test -f wp-content/plugins/esc-table/ESC-FORK.md
+          test -f wp-content/plugins/esc-table/license.txt
+          grep -Fq 'Plugin Name: ESC Table' wp-content/plugins/esc-table/esc-table.php
+          grep -Fq 'Version: 1.0.0' wp-content/plugins/esc-table/esc-table.php
+          grep -Fq 'Update URI: https://esc.vn/plugins/esc-table' wp-content/plugins/esc-table/esc-table.php
+          grep -Fq "ESC_TABLE_UPSTREAM_BASELINE', 'TablePress 3.3.4'" wp-content/plugins/esc-table/esc-table.php
+          grep -Fq "'esc-table/esc-table.php'" wp-content/mu-plugins/disable-plugins-for-api.php
+          grep -Fq "'esc-table/esc-table.php'" wp-content/mu-plugins/esc-admin-menu-bridge.php
+
+      - name: Guard legacy plugin-path references
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t refs < <(grep -R -l --include='*.php' 'tablepress/tablepress.php' wp-content 2>/dev/null || true)
+          unexpected=()
+          for file in "${refs[@]}"; do
+            case "$file" in
+              wp-content/mu-plugins/esc-table-migration.php|wp-content/mu-plugins/tests/esc-table-migration.php)
+                ;;
+              *)
+                unexpected+=("$file")
+                ;;
+            esac
+          done
+          if (( ${#unexpected[@]} > 0 )); then
+            printf 'Unexpected legacy TablePress plugin-path references:\n%s\n' "${unexpected[*]}"
+            exit 1
+          fi
+          echo 'Legacy plugin path is isolated to the migration compatibility layer.'
+
+      - name: Lint ESC Table PHP
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          find wp-content/plugins/esc-table -type f -name '*.php' -print0 | xargs -0 -n1 php -l >/tmp/esc-table-php-lint.log
+          tail -n 20 /tmp/esc-table-php-lint.log
+          php -l wp-content/mu-plugins/esc-table-migration.php
+          php -l wp-content/mu-plugins/disable-plugins-for-api.php
+          php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
+
+      - name: Run ESC Table regressions
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          php wp-content/mu-plugins/tests/esc-table-migration.php
+          php wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
+
+      - name: Confirm dedicated source tree
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -e wp-content/plugins/tablepress/tablepress.php ]; then
+            echo '::error::Legacy TablePress source tree is still present.'
+            exit 1
+          fi
+          echo 'ESC Table is the only maintained table plugin source tree.'

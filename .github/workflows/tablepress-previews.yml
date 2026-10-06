@@ -13,7 +13,7 @@ on:
           - single
           - selected
       shortcodes:
-        description: 'Comma/newline separated TablePress IDs, e.g. webnext_01,webnext_03'
+        description: 'Comma/newline separated ESC Table IDs, e.g. home_00,home_03'
         required: false
         default: ''
         type: string
@@ -34,7 +34,7 @@ on:
       - 'requests/tablepress-previews.txt'
 
 concurrency:
-  group: escvn-actions-tablepress-previews
+  group: xuongmunonbaohiem-actions-tablepress-previews
   cancel-in-progress: false
 
 jobs:
@@ -85,7 +85,7 @@ jobs:
           npm install --no-save playwright@1.55.0 sharp@0.34.3
           npx playwright install --with-deps chromium
 
-      - name: Capture and publish TablePress previews
+      - name: Capture and publish ESC Table previews
         working-directory: source
         env:
           WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}

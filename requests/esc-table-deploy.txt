@@ -1,6 +1,6 @@
 Deploy ESC Table production.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: 95321066039239eca5dd2b8228be9d0222d9e9b2
-Includes: ESC Table API source selector for Product, ProductCategory, Page, and manual API URL/path while preserving the existing tablepress_meta api contract.
+Expected source commit: c5c6e994c50048e0a633ade1f2fac1e8cc5fff1b
+Includes: editor preview-image UI improvements. The image is clearly labeled as the WordPress editor preview, shows a thumbnail, supports choose/replace and remove, and preserves existing field IDs for automation compatibility.
 Requested: 2026-10-06
 Deploy backend/ESC Table only through the dedicated ESC Table FTP workflow. Do not trigger or deploy Astro.

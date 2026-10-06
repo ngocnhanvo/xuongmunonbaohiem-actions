@@ -289,7 +289,7 @@ jobs:
           printf '%s\n' "$response" | tee /tmp/url-routing-seed.json
 
           jq -e '.ok == true' /tmp/url-routing-seed.json >/dev/null
-          jq -e '.version == "2026-10-data-routing-v3"' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.version == "2026-10-data-routing-v4"' /tmp/url-routing-seed.json >/dev/null
           jq -e '.system_route_count == 14' /tmp/url-routing-seed.json >/dev/null
           jq -e '.rewrite_count == 11' /tmp/url-routing-seed.json >/dev/null
 

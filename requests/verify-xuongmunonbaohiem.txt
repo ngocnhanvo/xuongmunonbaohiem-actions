@@ -1,3 +1,3 @@
-Verify xuongmunonbaohiem-astro@github data-driven URL routing refactor.
-Astro head: 1fdd66647a0ea8fe51ad8dba67e6badf8d3e769b
-Purpose: rerun unit tests + Astro check guard + build-git after restoring routing tests and internal query guard.
+Verify xuongmunonbaohiem-astro@github conditional structural URL routing.
+Astro head: e17fe96acee6f2c81d40acc104a8eb2b30f042c7
+Purpose: route conditions + priority + build-time page/category context; unit tests + Astro check guard + build-git.

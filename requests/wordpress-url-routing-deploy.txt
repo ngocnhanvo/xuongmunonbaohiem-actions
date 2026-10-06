@@ -1,3 +1,3 @@
-Deploy WordPress URL routing runtime and seed data-driven routes.
-PHP source: ed82d8f438f25e90228283d0786a8f4b69dfbb4b
-Seed: v2 preserves nested product-detail and cart/checkout subpath parity.
+Deploy WordPress conditional structural URL routing and clean stale seeded records.
+PHP source: bd6ba6c93782a85162dcd3bc1f62f0f8673141b3
+Seed: v3 keeps 14 structural rules, 11 rewrites, removes old per-content system records only.

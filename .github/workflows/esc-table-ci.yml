@@ -47,10 +47,17 @@ jobs:
           test -f wp-content/plugins/esc-table/esc-table.php
           test -f wp-content/plugins/esc-table/ESC-FORK.md
           test -f wp-content/plugins/esc-table/license.txt
+          test -f wp-content/plugins/esc-table/classes/class-esc-table-upstream-compat.php
+          test ! -d wp-content/plugins/esc-table/libraries/freemius
           grep -Fq 'Plugin Name: ESC Table' wp-content/plugins/esc-table/esc-table.php
           grep -Fq 'Version: 1.0.0' wp-content/plugins/esc-table/esc-table.php
           grep -Fq 'Update URI: https://esc.vn/plugins/esc-table' wp-content/plugins/esc-table/esc-table.php
           grep -Fq "ESC_TABLE_UPSTREAM_BASELINE', 'TablePress 3.3.4'" wp-content/plugins/esc-table/esc-table.php
+          grep -Fq "class-esc-table-upstream-compat.php" wp-content/plugins/esc-table/esc-table.php
+          if grep -Fq "libraries/freemius/start.php" wp-content/plugins/esc-table/esc-table.php; then
+            echo '::error::ESC Table still initializes the Freemius SDK.'
+            exit 1
+          fi
           grep -Fq "'esc-table/esc-table.php'" wp-content/mu-plugins/disable-plugins-for-api.php
           grep -Fq "'esc-table/esc-table.php'" wp-content/mu-plugins/esc-admin-menu-bridge.php
 
@@ -93,6 +100,7 @@ jobs:
         run: |
           set -euo pipefail
           php wp-content/mu-plugins/tests/esc-table-migration.php
+          php wp-content/mu-plugins/tests/esc-table-upstream-compat.php
           php wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
 
       - name: Confirm dedicated source tree

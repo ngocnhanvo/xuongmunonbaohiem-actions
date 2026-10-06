@@ -1,3 +1,3 @@
 Deploy WordPress URL routing runtime and seed data-driven routes.
-PHP source: 24c5efa7d261ff2ebda75dae9c056743e56da8ca
-Retry: fixed regression matcher; deploy bulk redirect-log endpoint and rerun REST smoke.
+PHP source: ed82d8f438f25e90228283d0786a8f4b69dfbb4b
+Seed: v2 preserves nested product-detail and cart/checkout subpath parity.

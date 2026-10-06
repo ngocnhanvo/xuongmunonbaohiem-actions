@@ -1,2 +1,2 @@
-Verify xuongmunonbaohiem-astro@github after Home_00 test syntax fix.
-Astro head: fff44e4aef8167a145fbc6daba26cfaa97e9241e
+Verify xuongmunonbaohiem-astro@github after Home_00 dimension assertion fix.
+Astro head: be52590ec2597f95e1bfc7d2b9e18600ebd9d573

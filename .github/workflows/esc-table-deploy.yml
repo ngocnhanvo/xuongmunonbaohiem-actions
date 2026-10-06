@@ -1,0 +1,183 @@
+name: Deploy ESC Table Production
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/esc-table-deploy.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-esc-table-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+          test -n "$FTP_SERVER"
+          test -n "$FTP_USERNAME"
+          test -n "$FTP_PASSWORD"
+          test -n "$WP_ADMIN_URL"
+
+      - name: Checkout WordPress source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Show production source revision
+        working-directory: source
+        run: echo "Deploying xuongmunonbaohiem-php@master $(git rev-parse HEAD)"
+
+      - name: Validate ESC Table before deploy
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f wp-content/plugins/esc-table/esc-table.php
+          test ! -e wp-content/plugins/tablepress/tablepress.php
+          grep -Fq 'Plugin Name: ESC Table' wp-content/plugins/esc-table/esc-table.php
+          grep -Fq 'Update URI: https://esc.vn/plugins/esc-table' wp-content/plugins/esc-table/esc-table.php
+          grep -Fq "register_rest_route( 'esc-table/v1', '/status'" wp-content/plugins/esc-table/esc-table.php
+          php -l wp-content/plugins/esc-table/esc-table.php
+          php -l wp-content/plugins/esc-table/controllers/controller-admin.php
+          php -l wp-content/mu-plugins/esc-table-migration.php
+          php -l wp-content/mu-plugins/disable-plugins-for-api.php
+          php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
+          php wp-content/mu-plugins/tests/esc-table-migration.php
+          php wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
+
+      - name: Resolve WordPress FTP path
+        id: wp_path
+        shell: bash
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          host="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          raw = os.environ['WP_ADMIN_URL'].strip()
+          parsed = urlparse(raw if '://' in raw else 'https://' + raw)
+          if not parsed.hostname:
+              raise SystemExit('Unable to resolve hostname from WP_ADMIN_URL')
+          print(parsed.hostname)
+          PY
+          )"
+          echo "host=$host" >> "$GITHUB_OUTPUT"
+          echo "remote_wp_content=/domains/$host/public_html/wp-content" >> "$GITHUB_OUTPUT"
+          echo 'Resolved WordPress production path.'
+
+      - name: Install FTP client
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y lftp
+
+      - name: Deploy ESC Table and migration runtime
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          REMOTE_WP_CONTENT: ${{ steps.wp_path.outputs.remote_wp_content }}
+        run: |
+          set -euo pipefail
+
+          protocol="${FTP_PROTOCOL:-ftp}"
+          export protocol FTP_SERVER FTP_USERNAME FTP_PASSWORD
+          ftp_url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          protocol = os.environ.get('protocol', 'ftp')
+          server = os.environ['FTP_SERVER']
+          username = quote(os.environ['FTP_USERNAME'], safe='')
+          password = quote(os.environ['FTP_PASSWORD'], safe='')
+          print(f'{protocol}://{username}:{password}@{server}')
+          PY
+          )"
+
+          lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set net:reconnect-interval-base 3
+          set ssl:verify-certificate no
+
+          mirror --reverse --delete --verbose "source/wp-content/plugins/esc-table" "$REMOTE_WP_CONTENT/plugins/esc-table"
+          cd "$REMOTE_WP_CONTENT/mu-plugins"
+          put "source/wp-content/mu-plugins/esc-table-migration.php" -o "esc-table-migration.php"
+          put "source/wp-content/mu-plugins/disable-plugins-for-api.php" -o "disable-plugins-for-api.php"
+          put "source/wp-content/mu-plugins/esc-admin-menu-bridge.php" -o "esc-admin-menu-bridge.php"
+
+          cd "$REMOTE_WP_CONTENT/plugins/esc-table"
+          get "esc-table.php" -o /tmp/esc-table.remote.php
+          cd "$REMOTE_WP_CONTENT/mu-plugins"
+          get "esc-table-migration.php" -o /tmp/esc-table-migration.remote.php
+          get "disable-plugins-for-api.php" -o /tmp/disable-plugins-for-api.remote.php
+          get "esc-admin-menu-bridge.php" -o /tmp/esc-admin-menu-bridge.remote.php
+          bye
+          LFTP
+
+          cmp source/wp-content/plugins/esc-table/esc-table.php /tmp/esc-table.remote.php
+          cmp source/wp-content/mu-plugins/esc-table-migration.php /tmp/esc-table-migration.remote.php
+          cmp source/wp-content/mu-plugins/disable-plugins-for-api.php /tmp/disable-plugins-for-api.remote.php
+          cmp source/wp-content/mu-plugins/esc-admin-menu-bridge.php /tmp/esc-admin-menu-bridge.remote.php
+          rm -f /tmp/esc-table.remote.php /tmp/esc-table-migration.remote.php /tmp/disable-plugins-for-api.remote.php /tmp/esc-admin-menu-bridge.remote.php
+          echo 'ESC Table runtime deployed and byte-verified.'
+
+          legacy_listing="$(lftp "$ftp_url" -e "set ssl:verify-certificate no; cls -1 '$REMOTE_WP_CONTENT/plugins'; bye" || true)"
+          if printf '%s\n' "$legacy_listing" | grep -Fxq 'tablepress'; then
+            lftp "$ftp_url" -e "set cmd:fail-exit yes; set ssl:verify-certificate no; rm -r '$REMOTE_WP_CONTENT/plugins/tablepress'; bye"
+            echo 'Legacy TablePress production directory removed.'
+          else
+            echo 'Legacy TablePress production directory already absent.'
+          fi
+
+      - name: Smoke test ESC Table production
+        shell: bash
+        env:
+          WP_HOST: ${{ steps.wp_path.outputs.host }}
+        run: |
+          set -euo pipefail
+          status_url="https://$WP_HOST/wp-json/esc-table/v1/status"
+          for attempt in {1..12}; do
+            code="$(curl -sS -o /tmp/esc-table-status.json -w '%{http_code}' --connect-timeout 10 --max-time 30 "$status_url" || true)"
+            if [ "$code" = '200' ] \
+              && grep -Fq '"plugin":"ESC Table"' /tmp/esc-table-status.json \
+              && grep -Fq '"version":"1.0.0"' /tmp/esc-table-status.json \
+              && grep -Fq '"upstream_baseline":"TablePress 3.3.4"' /tmp/esc-table-status.json; then
+              cat /tmp/esc-table-status.json
+              echo
+              echo 'ESC Table production smoke test passed.'
+              exit 0
+            fi
+            echo "Attempt ${attempt}/12: HTTP ${code:-curl-error}; waiting for plugin migration..."
+            sleep 5
+          done
+          cat /tmp/esc-table-status.json 2>/dev/null || true
+          echo '::error::ESC Table status endpoint did not become healthy.'
+          exit 1

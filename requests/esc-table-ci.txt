@@ -1,0 +1,4 @@
+Verify ESC Table dedicated fork.
+Source: ngocnhanvo/xuongmunonbaohiem-php@master
+Expected source commit: b2952e8ae91ef20f9a618c5b1d2870d5be8469ca
+Requested: 2026-10-06

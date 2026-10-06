@@ -1,3 +1,4 @@
 Deploy WordPress GitHub trigger runtime from xuongmunonbaohiem-php@master.
 retry: fixed lftp upload syntax
 retry: deploy dedicated Actions Hub token runtime
+retry: fixed token runtime workflow yaml

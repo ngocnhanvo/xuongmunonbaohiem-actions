@@ -289,9 +289,9 @@ jobs:
           printf '%s\n' "$response" | tee /tmp/url-routing-seed.json
 
           jq -e '.ok == true' /tmp/url-routing-seed.json >/dev/null
-          jq -e '.version == "2026-10-data-routing-v2"' /tmp/url-routing-seed.json >/dev/null
-          jq -e '.system_route_count > 0' /tmp/url-routing-seed.json >/dev/null
-          jq -e '.rewrite_count > 0' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.version == "2026-10-data-routing-v3"' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.system_route_count == 14' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.rewrite_count == 11' /tmp/url-routing-seed.json >/dev/null
 
           echo "Seeded $(jq -r '.system_route_count' /tmp/url-routing-seed.json) system URL routes ($(jq -r '.rewrite_count' /tmp/url-routing-seed.json) rewrites)."
 
@@ -311,6 +311,7 @@ jobs:
           test "$route_code" = "200"
           test "$logs_code" = "200"
           jq -e 'any(.[]; (.acf.type // "") == "Rewrite" and ((.acf.to_link // "") | startswith("/ssr/")))' /tmp/routes.json >/dev/null
+          jq -e 'any(.[]; (.route_priority // 100) >= 400 and ((.route_conditions // []) | length) > 0)' /tmp/routes.json >/dev/null
           jq -e 'all(.[]; has("action"))' /tmp/route-logs.json >/dev/null
 
           echo "WordPress URL routing REST smoke test passed."

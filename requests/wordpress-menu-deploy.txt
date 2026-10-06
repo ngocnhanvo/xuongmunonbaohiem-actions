@@ -1,0 +1,7 @@
+Deploy request: WordPress menu manager
+Source repo: ngocnhanvo/xuongmunonbaohiem-php
+Source branch: master
+Expected source commit: 4a865effcfd31508c41a1298863a30b624528dde
+Target: production FTP
+Reason: publish Loại menu / Dropdown / Mega menu ESC admin runtime
+Requested at: 2026-10-07T01:48:00+07:00

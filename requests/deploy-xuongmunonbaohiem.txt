@@ -1,0 +1,1 @@
+Deploy current xuongmunonbaohiem-astro@master through the central Actions Hub and smoke-test production.

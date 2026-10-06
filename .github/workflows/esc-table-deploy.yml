@@ -74,6 +74,7 @@ jobs:
           php wp-content/mu-plugins/tests/esc-table-migration.php
           php wp-content/mu-plugins/tests/esc-table-upstream-compat.php
           php wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
+          php wp-content/mu-plugins/tests/admin-performance-plugin-pages.php
 
       - name: Resolve WordPress FTP path
         id: wp_path

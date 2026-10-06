@@ -1,0 +1,317 @@
+name: Deploy WordPress URL Routing
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/wordpress-url-routing-deploy.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-wordpress-url-routing-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+          test -n "$FTP_SERVER"
+          test -n "$FTP_USERNAME"
+          test -n "$FTP_PASSWORD"
+          test -n "$WP_ADMIN_URL"
+
+      - name: Checkout WordPress source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Show production source revision
+        working-directory: source
+        run: echo "Deploying xuongmunonbaohiem-php@master $(git rev-parse HEAD)"
+
+      - name: Validate URL routing runtime
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wp-content/mu-plugins/esc-url-routing-manager.php
+          php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
+          php -l wp-content/plugins/github-trigger/vcs-build-trigger.php
+          php -l wp-content/plugins/github-trigger/redirects/endpoint.php
+          php -l wp-content/plugins/github-trigger/tests/redirect-rewrite-regression.php
+          php wp-content/plugins/github-trigger/tests/redirect-rewrite-regression.php
+          grep -Fq "ESC_URL_ROUTING_SEED_VERSION" wp-content/mu-plugins/esc-url-routing-manager.php
+          grep -Fq "_esc_route_seed_key" wp-content/mu-plugins/esc-url-routing-manager.php
+          grep -Fq "'redirects'" wp-content/plugins/github-trigger/vcs-build-trigger.php
+          grep -Fq "'match_type'" wp-content/plugins/github-trigger/redirects/endpoint.php
+
+      - name: Resolve WordPress FTP path
+        id: wp_path
+        shell: bash
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          host="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          raw = os.environ["WP_ADMIN_URL"].strip()
+          parsed = urlparse(raw if "://" in raw else "https://" + raw)
+          if not parsed.hostname:
+              raise SystemExit("Unable to resolve hostname from WP_ADMIN_URL")
+          print(parsed.hostname)
+          PY
+          )"
+          echo "host=$host" >> "$GITHUB_OUTPUT"
+          echo "remote_root=/domains/$host/public_html" >> "$GITHUB_OUTPUT"
+          echo "remote_wp_content=/domains/$host/public_html/wp-content" >> "$GITHUB_OUTPUT"
+          echo "Resolved WordPress host for URL routing deployment."
+
+      - name: Install FTP client
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y lftp
+
+      - name: Build one-time seed runner
+        id: seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          seed_token="$(python3 - <<'PY'
+          import secrets
+          print(secrets.token_urlsafe(32))
+          PY
+          )"
+          echo "token=$seed_token" >> "$GITHUB_OUTPUT"
+
+          cat > /tmp/esc-url-routing-seed.php <<'PHP'
+          <?php
+          declare(strict_types=1);
+
+          header('Content-Type: application/json; charset=utf-8');
+
+          $expectedToken = '__ESC_URL_ROUTING_SEED_TOKEN__';
+          $providedToken = isset($_GET['token']) && is_string($_GET['token']) ? $_GET['token'] : '';
+
+          if (!hash_equals($expectedToken, $providedToken)) {
+              http_response_code(403);
+              echo json_encode(['ok' => false, 'error' => 'forbidden']);
+              exit;
+          }
+
+          $script = __FILE__;
+
+          try {
+              require __DIR__ . '/wp-load.php';
+
+              if (!defined('ESC_URL_ROUTING_SEED_VERSION')
+                  || !defined('ESC_URL_ROUTING_SEED_OPTION')
+                  || !defined('ESC_URL_ROUTING_SEED_SUMMARY_OPTION')
+                  || !function_exists('esc_url_routing_seed_system_routes')) {
+                  throw new RuntimeException('URL routing seed runtime is not loaded');
+              }
+
+              $version = (string) get_option(ESC_URL_ROUTING_SEED_OPTION, '');
+              if ($version !== ESC_URL_ROUTING_SEED_VERSION) {
+                  $summary = esc_url_routing_seed_system_routes(false);
+              } else {
+                  $summary = get_option(ESC_URL_ROUTING_SEED_SUMMARY_OPTION, []);
+              }
+
+              $systemIds = get_posts([
+                  'post_type'      => 'chuyen-huong-link',
+                  'post_status'    => 'publish',
+                  'posts_per_page' => -1,
+                  'fields'         => 'ids',
+                  'meta_key'       => '_esc_route_seed_key',
+                  'meta_compare'   => 'EXISTS',
+                  'no_found_rows'  => true,
+              ]);
+
+              $rewriteIds = get_posts([
+                  'post_type'      => 'chuyen-huong-link',
+                  'post_status'    => 'publish',
+                  'posts_per_page' => -1,
+                  'fields'         => 'ids',
+                  'meta_query'     => [
+                      [
+                          'key'     => '_esc_route_seed_key',
+                          'compare' => 'EXISTS',
+                      ],
+                      [
+                          'key'     => 'type',
+                          'value'   => 'Rewrite',
+                          'compare' => '=',
+                      ],
+                  ],
+                  'no_found_rows'  => true,
+              ]);
+
+              $finalVersion = (string) get_option(ESC_URL_ROUTING_SEED_OPTION, '');
+              $ok = $finalVersion === ESC_URL_ROUTING_SEED_VERSION
+                  && !empty($systemIds)
+                  && !empty($rewriteIds)
+                  && is_array($summary)
+                  && !empty($summary['ok']);
+
+              if (!$ok) {
+                  http_response_code(500);
+              }
+
+              echo wp_json_encode([
+                  'ok'                 => $ok,
+                  'version'            => $finalVersion,
+                  'system_route_count' => count($systemIds),
+                  'rewrite_count'      => count($rewriteIds),
+                  'summary'            => $summary,
+              ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+          } catch (Throwable $e) {
+              http_response_code(500);
+              echo json_encode([
+                  'ok'    => false,
+                  'error' => $e->getMessage(),
+              ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+          }
+
+          @unlink($script);
+          PHP
+
+          SEED_TOKEN="$seed_token" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path('/tmp/esc-url-routing-seed.php')
+          text = path.read_text(encoding='utf-8')
+          path.write_text(
+              text.replace('__ESC_URL_ROUTING_SEED_TOKEN__', os.environ['SEED_TOKEN']),
+              encoding='utf-8',
+          )
+          PY
+          php -l /tmp/esc-url-routing-seed.php
+          chmod 600 /tmp/esc-url-routing-seed.php
+
+      - name: Deploy URL routing runtime through FTP
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          REMOTE_ROOT: ${{ steps.wp_path.outputs.remote_root }}
+          REMOTE_WP_CONTENT: ${{ steps.wp_path.outputs.remote_wp_content }}
+        run: |
+          set -euo pipefail
+          protocol="${FTP_PROTOCOL:-ftp}"
+          export protocol FTP_SERVER FTP_USERNAME FTP_PASSWORD
+
+          ftp_url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          protocol = os.environ.get('protocol', 'ftp')
+          server = os.environ['FTP_SERVER']
+          username = quote(os.environ['FTP_USERNAME'], safe='')
+          password = quote(os.environ['FTP_PASSWORD'], safe='')
+          print(f'{protocol}://{username}:{password}@{server}')
+          PY
+          )"
+
+          lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set net:reconnect-interval-base 3
+          set ssl:verify-certificate no
+
+          cd "$REMOTE_WP_CONTENT/mu-plugins"
+          put "source/wp-content/mu-plugins/esc-url-routing-manager.php" -o "esc-url-routing-manager.php"
+          put "source/wp-content/mu-plugins/esc-admin-menu-bridge.php" -o "esc-admin-menu-bridge.php"
+          get "esc-url-routing-manager.php" -o /tmp/esc-url-routing-manager.remote.php
+          get "esc-admin-menu-bridge.php" -o /tmp/esc-admin-menu-bridge.remote.php
+
+          cd "$REMOTE_WP_CONTENT/plugins/github-trigger"
+          put "source/wp-content/plugins/github-trigger/vcs-build-trigger.php" -o "vcs-build-trigger.php"
+          mkdir -p redirects
+          cd redirects
+          put "source/wp-content/plugins/github-trigger/redirects/endpoint.php" -o "endpoint.php"
+          get "endpoint.php" -o /tmp/redirect-endpoint.remote.php
+          cd ..
+          get "vcs-build-trigger.php" -o /tmp/vcs-build-trigger.remote.php
+
+          put "/tmp/esc-url-routing-seed.php" -o "$REMOTE_ROOT/esc-url-routing-seed.php"
+
+          bye
+          LFTP
+
+          cmp source/wp-content/mu-plugins/esc-url-routing-manager.php /tmp/esc-url-routing-manager.remote.php
+          cmp source/wp-content/mu-plugins/esc-admin-menu-bridge.php /tmp/esc-admin-menu-bridge.remote.php
+          cmp source/wp-content/plugins/github-trigger/vcs-build-trigger.php /tmp/vcs-build-trigger.remote.php
+          cmp source/wp-content/plugins/github-trigger/redirects/endpoint.php /tmp/redirect-endpoint.remote.php
+
+          rm -f \
+            /tmp/esc-url-routing-manager.remote.php \
+            /tmp/esc-admin-menu-bridge.remote.php \
+            /tmp/vcs-build-trigger.remote.php \
+            /tmp/redirect-endpoint.remote.php
+
+          echo "URL routing runtime uploaded and byte-verified."
+
+      - name: Seed URL routing records
+        shell: bash
+        env:
+          WP_HOST: ${{ steps.wp_path.outputs.host }}
+          SEED_TOKEN: ${{ steps.seed.outputs.token }}
+        run: |
+          set -euo pipefail
+          url="https://$WP_HOST/esc-url-routing-seed.php?token=$SEED_TOKEN"
+          response="$(curl -fsS --connect-timeout 10 --max-time 180 "$url")"
+          printf '%s\n' "$response" | tee /tmp/url-routing-seed.json
+
+          jq -e '.ok == true' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.version == "2026-10-data-routing-v1"' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.system_route_count > 0' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.rewrite_count > 0' /tmp/url-routing-seed.json >/dev/null
+
+          echo "Seeded $(jq -r '.system_route_count' /tmp/url-routing-seed.json) system URL routes ($(jq -r '.rewrite_count' /tmp/url-routing-seed.json) rewrites)."
+
+      - name: Smoke test routing REST contracts
+        shell: bash
+        env:
+          WP_HOST: ${{ steps.wp_path.outputs.host }}
+        run: |
+          set -euo pipefail
+
+          routes_url="https://$WP_HOST/wp-json/wp/v2/chuyen-huong-link?status=publish&per_page=100&orderby=id&order=desc"
+          logs_url="https://$WP_HOST/wp-json/astro/v1/get-redirect-logs"
+
+          route_code="$(curl -sS -o /tmp/routes.json -w '%{http_code}' --connect-timeout 10 --max-time 60 "$routes_url" || true)"
+          logs_code="$(curl -sS -o /tmp/route-logs.json -w '%{http_code}' --connect-timeout 10 --max-time 60 "$logs_url" || true)"
+
+          test "$route_code" = "200"
+          test "$logs_code" = "200"
+          jq -e 'any(.[]; (.acf.type // "") == "Rewrite" and ((.acf.to_link // "") | startswith("/ssr/")))' /tmp/routes.json >/dev/null
+          jq -e 'all(.[]; has("action"))' /tmp/route-logs.json >/dev/null
+
+          echo "WordPress URL routing REST smoke test passed."

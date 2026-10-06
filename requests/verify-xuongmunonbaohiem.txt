@@ -1,2 +1,3 @@
 Verify xuongmunonbaohiem-astro@github with inherited Astro diagnostics guard.
-Astro head: be52590ec2597f95e1bfc7d2b9e18600ebd9d573
+Astro head: 924b22daeb32365b1cfaf75976985b6c3986766e
+Purpose: ESC Table preview marker regression.

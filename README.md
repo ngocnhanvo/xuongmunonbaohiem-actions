@@ -37,3 +37,26 @@ Required repository secrets:
 - `WP_ADMIN_PASSWORD`
 
 The source repositories must not own production deployment workflows after migration is completed.
+
+
+## ESC Table preview images
+
+Workflow: `.github/workflows/tablepress-previews.yml`
+
+The workflow captures the real Astro frontend section marked with
+`data-tablepress-preview="<table-id>"`, converts the screenshot to WebP, uploads it
+to the WordPress Media Library folder `tablepress`, and writes the resulting image
+back to the ESC Table preview-image field.
+
+Modes:
+- `missing`: update only tables without a preview image.
+- `single`: update one table ID.
+- `selected`: update the requested comma/newline-separated table IDs.
+- `force=true`: replace an existing preview.
+
+The capture runtime is `automation/tablepress/previews.mjs` in
+`ngocnhanvo/xuongmunonbaohiem-php@master`.
+
+Astro preview markers are developed on `ngocnhanvo/xuongmunonbaohiem-astro@github`.
+The preview workflow targets the production frontend, so those markers must reach
+production before production screenshots can be generated.

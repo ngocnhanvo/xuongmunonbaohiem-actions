@@ -71,6 +71,7 @@ jobs:
           php -l wp-content/mu-plugins/esc-table-migration.php
           php -l wp-content/mu-plugins/disable-plugins-for-api.php
           php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
+          php -l wp-content/themes/vibe-code-theme/inc/tablepress/html.php
           php wp-content/mu-plugins/tests/esc-table-migration.php
           php wp-content/mu-plugins/tests/esc-table-upstream-compat.php
           php wp-content/mu-plugins/tests/esc-table-branding.php
@@ -118,7 +119,8 @@ jobs:
             wp-content/mu-plugins/disable-plugins-for-api.php \
             wp-content/mu-plugins/esc-admin-menu-bridge.php \
             wp-content/themes/vibe-code-theme/inc/tablepress/group.php \
-            wp-content/themes/vibe-code-theme/inc/tablepress/endpoint.php
+            wp-content/themes/vibe-code-theme/inc/tablepress/endpoint.php \
+            wp-content/themes/vibe-code-theme/inc/tablepress/html.php
 
           deploy_token="$(python3 - <<'PY'
           import secrets
@@ -214,6 +216,7 @@ jobs:
               foreach ([
                   'group.php',
                   'endpoint.php',
+                  'html.php',
               ] as $themeFile) {
                   $source = $staging . '/wp-content/themes/vibe-code-theme/inc/tablepress/' . $themeFile;
                   $target = $themeTablepressDir . '/' . $themeFile;

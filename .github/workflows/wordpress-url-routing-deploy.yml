@@ -253,7 +253,6 @@ jobs:
 
           cd "$REMOTE_WP_CONTENT/plugins/github-trigger"
           put "source/wp-content/plugins/github-trigger/vcs-build-trigger.php" -o "vcs-build-trigger.php"
-          mkdir -p redirects
           cd redirects
           put "source/wp-content/plugins/github-trigger/redirects/endpoint.php" -o "endpoint.php"
           get "endpoint.php" -o /tmp/redirect-endpoint.remote.php

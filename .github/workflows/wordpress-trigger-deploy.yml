@@ -63,25 +63,13 @@ jobs:
           SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import base64
-          import os
-          from pathlib import Path
-
-          token = os.environ["SOURCE_REPO_PAT"].strip()
-          if not token:
-              raise SystemExit("SOURCE_REPO_PAT is empty")
-
-          encoded = base64.b64encode(token.encode("utf-8")).decode("ascii")
-          php = """<?php
-if (!defined('ABSPATH')) exit;
-if (!defined('VCS_GH_TOKEN')) {
-    define('VCS_GH_TOKEN', base64_decode('%s'));
-}
-""" % encoded
-
-          Path("/tmp/esc-github-trigger-token.php").write_text(php, encoding="utf-8")
-          PY
+          token_b64="$(printf '%s' "$SOURCE_REPO_PAT" | base64 -w0)"
+          printf '%s\n' \
+            '<?php' \
+            "if (!defined('ABSPATH')) exit;" \
+            "if (!defined('VCS_GH_TOKEN')) { define('VCS_GH_TOKEN', base64_decode('${token_b64}')); }" \
+            > /tmp/esc-github-trigger-token.php
+          unset token_b64
           chmod 600 /tmp/esc-github-trigger-token.php
           php -l /tmp/esc-github-trigger-token.php
 

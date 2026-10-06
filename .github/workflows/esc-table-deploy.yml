@@ -87,6 +87,7 @@ jobs:
           PY
           )"
           echo "host=$host" >> "$GITHUB_OUTPUT"
+          echo "remote_wp_root=/domains/$host/public_html" >> "$GITHUB_OUTPUT"
           echo "remote_wp_content=/domains/$host/public_html/wp-content" >> "$GITHUB_OUTPUT"
           echo 'Resolved WordPress production path.'
 
@@ -95,17 +96,145 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y lftp
 
-      - name: Deploy ESC Table and migration runtime
+      - name: Build atomic ESC Table package
+        id: package
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/esc-table-runtime.zip /tmp/esc-table-deploy.php
+          zip -qr /tmp/esc-table-runtime.zip \
+            wp-content/plugins/esc-table \
+            wp-content/mu-plugins/esc-table-migration.php \
+            wp-content/mu-plugins/disable-plugins-for-api.php \
+            wp-content/mu-plugins/esc-admin-menu-bridge.php
+
+          deploy_token="$(python3 - <<'PY'
+          import secrets
+          print(secrets.token_urlsafe(32))
+          PY
+          )"
+          echo "token=$deploy_token" >> "$GITHUB_OUTPUT"
+
+          cat > /tmp/esc-table-deploy.php <<PHP
+          <?php
+          declare(strict_types=1);
+
+          header('Content-Type: application/json; charset=utf-8');
+
+          $expectedToken = '$deploy_token';
+          $providedToken = isset($_GET['token']) && is_string($_GET['token']) ? $_GET['token'] : '';
+          if (!hash_equals($expectedToken, $providedToken)) {
+              http_response_code(403);
+              echo json_encode(['ok' => false, 'error' => 'forbidden']);
+              exit;
+          }
+
+          function escTableDeleteDir(string $path): void {
+              if (!is_dir($path)) {
+                  return;
+              }
+              $iterator = new RecursiveIteratorIterator(
+                  new RecursiveDirectoryIterator($path, FilesystemIterator::SKIP_DOTS),
+                  RecursiveIteratorIterator::CHILD_FIRST
+              );
+              foreach ($iterator as $item) {
+                  if ($item->isDir()) {
+                      rmdir($item->getPathname());
+                  } else {
+                      unlink($item->getPathname());
+                  }
+              }
+              rmdir($path);
+          }
+
+          $root = __DIR__;
+          $zipFile = $root . '/esc-table-runtime.zip';
+          $staging = $root . '/.esc-table-staging-' . bin2hex(random_bytes(6));
+          $pluginDir = $root . '/wp-content/plugins/esc-table';
+          $legacyDir = $root . '/wp-content/plugins/tablepress';
+          $muDir = $root . '/wp-content/mu-plugins';
+
+          try {
+              if (!is_file($zipFile)) {
+                  throw new RuntimeException('deployment package missing');
+              }
+
+              if (!mkdir($staging, 0755, true) && !is_dir($staging)) {
+                  throw new RuntimeException('unable to create staging directory');
+              }
+
+              $zip = new ZipArchive();
+              if ($zip->open($zipFile) !== true) {
+                  throw new RuntimeException('unable to open deployment package');
+              }
+              if (!$zip->extractTo($staging)) {
+                  $zip->close();
+                  throw new RuntimeException('unable to extract deployment package');
+              }
+              $zip->close();
+
+              $stagedPlugin = $staging . '/wp-content/plugins/esc-table';
+              $stagedMain = $stagedPlugin . '/esc-table.php';
+              if (!is_file($stagedMain)) {
+                  throw new RuntimeException('staged ESC Table main file missing');
+              }
+
+              if (is_dir($pluginDir)) {
+                  escTableDeleteDir($pluginDir);
+              }
+              if (!rename($stagedPlugin, $pluginDir)) {
+                  throw new RuntimeException('unable to activate staged ESC Table directory');
+              }
+
+              foreach ([
+                  'esc-table-migration.php',
+                  'disable-plugins-for-api.php',
+                  'esc-admin-menu-bridge.php',
+              ] as $muFile) {
+                  $source = $staging . '/wp-content/mu-plugins/' . $muFile;
+                  $target = $muDir . '/' . $muFile;
+                  if (!is_file($source) || !copy($source, $target)) {
+                      throw new RuntimeException('unable to deploy MU file: ' . $muFile);
+                  }
+              }
+
+              if (is_dir($legacyDir)) {
+                  escTableDeleteDir($legacyDir);
+              }
+
+              escTableDeleteDir($staging);
+              @unlink($zipFile);
+
+              $response = [
+                  'ok' => true,
+                  'plugin' => 'ESC Table',
+                  'main_sha256' => hash_file('sha256', $pluginDir . '/esc-table.php'),
+                  'legacy_tablepress_present' => is_dir($legacyDir),
+              ];
+              echo json_encode($response, JSON_UNESCAPED_SLASHES);
+              @unlink(__FILE__);
+          } catch (Throwable $e) {
+              if (is_dir($staging)) {
+                  escTableDeleteDir($staging);
+              }
+              http_response_code(500);
+              echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+          }
+          PHP
+          php -l /tmp/esc-table-deploy.php
+          echo "Package bytes: $(stat -c%s /tmp/esc-table-runtime.zip)"
+
+      - name: Upload atomic ESC Table package through FTP
         shell: bash
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
-          REMOTE_WP_CONTENT: ${{ steps.wp_path.outputs.remote_wp_content }}
+          REMOTE_WP_ROOT: ${{ steps.wp_path.outputs.remote_wp_root }}
         run: |
           set -euo pipefail
-
           protocol="${FTP_PROTOCOL:-ftp}"
           export protocol FTP_SERVER FTP_USERNAME FTP_PASSWORD
           ftp_url="$(python3 - <<'PY'
@@ -126,36 +255,24 @@ jobs:
           set net:timeout 20
           set net:reconnect-interval-base 3
           set ssl:verify-certificate no
-
-          mirror --reverse --delete --verbose --parallel=8 "source/wp-content/plugins/esc-table" "$REMOTE_WP_CONTENT/plugins/esc-table"
-          cd "$REMOTE_WP_CONTENT/mu-plugins"
-          put "source/wp-content/mu-plugins/esc-table-migration.php" -o "esc-table-migration.php"
-          put "source/wp-content/mu-plugins/disable-plugins-for-api.php" -o "disable-plugins-for-api.php"
-          put "source/wp-content/mu-plugins/esc-admin-menu-bridge.php" -o "esc-admin-menu-bridge.php"
-
-          cd "$REMOTE_WP_CONTENT/plugins/esc-table"
-          get "esc-table.php" -o /tmp/esc-table.remote.php
-          cd "$REMOTE_WP_CONTENT/mu-plugins"
-          get "esc-table-migration.php" -o /tmp/esc-table-migration.remote.php
-          get "disable-plugins-for-api.php" -o /tmp/disable-plugins-for-api.remote.php
-          get "esc-admin-menu-bridge.php" -o /tmp/esc-admin-menu-bridge.remote.php
+          put "/tmp/esc-table-runtime.zip" -o "$REMOTE_WP_ROOT/esc-table-runtime.zip"
+          put "/tmp/esc-table-deploy.php" -o "$REMOTE_WP_ROOT/esc-table-deploy.php"
           bye
           LFTP
+          echo 'ESC Table package and one-time extractor uploaded.'
 
-          cmp source/wp-content/plugins/esc-table/esc-table.php /tmp/esc-table.remote.php
-          cmp source/wp-content/mu-plugins/esc-table-migration.php /tmp/esc-table-migration.remote.php
-          cmp source/wp-content/mu-plugins/disable-plugins-for-api.php /tmp/disable-plugins-for-api.remote.php
-          cmp source/wp-content/mu-plugins/esc-admin-menu-bridge.php /tmp/esc-admin-menu-bridge.remote.php
-          rm -f /tmp/esc-table.remote.php /tmp/esc-table-migration.remote.php /tmp/disable-plugins-for-api.remote.php /tmp/esc-admin-menu-bridge.remote.php
-          echo 'ESC Table runtime deployed and byte-verified.'
-
-          legacy_listing="$(lftp "$ftp_url" -e "set ssl:verify-certificate no; cls -1 '$REMOTE_WP_CONTENT/plugins'; bye" || true)"
-          if printf '%s\n' "$legacy_listing" | grep -Fxq 'tablepress'; then
-            lftp "$ftp_url" -e "set cmd:fail-exit yes; set ssl:verify-certificate no; rm -r '$REMOTE_WP_CONTENT/plugins/tablepress'; bye"
-            echo 'Legacy TablePress production directory removed.'
-          else
-            echo 'Legacy TablePress production directory already absent.'
-          fi
+      - name: Atomically install ESC Table package
+        shell: bash
+        env:
+          WP_HOST: ${{ steps.wp_path.outputs.host }}
+          DEPLOY_TOKEN: ${{ steps.package.outputs.token }}
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS --connect-timeout 10 --max-time 120 "https://$WP_HOST/esc-table-deploy.php?token=$DEPLOY_TOKEN")"
+          printf '%s\n' "$response"
+          printf '%s' "$response" | grep -Fq '"ok":true'
+          printf '%s' "$response" | grep -Fq '"legacy_tablepress_present":false'
+          echo 'ESC Table atomic install completed.'
 
       - name: Smoke test ESC Table production
         shell: bash

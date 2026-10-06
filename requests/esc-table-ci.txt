@@ -1,5 +1,5 @@
 Verify ESC Table dedicated fork.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: 6b7a6b106e51b402a17bf58b84c1cd6d78ec1bc4
+Expected source commit: b338019df317d4b6edf9281ef32c932a404431d8
 Requested: 2026-10-06
-Retry after migrating all legacy plugin-path fixtures.
+Verify pre-slim activation normalization.

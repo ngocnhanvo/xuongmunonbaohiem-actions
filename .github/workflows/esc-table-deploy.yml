@@ -72,6 +72,7 @@ jobs:
           php -l wp-content/mu-plugins/disable-plugins-for-api.php
           php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
           php -l wp-content/themes/vibe-code-theme/inc/tablepress/html.php
+          php -l wp-content/themes/vibe-code-theme/inc/tablepress/wysiwyg.php
           php wp-content/mu-plugins/tests/esc-table-migration.php
           php wp-content/mu-plugins/tests/esc-table-upstream-compat.php
           php wp-content/mu-plugins/tests/esc-table-branding.php
@@ -217,6 +218,7 @@ jobs:
                   'group.php',
                   'endpoint.php',
                   'html.php',
+                  'wysiwyg.php',
               ] as $themeFile) {
                   $source = $staging . '/wp-content/themes/vibe-code-theme/inc/tablepress/' . $themeFile;
                   $target = $themeTablepressDir . '/' . $themeFile;

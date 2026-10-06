@@ -127,7 +127,7 @@ jobs:
           set net:reconnect-interval-base 3
           set ssl:verify-certificate no
 
-          mirror --reverse --delete --verbose "source/wp-content/plugins/esc-table" "$REMOTE_WP_CONTENT/plugins/esc-table"
+          mirror --reverse --delete --verbose --parallel=8 "source/wp-content/plugins/esc-table" "$REMOTE_WP_CONTENT/plugins/esc-table"
           cd "$REMOTE_WP_CONTENT/mu-plugins"
           put "source/wp-content/mu-plugins/esc-table-migration.php" -o "esc-table-migration.php"
           put "source/wp-content/mu-plugins/disable-plugins-for-api.php" -o "disable-plugins-for-api.php"

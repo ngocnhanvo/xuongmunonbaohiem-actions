@@ -1,0 +1,167 @@
+name: Deploy WordPress Menu Manager
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/wordpress-menu-deploy.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-wordpress-menu-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+          test -n "$FTP_SERVER"
+          test -n "$FTP_USERNAME"
+          test -n "$FTP_PASSWORD"
+          test -n "$WP_ADMIN_URL"
+
+      - name: Checkout WordPress source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Show production source revision
+        working-directory: source
+        run: echo "Deploying xuongmunonbaohiem-php@master $(git rev-parse HEAD)"
+
+      - name: Validate menu manager runtime
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="wp-content/themes/vibe-code-theme/inc/tools/menu.php"
+          php -l "$file"
+          grep -Fq "function esc_pse_get_menu_types()" "$file"
+          grep -Fq "'mega' => 'Mega menu ESC'" "$file"
+          grep -Fq '<strong>Loại menu</strong>' "$file"
+          grep -Fq "name=\"esc_menu_type\"" "$file"
+          grep -Fq "'type' => esc_pse_get_menu_meta((int) \$menu->term_id)['type']" "$file"
+
+      - name: Resolve WordPress FTP path
+        id: wp_path
+        shell: bash
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          host="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          raw = os.environ["WP_ADMIN_URL"].strip()
+          parsed = urlparse(raw if "://" in raw else "https://" + raw)
+          if not parsed.hostname:
+              raise SystemExit("Unable to resolve hostname from WP_ADMIN_URL")
+          print(parsed.hostname)
+          PY
+          )"
+          echo "host=$host" >> "$GITHUB_OUTPUT"
+          echo "remote_tools=/domains/$host/public_html/wp-content/themes/vibe-code-theme/inc/tools" >> "$GITHUB_OUTPUT"
+          echo "Resolved WordPress host for menu deployment."
+
+      - name: Deploy menu manager through FTP
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          REMOTE_TOOLS: ${{ steps.wp_path.outputs.remote_tools }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y lftp
+
+          protocol="${FTP_PROTOCOL:-ftp}"
+          export protocol FTP_SERVER FTP_USERNAME FTP_PASSWORD
+
+          ftp_url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          protocol = os.environ.get("protocol", "ftp")
+          server = os.environ["FTP_SERVER"]
+          username = quote(os.environ["FTP_USERNAME"], safe="")
+          password = quote(os.environ["FTP_PASSWORD"], safe="")
+          print(f"{protocol}://{username}:{password}@{server}")
+          PY
+          )"
+
+          local_file="source/wp-content/themes/vibe-code-theme/inc/tools/menu.php"
+
+          lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set net:reconnect-interval-base 3
+          set ssl:verify-certificate no
+
+          cd "$REMOTE_TOOLS"
+          put "$local_file" -o "menu.php"
+          get "menu.php" -o /tmp/menu.remote.php
+
+          bye
+          LFTP
+
+          cmp "$local_file" /tmp/menu.remote.php
+          php -l /tmp/menu.remote.php
+          grep -Fq '<strong>Loại menu</strong>' /tmp/menu.remote.php
+          rm -f /tmp/menu.remote.php
+          echo "Menu manager deployed and byte-verified."
+
+      - name: Smoke test menu REST contract
+        shell: bash
+        env:
+          WP_HOST: ${{ steps.wp_path.outputs.host }}
+        run: |
+          set -euo pipefail
+          url="https://$WP_HOST/wp-json/esc-api/v1/menus/Header/vi"
+          for attempt in {1..12}; do
+            code="$(curl -sS -o /tmp/menu.json -w '%{http_code}' --connect-timeout 10 --max-time 30 "$url" || true)"
+            if [ "$code" = "200" ] && grep -Fq '"type":"dropdown"' /tmp/menu.json; then
+              cat /tmp/menu.json
+              echo
+              echo "Menu REST smoke test passed."
+              exit 0
+            fi
+
+            if [ "$code" = "200" ] && grep -Fq '"type":"mega"' /tmp/menu.json; then
+              cat /tmp/menu.json
+              echo
+              echo "Menu REST smoke test passed."
+              exit 0
+            fi
+
+            echo "Attempt ${attempt}/12: HTTP ${code:-curl-error}; waiting..."
+            sleep 5
+          done
+
+          cat /tmp/menu.json 2>/dev/null || true
+          echo "::error::Menu REST endpoint did not expose the menu type contract."
+          exit 1

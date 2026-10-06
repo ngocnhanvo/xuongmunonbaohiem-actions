@@ -1,2 +1,3 @@
 Bootstrap smoke request.
 Retry after workflow registration to verify SOURCE_REPO_PAT and checkout xuongmunonbaohiem-astro@github.
+retest: architecture migration completed

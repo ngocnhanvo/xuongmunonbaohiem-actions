@@ -73,6 +73,7 @@ jobs:
           php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
           php wp-content/mu-plugins/tests/esc-table-migration.php
           php wp-content/mu-plugins/tests/esc-table-upstream-compat.php
+          php wp-content/mu-plugins/tests/esc-table-branding.php
           php wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
           php wp-content/mu-plugins/tests/admin-performance-plugin-pages.php
 
@@ -115,7 +116,9 @@ jobs:
             wp-content/plugins/esc-table \
             wp-content/mu-plugins/esc-table-migration.php \
             wp-content/mu-plugins/disable-plugins-for-api.php \
-            wp-content/mu-plugins/esc-admin-menu-bridge.php
+            wp-content/mu-plugins/esc-admin-menu-bridge.php \
+            wp-content/themes/vibe-code-theme/inc/tablepress/group.php \
+            wp-content/themes/vibe-code-theme/inc/tablepress/endpoint.php
 
           deploy_token="$(python3 - <<'PY'
           import secrets
@@ -162,6 +165,7 @@ jobs:
           $pluginDir = $root . '/wp-content/plugins/esc-table';
           $legacyDir = $root . '/wp-content/plugins/tablepress';
           $muDir = $root . '/wp-content/mu-plugins';
+          $themeTablepressDir = $root . '/wp-content/themes/vibe-code-theme/inc/tablepress';
 
           try {
               if (!is_file($zipFile)) {
@@ -204,6 +208,17 @@ jobs:
                   $target = $muDir . '/' . $muFile;
                   if (!is_file($source) || !copy($source, $target)) {
                       throw new RuntimeException('unable to deploy MU file: ' . $muFile);
+                  }
+              }
+
+              foreach ([
+                  'group.php',
+                  'endpoint.php',
+              ] as $themeFile) {
+                  $source = $staging . '/wp-content/themes/vibe-code-theme/inc/tablepress/' . $themeFile;
+                  $target = $themeTablepressDir . '/' . $themeFile;
+                  if (!is_file($source) || !copy($source, $target)) {
+                      throw new RuntimeException('unable to deploy ESC Table theme integration file: ' . $themeFile);
                   }
               }
 

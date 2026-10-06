@@ -1,2 +1,3 @@
-Deploy URL routing seed v4: exclude one-level static files from post-detail fallback while preserving /*.html -> /* redirect behavior.
-PHP source: ee9818f35dc0ef9cef7a2e172a46828ce419f9f2
+Deploy URL routing seed v4 after fixing regex/test literals.
+PHP source: 217e9360594abb46891aaaacc868fc9fc40af68b
+Goal: keep /*.html -> /* redirect, exclude sitemap.xml/robots.txt/static files from post-detail fallback.

@@ -1,3 +1,3 @@
 Deploy WordPress URL routing runtime and seed data-driven routes.
-PHP source: da243450fb7969b4d4182e9188c4b6ccdc9ad485
-Retry: FTP redirects directory already exists; continue deploy + seed.
+PHP source: 896f37a8b9f6e0e37e0fd522c2af65aaf8aa7529
+Retry: optimized bulk/idempotent seed; auto-init seed disabled.

@@ -55,6 +55,35 @@ jobs:
           php -l wp-content/mu-plugins/esc-github-trigger-config.php
           grep -Fq "xuongmunonbaohiem-actions" wp-content/plugins/github-trigger/vcs-build-trigger.php
           grep -Fq "xuongmunonbaohiem-actions" wp-content/mu-plugins/esc-github-trigger-config.php
+          grep -Fq "esc-github-trigger-token.php" wp-content/mu-plugins/esc-github-trigger-config.php
+
+      - name: Prepare dedicated GitHub trigger token
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          token = os.environ["SOURCE_REPO_PAT"].strip()
+          if not token:
+              raise SystemExit("SOURCE_REPO_PAT is empty")
+
+          encoded = base64.b64encode(token.encode("utf-8")).decode("ascii")
+          php = """<?php
+if (!defined('ABSPATH')) exit;
+if (!defined('VCS_GH_TOKEN')) {
+    define('VCS_GH_TOKEN', base64_decode('%s'));
+}
+""" % encoded
+
+          Path("/tmp/esc-github-trigger-token.php").write_text(php, encoding="utf-8")
+          PY
+          chmod 600 /tmp/esc-github-trigger-token.php
+          php -l /tmp/esc-github-trigger-token.php
 
       - name: Resolve WordPress FTP path
         id: wp_path
@@ -118,11 +147,17 @@ jobs:
 
           cd "$REMOTE_WP_CONTENT/mu-plugins"
           put "source/wp-content/mu-plugins/esc-github-trigger-config.php"
-          get esc-github-trigger-config.php -o /tmp/esc-github-trigger-config.php
+          get esc-github-trigger-config.php -o /tmp/esc-github-trigger-config.remote.php
+
+          cd "$REMOTE_WP_CONTENT"
+          put "/tmp/esc-github-trigger-token.php"
+          get esc-github-trigger-token.php -o /tmp/esc-github-trigger-token.remote.php
 
           bye
           LFTP
 
           cmp source/wp-content/plugins/github-trigger/vcs-build-trigger.php /tmp/vcs-build-trigger.php
-          cmp source/wp-content/mu-plugins/esc-github-trigger-config.php /tmp/esc-github-trigger-config.php
-          echo "WordPress GitHub trigger runtime deployed and byte-verified."
+          cmp source/wp-content/mu-plugins/esc-github-trigger-config.php /tmp/esc-github-trigger-config.remote.php
+          cmp /tmp/esc-github-trigger-token.php /tmp/esc-github-trigger-token.remote.php
+          rm -f /tmp/esc-github-trigger-token.php /tmp/esc-github-trigger-token.remote.php /tmp/esc-github-trigger-config.remote.php /tmp/vcs-build-trigger.php
+          echo "WordPress GitHub trigger runtime and dedicated token deployed and byte-verified."

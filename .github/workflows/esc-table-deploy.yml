@@ -60,12 +60,19 @@ jobs:
           grep -Fq 'Plugin Name: ESC Table' wp-content/plugins/esc-table/esc-table.php
           grep -Fq 'Update URI: https://esc.vn/plugins/esc-table' wp-content/plugins/esc-table/esc-table.php
           grep -Fq "register_rest_route( 'esc-table/v1', '/status'" wp-content/plugins/esc-table/esc-table.php
+          test -f wp-content/plugins/esc-table/classes/class-esc-table-upstream-compat.php
+          test ! -d wp-content/plugins/esc-table/libraries/freemius
+          if grep -Fq "libraries/freemius/start.php" wp-content/plugins/esc-table/esc-table.php; then
+            echo '::error::ESC Table still initializes the Freemius SDK.'
+            exit 1
+          fi
           php -l wp-content/plugins/esc-table/esc-table.php
           php -l wp-content/plugins/esc-table/controllers/controller-admin.php
           php -l wp-content/mu-plugins/esc-table-migration.php
           php -l wp-content/mu-plugins/disable-plugins-for-api.php
           php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
           php wp-content/mu-plugins/tests/esc-table-migration.php
+          php wp-content/mu-plugins/tests/esc-table-upstream-compat.php
           php wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
 
       - name: Resolve WordPress FTP path

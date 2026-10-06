@@ -71,6 +71,14 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Validate preview automation source
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check automation/tablepress/previews.mjs
+          grep -Fq 'https://xuongmunonbaohiem.io.vn' automation/tablepress/previews.mjs
+
       - name: Install browser and image tools
         working-directory: source
         run: |

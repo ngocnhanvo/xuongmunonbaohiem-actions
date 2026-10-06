@@ -1,5 +1,4 @@
 Deploy WordPress GitHub trigger runtime from xuongmunonbaohiem-php@master.
-retry: fixed lftp upload syntax
-retry: deploy dedicated Actions Hub token runtime
-retry: fixed token runtime workflow yaml
-retry: force dedicated VCS_GH_ACTIONS_TOKEN precedence
+PHP source: 06392f66b326419694cf8a558d694a0145e7a060
+Feature: shared build state + atomic server lock + cross-user UI polling + JS cache bump 1.2.0.
+Deploy both vcs-build-trigger.php and vcs-build-trigger.js with byte verification.

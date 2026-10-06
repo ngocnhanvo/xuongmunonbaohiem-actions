@@ -1,0 +1,145 @@
+name: Deploy Blue Sea Astro Production
+
+on:
+  repository_dispatch:
+    types: [wp_trigger_build]
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/deploy-xuongmunonbaohiem.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-deploy
+  cancel-in-progress: false
+
+jobs:
+  web-deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+          test -n "$ENV_FILE"
+          test -n "$FTP_SERVER"
+          test -n "$FTP_USERNAME"
+          test -n "$FTP_PASSWORD"
+
+      - name: Checkout private Blue Sea Astro source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Show production source revision
+        working-directory: source
+        run: echo "Deploying xuongmunonbaohiem-astro@master $(git rev-parse HEAD)"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Make .env
+        working-directory: source
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: printf '%s\n' "$ENV_FILE" > .env
+
+      - name: Restore and update Astro cache
+        uses: actions/cache@v4
+        with:
+          path: source/.cache
+          key: ${{ runner.os }}-xuongmunonbaohiem-dot-cache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-xuongmunonbaohiem-dot-cache-
+
+      - name: Build Project
+        working-directory: source
+        run: pnpm run build-git
+
+      - name: Zip Build Folder
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deploy upload
+          cp .env deploy/
+          cp -r dist/* deploy/
+          cd deploy
+          zip -r ../upload/escvn.zip .
+          cd ..
+          rm -rf dist deploy
+
+      - name: Sync files via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./source/upload/
+          server-dir: /domains/xuongmunonbaohiem.io.vn/public_html/
+          timeout: 600000
+          security: "loose"
+          dangerous-clean-slate: false
+
+      - name: Trigger Remote Unzip
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source .env
+          curl -fsS "$WC_URL/unzip.php"
+
+      - name: Smoke test production
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="https://xuongmunonbaohiem.io.vn/"
+          sitemap="https://xuongmunonbaohiem.io.vn/sitemap.xml"
+
+          for attempt in {1..12}; do
+            root_status="$(curl -L -sS -o /tmp/blue-root.html -w '%{http_code}' --connect-timeout 10 --max-time 30 "$root" || true)"
+            sitemap_status="$(curl -L -sS -o /tmp/blue-sitemap.xml -w '%{http_code}' --connect-timeout 10 --max-time 30 "$sitemap" || true)"
+
+            if [ "$root_status" = "200" ] && [ "$sitemap_status" = "200" ] && grep -qi '<urlset' /tmp/blue-sitemap.xml; then
+              echo "Production smoke test passed."
+              exit 0
+            fi
+
+            echo "Attempt ${attempt}/12 failed: root=${root_status:-curl-error}, sitemap=${sitemap_status:-curl-error}. Waiting..."
+            sleep 5
+          done
+
+          echo "::error::Production smoke test failed after 12 attempts."
+          exit 1

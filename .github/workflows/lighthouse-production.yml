@@ -1,0 +1,98 @@
+name: Lighthouse Production Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/lighthouse-production.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-lighthouse-production
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    name: Audit production sitemap
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Validate SOURCE_REPO_PAT
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+
+      - name: Checkout private production source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Setup Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+
+      - name: Install Lighthouse
+        run: npm install --global lighthouse@13.5.0
+
+      - name: Verify audit scripts
+        working-directory: source
+        run: node --test scripts/lighthouse/lib.test.mjs
+
+      - name: Audit all production sitemap URLs
+        id: lighthouse
+        continue-on-error: true
+        working-directory: source
+        env:
+          SITEMAP_URL: https://xuongmunonbaohiem.io.vn/sitemap.xml
+          DEVICE: mobile
+          MIN_PERFORMANCE: "90"
+          MIN_ACCESSIBILITY: "90"
+          MIN_BEST_PRACTICES: "90"
+          MIN_SEO: "90"
+          REPORT_DIR: lighthouse-reports
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: node scripts/lighthouse-production.mjs
+
+      - name: Publish audit summary
+        if: always()
+        working-directory: source
+        shell: bash
+        run: |
+          if [ -f lighthouse-reports/summary.md ]; then
+            cat lighthouse-reports/summary.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "# Lighthouse Production Audit" >> "$GITHUB_STEP_SUMMARY"
+            echo "Audit failed before a summary could be generated." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-production-${{ github.run_number }}
+          path: source/lighthouse-reports/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail workflow when audit fails
+        if: steps.lighthouse.outcome == 'failure'
+        run: exit 1

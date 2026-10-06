@@ -1,0 +1,73 @@
+name: Blue Sea Actions Hub Smoke
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/hub-smoke.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-hub-smoke
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Checkout private source and run unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Validate SOURCE_REPO_PAT
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SOURCE_REPO_PAT" ]; then
+            echo "::error::SOURCE_REPO_PAT is not configured."
+            exit 1
+          fi
+          echo "SOURCE_REPO_PAT is configured."
+
+      - name: Checkout xuongmunonbaohiem-astro github branch
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Verify checked out source
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          test -f package.json
+          test -f pnpm-lock.yaml
+          echo "Checked out xuongmunonbaohiem-astro@github: $(git rev-parse HEAD)"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+          cache-dependency-path: source/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        working-directory: source
+        run: pnpm test:run

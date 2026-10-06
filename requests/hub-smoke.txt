@@ -1,0 +1,2 @@
+Bootstrap smoke request.
+Created to verify that the Actions Hub can authenticate and checkout xuongmunonbaohiem-astro@github.

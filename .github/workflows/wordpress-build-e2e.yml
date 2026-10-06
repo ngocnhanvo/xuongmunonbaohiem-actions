@@ -1,0 +1,125 @@
+name: Test WordPress Build Website Dispatch
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/wordpress-build-e2e.txt'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-wordpress-build-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout Actions Hub
+        uses: actions/checkout@v4
+
+      - name: Validate WordPress secrets
+        shell: bash
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$WP_ADMIN_URL"
+          test -n "$WP_ADMIN_USERNAME"
+          test -n "$WP_ADMIN_PASSWORD"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install Playwright
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Record dispatch window
+        shell: bash
+        run: echo "DISPATCH_AFTER_EPOCH=$(date -u +%s)" >> "$GITHUB_ENV"
+
+      - name: Trigger Build Website through WordPress
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: node scripts/wordpress-build-trigger-e2e.mjs
+
+      - name: Find Hub repository_dispatch run
+        id: find_run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs?event=repository_dispatch&per_page=20"
+
+          for attempt in {1..30}; do
+            payload="$(curl -fsS               -H "Authorization: Bearer ${GH_TOKEN}"               -H "Accept: application/vnd.github+json"               -H "X-GitHub-Api-Version: 2022-11-28"               "$api")"
+
+            run_id="$(jq -r --argjson after "$DISPATCH_AFTER_EPOCH" '
+              [.workflow_runs[]
+                | select(.path == ".github/workflows/deploy.yml")
+                | select((.created_at | fromdateiso8601) >= $after)]
+              | sort_by(.created_at)
+              | last
+              | .id // empty
+            ' <<<"$payload")"
+
+            if [ -n "$run_id" ]; then
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "WordPress dispatch created Hub deploy run: $run_id"
+              exit 0
+            fi
+
+            echo "Waiting for repository_dispatch run (${attempt}/30)..."
+            sleep 5
+          done
+
+          echo "::error::WordPress accepted the build request, but no Hub deploy repository_dispatch appeared."
+          exit 1
+
+      - name: Wait for Hub deploy result
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOY_RUN_ID: ${{ steps.find_run.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}"
+
+          for attempt in {1..180}; do
+            payload="$(curl -fsS               -H "Authorization: Bearer ${GH_TOKEN}"               -H "Accept: application/vnd.github+json"               -H "X-GitHub-Api-Version: 2022-11-28"               "$api")"
+            status="$(jq -r '.status' <<<"$payload")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$payload")"
+
+            echo "Deploy run ${DEPLOY_RUN_ID}: status=${status} conclusion=${conclusion:-pending}"
+
+            if [ "$status" = "completed" ]; then
+              if [ "$conclusion" = "success" ]; then
+                echo "WordPress -> Actions Hub -> production deploy E2E passed."
+                echo "Deploy run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${DEPLOY_RUN_ID}" >> "$GITHUB_STEP_SUMMARY"
+                exit 0
+              fi
+              echo "::error::Hub deploy run ${DEPLOY_RUN_ID} completed with conclusion=${conclusion}."
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "::error::Timed out waiting for Hub deploy run ${DEPLOY_RUN_ID}."
+          exit 1

@@ -1,0 +1,145 @@
+name: Blue Sea CI Architecture Check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - 'scripts/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-architecture-check
+  cancel-in-progress: true
+
+jobs:
+  architecture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Actions Hub
+        uses: actions/checkout@v4
+
+      - name: Validate SOURCE_REPO_PAT
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+
+      - name: Checkout Astro development source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: private/astro
+          persist-credentials: false
+
+      - name: Checkout WordPress source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: private/php
+          persist-credentials: false
+
+      - name: Enforce Actions Hub architecture
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('.')
+          verify_path = root / '.github/workflows/verify.yml'
+          deploy_path = root / '.github/workflows/deploy.yml'
+          smoke_path = root / '.github/workflows/hub-smoke.yml'
+          e2e_path = root / '.github/workflows/wordpress-build-e2e.yml'
+          trigger_deploy_path = root / '.github/workflows/wordpress-trigger-deploy.yml'
+          lighthouse_path = root / '.github/workflows/lighthouse-production.yml'
+
+          required = (
+              verify_path,
+              deploy_path,
+              smoke_path,
+              e2e_path,
+              trigger_deploy_path,
+              lighthouse_path,
+          )
+          for path in required:
+              assert path.is_file(), f'Missing Actions Hub workflow: {path}'
+
+          verify = verify_path.read_text(encoding='utf-8')
+          deploy = deploy_path.read_text(encoding='utf-8')
+          smoke = smoke_path.read_text(encoding='utf-8')
+          e2e = e2e_path.read_text(encoding='utf-8')
+          trigger_deploy = trigger_deploy_path.read_text(encoding='utf-8')
+
+          assert 'repository: ngocnhanvo/xuongmunonbaohiem-astro' in verify
+          assert 'ref: github' in verify
+          assert 'SOURCE_REPO_PAT' in verify
+          assert 'ENV_FILE' in verify
+          assert 'pnpm test:run' in verify
+          assert 'pnpm check' in verify
+          assert 'pnpm run build-git' in verify
+
+          assert 'repository_dispatch:' in deploy
+          assert 'wp_trigger_build' in deploy
+          assert 'repository: ngocnhanvo/xuongmunonbaohiem-astro' in deploy
+          assert 'ref: master' in deploy
+          assert 'SOURCE_REPO_PAT' in deploy
+          assert 'ENV_FILE' in deploy
+          assert 'FTP_SERVER' in deploy
+          assert 'FTP_USERNAME' in deploy
+          assert 'FTP_PASSWORD' in deploy
+          assert 'Smoke test production' in deploy
+          assert 'requests/deploy-xuongmunonbaohiem.txt' in deploy
+
+          assert 'repository: ngocnhanvo/xuongmunonbaohiem-astro' in smoke
+          assert 'ref: github' in smoke
+          assert 'pnpm test:run' in smoke
+
+          assert 'scripts/wordpress-build-trigger-e2e.mjs' in e2e
+          assert 'WP_ADMIN_URL' in e2e
+          assert 'WP_ADMIN_USERNAME' in e2e
+          assert 'WP_ADMIN_PASSWORD' in e2e
+          assert 'repository_dispatch' in e2e
+          assert '.github/workflows/deploy.yml' in e2e
+
+          assert 'repository: ngocnhanvo/xuongmunonbaohiem-php' in trigger_deploy
+          assert 'ref: master' in trigger_deploy
+          assert 'SOURCE_REPO_PAT' in trigger_deploy
+          assert 'esc-github-trigger-token.php' in trigger_deploy
+          assert 'VCS_GH_ACTIONS_TOKEN' in trigger_deploy
+
+          astro_workflows = Path('private/astro/.github/workflows')
+          assert not astro_workflows.exists() or not list(astro_workflows.glob('*.yml')), \
+              'Astro github development branch must not contain active GitHub Actions workflows'
+
+          mu_config = Path('private/php/wp-content/mu-plugins/esc-github-trigger-config.php').read_text(encoding='utf-8')
+          trigger = Path('private/php/wp-content/plugins/github-trigger/vcs-build-trigger.php').read_text(encoding='utf-8')
+
+          assert "define('VCS_GH_REPO', 'xuongmunonbaohiem-actions');" in mu_config, \
+              'WordPress MU config must dispatch to xuongmunonbaohiem-actions'
+          assert 'esc-github-trigger-token.php' in mu_config, \
+              'WordPress MU config must load the dedicated Actions Hub token runtime'
+          assert 'VCS_GH_ACTIONS_TOKEN' in trigger, \
+              'WordPress trigger must prefer the dedicated Actions Hub token'
+
+          print('Blue Sea Actions Hub architecture contract passed.')
+          PY
+
+      - name: Validate orchestration syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/wordpress-build-trigger-e2e.mjs
+          php -l private/php/wp-content/mu-plugins/esc-github-trigger-config.php
+          php -l private/php/wp-content/plugins/github-trigger/vcs-build-trigger.php

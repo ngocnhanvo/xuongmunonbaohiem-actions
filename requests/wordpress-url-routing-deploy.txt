@@ -1,4 +1,2 @@
-Deploy WordPress conditional structural URL routing and clean stale seeded records.
-PHP source: 6703524f1ac53b67dd875cbd5d5740230f1ef753
-Seed: v3 keeps 14 structural rules, 11 rewrites, removes old per-content system records only.
-Retry: fixed cleanup regression assertion after PHP syntax passed.
+Deploy URL routing seed v4: exclude one-level static files from post-detail fallback while preserving /*.html -> /* redirect behavior.
+PHP source: ee9818f35dc0ef9cef7a2e172a46828ce419f9f2

@@ -1,5 +1,5 @@
 Verify ESC Table dedicated fork.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: 027f1c573e01719c9b6dd38277e300bf1fbd8c22
+Expected source commit: d858c2a4da0777da943b93b23e3754e2539a253c
 Requested: 2026-10-06
 Verify Freemius SDK removal, local compatibility shim, activation migration, admin slimming, and dedicated source tree.

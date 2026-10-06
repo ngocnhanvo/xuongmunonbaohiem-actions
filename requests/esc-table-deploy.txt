@@ -1,6 +1,6 @@
 Deploy ESC Table production.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: 1133925eee0d1e1c7c9c6814720b37d9a4149f3a
-Includes: reserve exact ESC Table preview image dimensions inside the WordPress Classic Editor to prevent layout jumping while previews load. Existing preview appearance is preserved.
+Expected source commit: 2eb6163046e565fb1b47d06c79e9e824001f896c
+Includes: hotfix for TinyMCE inline JavaScript syntax caused by quoted data-table-id selectors in content_style. Keeps editor preview aspect-ratio reservation without breaking tinyMCEPreInit.
 Requested: 2026-10-06
 Deploy backend/ESC Table editor integration only. Do not trigger or deploy Astro.

@@ -121,7 +121,8 @@ jobs:
             wp-content/mu-plugins/esc-admin-menu-bridge.php \
             wp-content/themes/vibe-code-theme/inc/tablepress/group.php \
             wp-content/themes/vibe-code-theme/inc/tablepress/endpoint.php \
-            wp-content/themes/vibe-code-theme/inc/tablepress/html.php
+            wp-content/themes/vibe-code-theme/inc/tablepress/html.php \
+            wp-content/themes/vibe-code-theme/inc/tablepress/wysiwyg.php
 
           deploy_token="$(python3 - <<'PY'
           import secrets

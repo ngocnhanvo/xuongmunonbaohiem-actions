@@ -1,6 +1,6 @@
 Deploy ESC Table production.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: e7c596e47775a5eeafbf10d031b260ec3f45b8b5
-Includes: Classic Editor context menu adds “Thay thế”, opens the native ESC Table picker, and replaces the exact existing preview wrapper/shortcode in-place without appending duplicate HTML. Keeps undo support and preview dimensions.
-Requested: 2026-10-06
+Expected source commit: fb56a4fe2ada21148782e322eaa5bb0998752ca7
+Includes: ESC Table edit screen preview thumbnail supports click/keyboard zoom in a full-screen lightbox, closes by X, backdrop click, or Escape, preserves focus, and keeps the existing preview automation field order.
+Requested: 2026-10-07
 Deploy backend/ESC Table editor integration only. Do not trigger or deploy Astro.

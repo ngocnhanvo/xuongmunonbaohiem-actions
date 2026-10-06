@@ -1,6 +1,6 @@
 Deploy ESC Table production.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: b338019df317d4b6edf9281ef32c932a404431d8
-Includes: ESC Table 1.0.0, pre-slim activation migration guard, admin performance integration, removal of legacy TablePress directory.
+Expected source commit: d858c2a4da0777da943b93b23e3754e2539a253c
+Includes: ESC Table 1.0.0, Freemius SDK removal with local compatibility shim, activation migration guard, admin performance integration, removal of legacy TablePress directory.
 Requested: 2026-10-06
 Final production revision after ESC Table CI success. Use atomic FTP package deployment with quoted one-time extractor.

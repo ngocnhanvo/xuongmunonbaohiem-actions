@@ -1,0 +1,5 @@
+Deploy WordPress admin performance runtime.
+Source: ngocnhanvo/xuongmunonbaohiem-php@master
+Expected source commit: d612b9b8fb71b8f944375b6e93ff449b05d58602
+Reason: restore The Paste on TablePress editor/media modal.
+Requested: 2026-10-06

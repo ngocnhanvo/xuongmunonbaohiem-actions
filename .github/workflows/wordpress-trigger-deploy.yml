@@ -54,6 +54,7 @@ jobs:
           php -l wp-content/plugins/github-trigger/vcs-build-trigger.php
           php -l wp-content/mu-plugins/esc-github-trigger-config.php
           grep -Fq "xuongmunonbaohiem-actions" wp-content/plugins/github-trigger/vcs-build-trigger.php
+          grep -Fq "VCS_GH_ACTIONS_TOKEN" wp-content/plugins/github-trigger/vcs-build-trigger.php
           grep -Fq "xuongmunonbaohiem-actions" wp-content/mu-plugins/esc-github-trigger-config.php
           grep -Fq "esc-github-trigger-token.php" wp-content/mu-plugins/esc-github-trigger-config.php
 
@@ -67,7 +68,7 @@ jobs:
           printf '%s\n' \
             '<?php' \
             "if (!defined('ABSPATH')) exit;" \
-            "if (!defined('VCS_GH_TOKEN')) { define('VCS_GH_TOKEN', base64_decode('${token_b64}')); }" \
+            "if (!defined('VCS_GH_ACTIONS_TOKEN')) { define('VCS_GH_ACTIONS_TOKEN', base64_decode('${token_b64}')); }" \
             > /tmp/esc-github-trigger-token.php
           unset token_b64
           chmod 600 /tmp/esc-github-trigger-token.php

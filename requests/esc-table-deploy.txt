@@ -1,6 +1,6 @@
 Deploy ESC Table production.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: 2eb6163046e565fb1b47d06c79e9e824001f896c
-Includes: hotfix for TinyMCE inline JavaScript syntax caused by quoted data-table-id selectors in content_style. Keeps editor preview aspect-ratio reservation without breaking tinyMCEPreInit.
+Expected source commit: e7c596e47775a5eeafbf10d031b260ec3f45b8b5
+Includes: Classic Editor context menu adds “Thay thế”, opens the native ESC Table picker, and replaces the exact existing preview wrapper/shortcode in-place without appending duplicate HTML. Keeps undo support and preview dimensions.
 Requested: 2026-10-06
 Deploy backend/ESC Table editor integration only. Do not trigger or deploy Astro.

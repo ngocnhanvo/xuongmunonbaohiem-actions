@@ -1,6 +1,6 @@
 Deploy ESC Table production.
 Source: ngocnhanvo/xuongmunonbaohiem-php@master
-Expected source commit: 20a35368c7f27adac4559f3b5e5c13854a3b13a5
-Includes: ESC Table 1.0.0 production package plus Vietnamese admin labels and lightweight styling for the Table Information panel.
+Expected source commit: 95321066039239eca5dd2b8228be9d0222d9e9b2
+Includes: ESC Table API source selector for Product, ProductCategory, Page, and manual API URL/path while preserving the existing tablepress_meta api contract.
 Requested: 2026-10-06
 Deploy backend/ESC Table only through the dedicated ESC Table FTP workflow. Do not trigger or deploy Astro.

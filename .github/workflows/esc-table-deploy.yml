@@ -116,13 +116,13 @@ jobs:
           )"
           echo "token=$deploy_token" >> "$GITHUB_OUTPUT"
 
-          cat > /tmp/esc-table-deploy.php <<PHP
+          cat > /tmp/esc-table-deploy.php <<'PHP'
           <?php
           declare(strict_types=1);
 
           header('Content-Type: application/json; charset=utf-8');
 
-          $expectedToken = '$deploy_token';
+          $expectedToken = '__ESC_TABLE_DEPLOY_TOKEN__';
           $providedToken = isset($_GET['token']) && is_string($_GET['token']) ? $_GET['token'] : '';
           if (!hash_equals($expectedToken, $providedToken)) {
               http_response_code(403);
@@ -222,6 +222,17 @@ jobs:
               echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
           }
           PHP
+          DEPLOY_TOKEN="$deploy_token" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path('/tmp/esc-table-deploy.php')
+          text = path.read_text(encoding='utf-8')
+          path.write_text(
+              text.replace('__ESC_TABLE_DEPLOY_TOKEN__', os.environ['DEPLOY_TOKEN']),
+              encoding='utf-8',
+          )
+          PY
           php -l /tmp/esc-table-deploy.php
           echo "Package bytes: $(stat -c%s /tmp/esc-table-runtime.zip)"
 

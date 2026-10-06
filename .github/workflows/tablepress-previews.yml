@@ -1,0 +1,100 @@
+name: Update ESC Table Preview Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'missing = only tables without preview; single/selected = chosen shortcode IDs'
+        required: true
+        default: missing
+        type: choice
+        options:
+          - missing
+          - single
+          - selected
+      shortcodes:
+        description: 'Comma/newline separated TablePress IDs, e.g. webnext_01,webnext_03'
+        required: false
+        default: ''
+        type: string
+      force:
+        description: 'Replace an existing preview image'
+        required: false
+        default: false
+        type: boolean
+      page_url:
+        description: 'Optional production page URL override for the selected IDs'
+        required: false
+        default: ''
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/tablepress-previews.txt'
+
+concurrency:
+  group: escvn-actions-tablepress-previews
+  cancel-in-progress: false
+
+jobs:
+  previews:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+          test -n "$WP_ADMIN_URL"
+          test -n "$WP_ADMIN_USERNAME"
+          test -n "$WP_ADMIN_PASSWORD"
+
+      - name: Checkout private Blue Sea PHP source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install browser and image tools
+        working-directory: source
+        run: |
+          npm install --no-save playwright@1.55.0 sharp@0.34.3
+          npx playwright install --with-deps chromium
+
+      - name: Capture and publish TablePress previews
+        working-directory: source
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          TABLEPRESS_PUBLIC_ORIGIN: https://xuongmunonbaohiem.io.vn
+          TABLEPRESS_PREVIEW_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'missing' }}
+          TABLEPRESS_SHORTCODES: ${{ github.event_name == 'workflow_dispatch' && inputs.shortcodes || 'home_00,home_01,home_02,home_03,home_04,home_05,home_06,home_07,home_08,home_09,home_10,home_11,home_12,home_13,contact_00' }}
+          TABLEPRESS_FORCE: ${{ github.event_name == 'workflow_dispatch' && inputs.force || 'false' }}
+          TABLEPRESS_PAGE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.page_url || '' }}
+        run: node automation/tablepress/previews.mjs
+
+      - name: Upload preview diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tablepress-previews
+          path: source/tablepress-previews/
+          if-no-files-found: ignore
+          retention-days: 3

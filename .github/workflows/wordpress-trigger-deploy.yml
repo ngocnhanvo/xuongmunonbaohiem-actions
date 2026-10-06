@@ -53,6 +53,8 @@ jobs:
           set -euo pipefail
           php -l wp-content/plugins/github-trigger/vcs-build-trigger.php
           php -l wp-content/mu-plugins/esc-github-trigger-config.php
+          php wp-content/plugins/github-trigger/tests/build-status-regression.php
+          node --check wp-content/plugins/github-trigger/vcs-build-trigger.js
           grep -Fq "xuongmunonbaohiem-actions" wp-content/plugins/github-trigger/vcs-build-trigger.php
           grep -Fq "VCS_GH_ACTIONS_TOKEN" wp-content/plugins/github-trigger/vcs-build-trigger.php
           grep -Fq "xuongmunonbaohiem-actions" wp-content/mu-plugins/esc-github-trigger-config.php
@@ -132,7 +134,9 @@ jobs:
 
           cd "$REMOTE_WP_CONTENT/plugins/github-trigger"
           put "source/wp-content/plugins/github-trigger/vcs-build-trigger.php"
+          put "source/wp-content/plugins/github-trigger/vcs-build-trigger.js"
           get vcs-build-trigger.php -o /tmp/vcs-build-trigger.php
+          get vcs-build-trigger.js -o /tmp/vcs-build-trigger.js
 
           cd "$REMOTE_WP_CONTENT/mu-plugins"
           put "source/wp-content/mu-plugins/esc-github-trigger-config.php"
@@ -146,7 +150,8 @@ jobs:
           LFTP
 
           cmp source/wp-content/plugins/github-trigger/vcs-build-trigger.php /tmp/vcs-build-trigger.php
+          cmp source/wp-content/plugins/github-trigger/vcs-build-trigger.js /tmp/vcs-build-trigger.js
           cmp source/wp-content/mu-plugins/esc-github-trigger-config.php /tmp/esc-github-trigger-config.remote.php
           cmp /tmp/esc-github-trigger-token.php /tmp/esc-github-trigger-token.remote.php
-          rm -f /tmp/esc-github-trigger-token.php /tmp/esc-github-trigger-token.remote.php /tmp/esc-github-trigger-config.remote.php /tmp/vcs-build-trigger.php
-          echo "WordPress GitHub trigger runtime and dedicated token deployed and byte-verified."
+          rm -f /tmp/esc-github-trigger-token.php /tmp/esc-github-trigger-token.remote.php /tmp/esc-github-trigger-config.remote.php /tmp/vcs-build-trigger.php /tmp/vcs-build-trigger.js
+          echo "WordPress GitHub trigger PHP/JS runtime and dedicated token deployed and byte-verified."

@@ -1,2 +1,2 @@
-Verify xuongmunonbaohiem-astro@github after Home_00 dimension assertion fix.
+Verify xuongmunonbaohiem-astro@github with inherited Astro diagnostics guard.
 Astro head: be52590ec2597f95e1bfc7d2b9e18600ebd9d573

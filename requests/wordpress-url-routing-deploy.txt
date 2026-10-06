@@ -1,3 +1,4 @@
 Deploy WordPress conditional structural URL routing and clean stale seeded records.
-PHP source: bd6ba6c93782a85162dcd3bc1f62f0f8673141b3
+PHP source: cb8beaa177b56e1a51bae996106b1c676db6ac9f
 Seed: v3 keeps 14 structural rules, 11 rewrites, removes old per-content system records only.
+Retry: fixed admin column PHP syntax before FTP.

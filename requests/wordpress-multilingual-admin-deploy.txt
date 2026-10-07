@@ -1,3 +1,4 @@
 Deploy multilingual WordPress admin grouping fix.
-PHP source: 7b2654e0772750524e63e20a7e7da11ce7e73972
+PHP source: cdafc7dbd4a039381e832aade75f0329c463be19
 Fix: translation rows stay hidden but are grouped into the root language selector using captured main-query/list-table rows, with current-row fallback.
+Retry: fixed regression assertion only; runtime PHP already parsed clean.

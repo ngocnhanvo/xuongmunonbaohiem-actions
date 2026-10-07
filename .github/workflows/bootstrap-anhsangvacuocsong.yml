@@ -1,0 +1,55 @@
+name: Bootstrap anhsangvacuocsong repositories
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/bootstrap-anhsangvacuocsong.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+    steps:
+      - name: Validate token
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+
+      - name: Clone canonical branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config --global user.name "anhsangvacuocsong bootstrap"
+          git config --global user.email "37570235+ngocnhanvo@users.noreply.github.com"
+
+          copy_branch() {
+            src_repo="$1"
+            src_ref="$2"
+            dst_repo="$3"
+            dst_ref="$4"
+            workdir="$5"
+
+            rm -rf "$workdir"
+            git clone --no-tags --single-branch --branch "$src_ref" "https://x-access-token:${SOURCE_REPO_PAT}@github.com/${src_repo}.git" "$workdir"
+            cd "$workdir"
+            git commit --allow-empty -m "Bootstrap ${dst_repo}:${dst_ref} from ${src_repo}:${src_ref} [skip ci]"
+            git remote set-url origin "https://x-access-token:${SOURCE_REPO_PAT}@github.com/${dst_repo}.git"
+            git push --force origin "HEAD:refs/heads/${dst_ref}"
+            cd "$GITHUB_WORKSPACE"
+          }
+
+          copy_branch "ngocnhanvo/xuongmunonbaohiem-astro" "github" "ngocnhanvo/anhsangvacuocsong-astro" "github" "astro-github"
+          copy_branch "ngocnhanvo/xuongmunonbaohiem-astro" "master" "ngocnhanvo/anhsangvacuocsong-astro" "master" "astro-master"
+          copy_branch "ngocnhanvo/xuongmunonbaohiem-php" "master" "ngocnhanvo/anhsangvacuocsong-php" "master" "php-master"
+          copy_branch "ngocnhanvo/xuongmunonbaohiem-actions" "main" "ngocnhanvo/anhsangvacuocsong-actions" "main" "actions-main"
+
+      - name: Report
+        run: |
+          echo "Astro github/master, PHP master, Actions main cloned."

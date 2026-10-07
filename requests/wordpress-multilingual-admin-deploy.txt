@@ -1,4 +1,3 @@
-Deploy multilingual WordPress admin grouping fix.
-PHP source: cdafc7dbd4a039381e832aade75f0329c463be19
-Fix: translation rows stay hidden but are grouped into the root language selector using captured main-query/list-table rows, with current-row fallback.
-Retry: fixed regression assertion only; runtime PHP already parsed clean.
+Deploy multilingual WordPress admin UI width fix.
+PHP source: 1b4240bc94de92cef0f583ca55a3d3adb764b81d
+Fix: keep Product language selector readable at 190px and allow the WooCommerce product table to stay wide instead of collapsing the column vertically.

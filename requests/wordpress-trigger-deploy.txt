@@ -1,4 +1,5 @@
 Deploy WordPress GitHub trigger runtime from xuongmunonbaohiem-php@master.
-PHP source: 06392f66b326419694cf8a558d694a0145e7a060
-Feature: shared build state + atomic server lock + cross-user UI polling + JS cache bump 1.2.0.
-Deploy both vcs-build-trigger.php and vcs-build-trigger.js with byte verification.
+PHP source HEAD: 7028fe9adb88e4426f141bef385a5ed5bcd81609
+Feature: server-authoritative elapsed_seconds + performance.now client delta + JS cache bump 1.2.1.
+Regression test: build-status-regression.php covers server-based build elapsed timing.
+Deploy vcs-build-trigger.php and vcs-build-trigger.js with byte verification.

@@ -1,0 +1,3 @@
+Deploy multilingual WordPress admin grouping for Page/Post/Product.
+PHP source: 5f989961bb78592d95170bcb7ff88b1ebb6e2556
+Feature: show only root rows, language switcher select, confirmation modal, create-missing translation flow, ACF-driven languages.

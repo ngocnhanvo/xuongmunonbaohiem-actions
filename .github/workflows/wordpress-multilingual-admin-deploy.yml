@@ -1,0 +1,137 @@
+name: Deploy WordPress Multilingual Admin
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/wordpress-multilingual-admin-deploy.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-wordpress-multilingual-admin-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+          test -n "$FTP_SERVER"
+          test -n "$FTP_USERNAME"
+          test -n "$FTP_PASSWORD"
+          test -n "$WP_ADMIN_URL"
+
+      - name: Checkout WordPress source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Show production source revision
+        working-directory: source
+        run: echo "Deploying xuongmunonbaohiem-php@master $(git rev-parse HEAD)"
+
+      - name: Validate multilingual admin runtime
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wp-content/mu-plugins/esc-multilingual-admin.php
+          php -l wp-content/mu-plugins/tests/multilingual-admin-regression.php
+          php wp-content/mu-plugins/tests/multilingual-admin-regression.php
+
+      - name: Resolve WordPress FTP path
+        id: wp_path
+        shell: bash
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          host="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          raw = os.environ["WP_ADMIN_URL"].strip()
+          parsed = urlparse(raw if "://" in raw else "https://" + raw)
+          if not parsed.hostname:
+              raise SystemExit("Unable to resolve hostname from WP_ADMIN_URL")
+          print(parsed.hostname)
+          PY
+          )"
+          echo "host=$host" >> "$GITHUB_OUTPUT"
+          echo "remote_mu_plugins=/domains/$host/public_html/wp-content/mu-plugins" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy multilingual admin runtime through FTP
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          REMOTE_MU_PLUGINS: ${{ steps.wp_path.outputs.remote_mu_plugins }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y lftp
+
+          protocol="${FTP_PROTOCOL:-ftp}"
+          export protocol FTP_SERVER FTP_USERNAME FTP_PASSWORD
+
+          ftp_url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+
+          protocol = os.environ.get("protocol", "ftp")
+          server = os.environ["FTP_SERVER"]
+          username = quote(os.environ["FTP_USERNAME"], safe="")
+          password = quote(os.environ["FTP_PASSWORD"], safe="")
+          print(f"{protocol}://{username}:{password}@{server}")
+          PY
+          )"
+
+          lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set net:reconnect-interval-base 3
+          set ssl:verify-certificate no
+
+          cd "$REMOTE_MU_PLUGINS"
+          put "source/wp-content/mu-plugins/esc-multilingual-admin.php" -o "esc-multilingual-admin.php"
+          get "esc-multilingual-admin.php" -o /tmp/esc-multilingual-admin.remote.php
+
+          bye
+          LFTP
+
+          cmp source/wp-content/mu-plugins/esc-multilingual-admin.php /tmp/esc-multilingual-admin.remote.php
+          rm -f /tmp/esc-multilingual-admin.remote.php
+          echo "Multilingual admin runtime deployed and byte-verified."
+
+      - name: Smoke test WordPress backend
+        shell: bash
+        env:
+          WP_HOST: ${{ steps.wp_path.outputs.host }}
+        run: |
+          set -euo pipefail
+          curl -fsS --connect-timeout 10 --max-time 30 "https://$WP_HOST/wp-json/" >/tmp/wp-json-index.json
+          test -s /tmp/wp-json-index.json
+          echo "WordPress backend smoke test passed."

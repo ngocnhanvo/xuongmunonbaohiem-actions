@@ -5,3 +5,5 @@ Safety: no Astro build, no PHP-repo runner; PHP lint/unit tests before FTP; live
 Run requested: 2026-10-09 (Vietnam local).
 
 Retry after regression assertion aligns with published Page pricing source rules. PHP master head f73e2fb54a06dc008dc38a5fb4295df6938beffd. Retry sequence 2.
+
+Retry 3: restored backward-compatible provider plan shape when no memory_update is supplied. Source bc048517208e4916b239d042b688e2ee4919a748.

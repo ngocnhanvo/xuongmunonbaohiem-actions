@@ -1,3 +1,3 @@
-Verify xuongmunonbaohiem-astro@github after sitemap guard regression test.
-Astro head: c7532a9f5876d87587c029bf5f9fe46a4ce3f75e
-Purpose: confirm /*.html -> /* redirect still wins, sitemap.xml/robots.txt are not rewritten as post detail, then run unit tests + Astro guard + build-git.
+Verify xuongmunonbaohiem-astro@github product detail null DOM control fix.
+Astro head: 87872cb71787066995965d551dfa8409a0d8b1ac
+Purpose: confirm contact-price products do not crash when #btn-text-fallback is absent, cart navigation is null-safe, then run unit tests + Astro guard + build-git.

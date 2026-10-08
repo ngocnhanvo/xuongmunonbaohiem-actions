@@ -114,6 +114,8 @@ try {
     const body = new URLSearchParams({
       action: 'vcs_trigger_build',
       nonce: globalThis.vcsBuild.nonce,
+      // E2E chạy lại build kể cả khi không có pending logs.
+      force_build: '1',
     });
 
     const response = await fetch(globalThis.vcsBuild.ajax_url, {

@@ -1,5 +1,7 @@
-Deploy WordPress GitHub trigger runtime from xuongmunonbaohiem-php@master.
-PHP source HEAD: 7028fe9adb88e4426f141bef385a5ed5bcd81609
-Feature: server-authoritative elapsed_seconds + performance.now client delta + JS cache bump 1.2.1.
-Regression test: build-status-regression.php covers server-based build elapsed timing.
-Deploy vcs-build-trigger.php and vcs-build-trigger.js with byte verification.
+Deploy WordPress GitHub Trigger from xuongmunonbaohiem-php@master.
+PHP source HEAD: 0a6bb1a0e0dd8620718d49c42063994215a4eeca
+Feature: "Build ngoại lệ" checkbox enables Build with 0 pending events, while active build disables checkbox + button.
+Server: force_build=1 only bypasses empty pending logs; atomic shared build lock remains authoritative.
+E2E: wordpress-build-trigger-e2e.mjs sets force_build=1 for its intentional repeat-build dispatch.
+Validation: PHP lint, build-status-regression.php, node --check, FTP byte verification.
+Runtime: vcs-build-trigger.php + vcs-build-trigger.js; JS cache version 1.2.2.

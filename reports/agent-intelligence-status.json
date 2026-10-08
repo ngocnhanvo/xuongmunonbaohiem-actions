@@ -1,11 +1,11 @@
 {
-  "UNIT": "success",
-  "CONFIG": "success",
-  "DEPLOY": "success",
-  "SMOKE": "success",
-  "SEMANTIC": "failure",
-  "SOURCE_SHA": "5782387fdf5fb9d1f51b6aed150d59ee433e4d25",
-  "run_id": "37832306513",
-  "url": "https://github.com/ngocnhanvo/xuongmunonbaohiem-actions/actions/runs/37832306513",
-  "updated_at": "2026-10-08T19:33:20.686043+00:00"
+  "UNIT": "failure",
+  "CONFIG": "skipped",
+  "DEPLOY": "skipped",
+  "SMOKE": "skipped",
+  "SEMANTIC": "skipped",
+  "SOURCE_SHA": "560c426e82580ebaa1021dff7fa5dd8b9a552df0",
+  "run_id": "37833158141",
+  "url": "https://github.com/ngocnhanvo/xuongmunonbaohiem-actions/actions/runs/37833158141",
+  "updated_at": "2026-10-08T19:36:15.811980+00:00"
 }

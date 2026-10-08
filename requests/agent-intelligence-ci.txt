@@ -11,3 +11,5 @@ Retry 3: restored backward-compatible provider plan shape when no memory_update 
 Final full cycle: source 5782387fdf5fb9d1f51b6aed150d59ee433e4d25. Runs knowledge unit tests, FTP, smoke, and agent-intelligence conversation regression. Reporter fast-forward conflict fixed. Requested 2026-10-09.
 
 Retry after semantic red: bare Page title routing and quote context hydration; 5 scenarios, including 11-turn old-memory check. PHP head 560c426e82580ebaa1021dff7fa5dd8b9a552df0.
+
+Retry PHP unit: fix foreach by-reference on validated plan array; commit 49fcdac88a38040ad378c3a3099a6adb3c565a6f.

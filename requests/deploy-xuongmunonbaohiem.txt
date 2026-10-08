@@ -1,4 +1,4 @@
 Deploy current xuongmunonbaohiem-astro@master through the central Actions Hub and smoke-test production.
-Astro production head: e14633a28479c21758b0d3a070fa4aecc550ab34
-Purpose: publish Menu Manager frontend support for dropdown/mega menus and current ESC Table preview updates.
-Requested at: 2026-10-07T02:13:00+07:00
+Astro production head: 052350263ef815b9074ea3f162a4d27ffca99ca0
+Purpose: publish ProductDetailsPage null-safe fix for contact-price products and cart navigation fallback.
+Requested at: 2026-10-08T15:19:00+07:00

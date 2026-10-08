@@ -1,0 +1,164 @@
+name: Agent Intelligence — WordPress QA & FTP
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agent-intelligence-ci.yml'
+      - 'requests/agent-intelligence-ci.txt'
+permissions:
+  contents: write
+concurrency:
+  group: blue-sea-agent-intelligence
+  cancel-in-progress: false
+jobs:
+  agent-qa-deploy:
+    name: Validate PHP, deploy FTP, test live Agent
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      AGENT_TEST_URL: https://xuongmunonbaohiem.io.vn/api/agent/chat
+      AGENT_TEST_TIMEOUT_MS: '45000'
+      AGENT_CASE_MAX_ATTEMPTS: '1'
+      AGENT_REPORT_PATH: tests/agent-regression/report.json
+    steps:
+      - name: Checkout Actions Hub
+        uses: actions/checkout@v4
+        with:
+          path: hub
+          persist-credentials: true
+      - name: Checkout WordPress source at master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Record source revision
+        id: revision
+        run: |
+          echo "sha=$(git -C source rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "Source revision: $(git -C source rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Validate Agent syntax and tests
+        id: unit
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          php -l wp-content/mu-plugins/esc-agent.php
+          find wp-content/mu-plugins/esc-agent/src -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          php -l wp-content/mu-plugins/esc-agent/tests/conversation-memory.php
+          php wp-content/mu-plugins/esc-agent/tests/conversation-memory.php
+          php wp-content/mu-plugins/esc-agent/tests/context-window.php
+          php wp-content/mu-plugins/esc-agent/tests/llm-first-all-intents.php
+          php wp-content/mu-plugins/esc-agent/tests/planner.php
+          php wp-content/mu-plugins/esc-agent/tests/planner-synthesis-context.php
+          php wp-content/mu-plugins/esc-agent/tests/product-preplanner-routing.php
+          php wp-content/mu-plugins/esc-agent/tests/quote-yes-no-evidence.php
+          php wp-content/mu-plugins/esc-agent/tests/product-category-feature-routing.php
+          php wp-content/mu-plugins/esc-agent/tests/company-fact-preplanner-routing.php
+          php wp-content/mu-plugins/esc-agent/tests/contact-quote.php
+          php wp-content/mu-plugins/esc-agent/tests/llm-provider-config.php
+          php wp-content/mu-plugins/esc-agent/tests/llm-health-router.php
+          php wp-content/mu-plugins/esc-agent/tests/llm-provider-clients.php
+          php wp-content/mu-plugins/esc-agent/tests/llm-telemetry.php
+          php wp-content/mu-plugins/esc-agent/tests/planner-repair-feedback.php
+          node --test tests/agent-regression/*.test.mjs
+      - name: Validate FTP configuration
+        id: config
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD" && test -n "$WP_ADMIN_URL"
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import os
+          from urllib.parse import urlparse
+          raw=os.environ["WP_ADMIN_URL"].strip()
+          host=urlparse(raw if "://" in raw else "https://"+raw).hostname
+          if not host: raise SystemExit("Missing valid WordPress admin host")
+          print(f"REMOTE_MU_PLUGINS=/domains/{host}/public_html/wp-content/mu-plugins")
+          print(f"WP_BACKEND_HOST={host}")
+          PY
+      - name: Deploy ONLY Agent MU plugin through FTP
+        id: deploy
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq lftp
+          ftp_url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          protocol=os.environ.get('FTP_PROTOCOL') or 'ftp'
+          username=quote(os.environ['FTP_USERNAME'],safe='')
+          password=quote(os.environ['FTP_PASSWORD'],safe='')
+          print(f"{protocol}://{username}:{password}@{os.environ['FTP_SERVER']}")
+          PY
+          )"
+          lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 25
+          set ssl:verify-certificate no
+          cd "$REMOTE_MU_PLUGINS"
+          mirror -R --delete --verbose=1 --parallel=2 "source/wp-content/mu-plugins/esc-agent/" "esc-agent/"
+          put "source/wp-content/mu-plugins/esc-agent.php" -o "esc-agent.php"
+          get "esc-agent/src/Core/ConversationMemory.php" -o /tmp/agent-memory.remote.php
+          bye
+          LFTP
+          cmp source/wp-content/mu-plugins/esc-agent/src/Core/ConversationMemory.php /tmp/agent-memory.remote.php
+          echo "Agent memory deployed and byte-verified" >> "$GITHUB_STEP_SUMMARY"
+      - name: Production smoke and memory regression
+        id: smoke
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          curl -fsS --connect-timeout 10 --max-time 30 "https://$WP_BACKEND_HOST/wp-json/" >/dev/null
+          node tests/agent-regression/run.mjs --smoke-only
+      - name: Upload regression artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-intelligence-${{ github.run_id }}
+          path: source/tests/agent-regression/report.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Persist QA/deploy status in Actions Hub
+        if: always()
+        shell: bash
+        env:
+          UNIT: ${{ steps.unit.outcome }}
+          CONFIG: ${{ steps.config.outcome }}
+          DEPLOY: ${{ steps.deploy.outcome }}
+          SMOKE: ${{ steps.smoke.outcome }}
+          SOURCE_SHA: ${{ steps.revision.outputs.sha }}
+          GH_TOKEN: ${{ github.token }}
+        working-directory: hub
+        run: |
+          mkdir -p reports
+          python3 - <<'PY'
+          import os,json,datetime
+          status={key:os.environ.get(key,'') for key in ['UNIT','CONFIG','DEPLOY','SMOKE','SOURCE_SHA']}
+          status.update({
+            'run_id': os.environ['GITHUB_RUN_ID'],
+            'url': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+            'updated_at': datetime.datetime.now(datetime.timezone.utc).isoformat()
+          })
+          with open('reports/agent-intelligence-status.json','w') as fp: json.dump(status,fp,ensure_ascii=False,indent=2)
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/agent-intelligence-status.json
+          git commit -m "ci(agent): record intelligence verification [skip ci]" || exit 0
+          git push origin HEAD:main

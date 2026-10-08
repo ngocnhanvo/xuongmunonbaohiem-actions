@@ -1,0 +1,1 @@
+Snapshot active Agent Intelligence workflow run status while FTP and live checks are being verified.

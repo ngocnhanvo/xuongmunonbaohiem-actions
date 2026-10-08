@@ -1,0 +1,82 @@
+name: WordPress API Build Logs Regression
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/wordpress-api-logs-ci.yml'
+      - 'requests/wordpress-api-logs-ci.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-wordpress-api-logs-ci
+  cancel-in-progress: false
+
+jobs:
+  regression:
+    name: PHP lint and deterministic API log tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Validate SOURCE_REPO_PAT
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+
+      - name: Checkout WordPress PHP master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Confirm source commit and PHP runtime
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD
+          php -v | head -n 2
+          test -f tests/api-build-logs-regression.php
+          echo "Source: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: PHP syntax validation
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            wp-content/plugins/github-trigger/vcs-hook.php \
+            wp-content/plugins/github-trigger/vcs-build-trigger.php \
+            wp-content/plugins/github-trigger/pages/endpoint.php \
+            wp-content/plugins/github-trigger/products/endpoint.php \
+            wp-content/plugins/github-trigger/info/endpoint.php \
+            wp-content/plugins/github-trigger/tablepress/endpoint.php \
+            tests/api-build-logs-regression.php; do
+            php -l "$file"
+          done
+
+      - name: Deterministic build log regression
+        working-directory: source
+        shell: bash
+        run: |
+          set -o pipefail
+          php tests/api-build-logs-regression.php 2>&1 | tee "$GITHUB_WORKSPACE/api-build-logs-regression.log"
+
+      - name: Preserve test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wp-api-build-logs-regression-${{ github.run_id }}
+          path: api-build-logs-regression.log
+          if-no-files-found: ignore
+          retention-days: 7

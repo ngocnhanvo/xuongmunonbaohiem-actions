@@ -11,3 +11,5 @@ Snapshot logo-intent 8-case semantic QA triggered from request 7e698ea1a03250fcb
 Snapshot targeted QA for price timeout and quote-context tests on 2026-10-09.
 
 Track targeted one-case run after updated Vietnamese paraphrase assertion, request commit 4bfd932ad0acd3b3c462b8524228ca3445907cdd.
+
+Snapshot run for 11-turn category-comparison stabilization after request commit 24a2ffbfdf2eb927799db384f4ff8557cb2074da.

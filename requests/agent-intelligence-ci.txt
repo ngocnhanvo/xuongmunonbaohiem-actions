@@ -1,0 +1,5 @@
+Run Blue Sea Agent Intelligence regression and deploy PHP MU agent only, via Actions Hub.
+Source repository: ngocnhanvo/xuongmunonbaohiem-php@master
+Change set: LLM structured conversation memory, Page/Post knowledge pricing priority.
+Safety: no Astro build, no PHP-repo runner; PHP lint/unit tests before FTP; live smoke after FTP.
+Run requested: 2026-10-09 (Vietnam local).

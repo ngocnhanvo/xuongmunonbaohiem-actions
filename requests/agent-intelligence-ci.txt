@@ -15,3 +15,5 @@ Retry after semantic red: bare Page title routing and quote context hydration; 5
 Retry PHP unit: fix foreach by-reference on validated plan array; commit 49fcdac88a38040ad378c3a3099a6adb3c565a6f.
 
 Final greeting/common-knowledge QA improvement: LLM-only greeting/direct explanation without regex. PHP master 49a7482e0a46b5bffefda6a5b835f22736e1042d. Semantic now 7 cases; Actions only.
+
+Run 8-case semantic regression after quote logo semantic intent correction. PHP source 93f5fffc311bb2107aeae45eec330c16ee04454d. Enforce known logo=true/false, cancellation and resumption without regex. GitHub Actions only.

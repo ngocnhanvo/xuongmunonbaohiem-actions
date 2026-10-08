@@ -1,4 +1,3 @@
-# Only unresolved cases. No FTP, no full-suite retest.
-intelligence-pricing-page-title
+# Verify only the previously test-mismatched quote resumption case. Price title and general comparison already PASS.
+# Assertion accepts 'có yêu cầu in logo' as a correct yes-intent.
 intelligence-topic-resume
-intelligence-context-general-compare

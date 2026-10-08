@@ -1,0 +1,42 @@
+name: Astro TablePress Cache Regression (Development)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/astro-tablepress-cache-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  tablepress-cache-tests:
+    name: Test Astro github branch (no deploy)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Astro development source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Regression tests
+        working-directory: source
+        run: pnpm exec vitest run src/lib/wordpress/tablepress/processedCache.test.ts src/lib/wordpress/tablepress/getData.test.ts

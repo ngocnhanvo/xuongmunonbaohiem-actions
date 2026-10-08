@@ -3,3 +3,5 @@ Source repository: ngocnhanvo/xuongmunonbaohiem-php@master
 Change set: LLM structured conversation memory, Page/Post knowledge pricing priority.
 Safety: no Astro build, no PHP-repo runner; PHP lint/unit tests before FTP; live smoke after FTP.
 Run requested: 2026-10-09 (Vietnam local).
+
+Retry after regression assertion aligns with published Page pricing source rules. PHP master head f73e2fb54a06dc008dc38a5fb4295df6938beffd. Retry sequence 2.

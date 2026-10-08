@@ -1,0 +1,4 @@
+# Only unresolved cases. No FTP, no full-suite retest.
+intelligence-pricing-page-title
+intelligence-topic-resume
+intelligence-context-general-compare

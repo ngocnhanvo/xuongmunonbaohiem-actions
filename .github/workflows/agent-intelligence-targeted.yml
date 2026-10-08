@@ -1,0 +1,71 @@
+name: Agent Targeted Semantic QA (no FTP)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agent-intelligence-targeted.yml'
+      - 'requests/agent-intelligence-targeted.txt'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-agent-targeted
+  cancel-in-progress: false
+jobs:
+  targeted-qa:
+    name: Test only unresolved Agent scenarios
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      AGENT_TEST_URL: https://xuongmunonbaohiem.io.vn/api/agent/chat
+      AGENT_TEST_TIMEOUT_MS: '45000'
+      AGENT_CASE_MAX_ATTEMPTS: '2'
+    steps:
+      - name: Checkout Actions Hub
+        uses: actions/checkout@v4
+        with:
+          path: hub
+      - name: Checkout PHP source (read-only for testing)
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Verify source and select unresolved cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "PHP source $(git -C source rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          test -f hub/requests/agent-intelligence-targeted.txt
+          cat hub/requests/agent-intelligence-targeted.txt
+      - name: Run targeted semantic regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          failed=0
+          count=0
+          while IFS= read -r case_id || [[ -n "$case_id" ]]; do
+            case_id="${case_id%$'\r'}"
+            [[ -z "$case_id" || "$case_id" == \#* ]] && continue
+            [[ "$case_id" =~ ^intelligence-[a-z0-9-]+$ ]] || { echo "Invalid case id: $case_id"; exit 1; }
+            count=$((count+1))
+            echo "Testing unresolved case: $case_id"
+            (
+              cd source
+              export AGENT_REPORT_PATH="$GITHUB_WORKSPACE/reports/$case_id.json"
+              node tests/agent-regression/run.mjs "--case=$case_id"
+            ) || failed=$((failed+1))
+          done < hub/requests/agent-intelligence-targeted.txt
+          echo "Selected $count cases; failed $failed" >> "$GITHUB_STEP_SUMMARY"
+          [[ "$count" -gt 0 && "$failed" -eq 0 ]]
+      - name: Upload semantic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-targeted-${{ github.run_id }}
+          path: reports/*.json
+          if-no-files-found: ignore
+          retention-days: 14

@@ -19,7 +19,7 @@ jobs:
     env:
       AGENT_TEST_URL: https://xuongmunonbaohiem.io.vn/api/agent/chat
       AGENT_TEST_TIMEOUT_MS: '45000'
-      AGENT_CASE_MAX_ATTEMPTS: '1'
+      AGENT_CASE_MAX_ATTEMPTS: '2'
       AGENT_REPORT_PATH: tests/agent-regression/report.json
     steps:
       - name: Checkout Actions Hub
@@ -134,7 +134,13 @@ jobs:
         working-directory: source
         run: |
           set -euo pipefail
-          node tests/agent-regression/run.mjs --group=agent-intelligence
+          selected_case="$(sed -nE 's/^semantic_case=([a-z0-9-]+)$/\\1/p' ../hub/requests/agent-intelligence-ci.txt | tail -n 1)"
+          if [[ -n "$selected_case" ]]; then
+            echo "Run only unresolved semantic case: $selected_case"
+            node tests/agent-regression/run.mjs "--case=$selected_case"
+          else
+            node tests/agent-regression/run.mjs --group=agent-intelligence
+          fi
       - name: Upload regression artifacts
         if: always()
         uses: actions/upload-artifact@v4

@@ -126,6 +126,13 @@ jobs:
           set -euo pipefail
           curl -fsS --connect-timeout 10 --max-time 30 "https://$WP_BACKEND_HOST/wp-json/" >/dev/null
           node tests/agent-regression/run.mjs --smoke-only
+      - name: Live semantic pricing and memory regression
+        id: semantic
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          node tests/agent-regression/run.mjs --group=agent-intelligence
       - name: Upload regression artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -142,6 +149,7 @@ jobs:
           CONFIG: ${{ steps.config.outcome }}
           DEPLOY: ${{ steps.deploy.outcome }}
           SMOKE: ${{ steps.smoke.outcome }}
+          SEMANTIC: ${{ steps.semantic.outcome }}
           SOURCE_SHA: ${{ steps.revision.outputs.sha }}
           GH_TOKEN: ${{ github.token }}
         working-directory: hub
@@ -149,7 +157,7 @@ jobs:
           mkdir -p reports
           python3 - <<'PY'
           import os,json,datetime
-          status={key:os.environ.get(key,'') for key in ['UNIT','CONFIG','DEPLOY','SMOKE','SOURCE_SHA']}
+          status={key:os.environ.get(key,'') for key in ['UNIT','CONFIG','DEPLOY','SMOKE','SEMANTIC','SOURCE_SHA']}
           status.update({
             'run_id': os.environ['GITHUB_RUN_ID'],
             'url': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",

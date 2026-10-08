@@ -134,7 +134,7 @@ jobs:
         working-directory: source
         run: |
           set -euo pipefail
-          selected_case="$(sed -nE 's/^semantic_case=([a-z0-9-]+)$/\\1/p' ../hub/requests/agent-intelligence-ci.txt | tail -n 1)"
+          selected_case="$(awk -F= '$1 == "semantic_case" && $2 ~ /^[a-z0-9-]+$/ { print $2 }' ../hub/requests/agent-intelligence-ci.txt | tail -n 1)"
           if [[ -n "$selected_case" ]]; then
             echo "Run only unresolved semantic case: $selected_case"
             node tests/agent-regression/run.mjs "--case=$selected_case"

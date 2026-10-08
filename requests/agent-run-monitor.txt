@@ -7,3 +7,5 @@ Snapshot retry after conversation memory reference fix (Actions request d00da13b
 Monitor upgraded Agent 7-case semantic suite on Actions request d745934348e9825447ba6e2241d922b0d0967d52.
 
 Snapshot logo-intent 8-case semantic QA triggered from request 7e698ea1a03250fcb014e885b04442d34d12bf60.
+
+Snapshot targeted QA for price timeout and quote-context tests on 2026-10-09.

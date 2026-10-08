@@ -1,0 +1,46 @@
+name: Production Smoke Test (Post Deploy)
+
+on:
+  workflow_run:
+    workflows:
+      - Deploy Blue Sea Astro Production
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-production-smoke
+  cancel-in-progress: false
+
+jobs:
+  production-smoke:
+    name: Smoke test production
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check production root and sitemap
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="https://xuongmunonbaohiem.io.vn/"
+          sitemap="https://xuongmunonbaohiem.io.vn/sitemap.xml"
+
+          echo "Smoke test for deployment run: ${{ github.event.workflow_run.html_url }}"
+          for attempt in {1..12}; do
+            root_status="$(curl -L -sS -o /tmp/blue-root.html -w '%{http_code}' --connect-timeout 10 --max-time 30 "$root" || true)"
+            sitemap_status="$(curl -L -sS -o /tmp/blue-sitemap.xml -w '%{http_code}' --connect-timeout 10 --max-time 30 "$sitemap" || true)"
+
+            if [ "$root_status" = "200" ] && [ "$sitemap_status" = "200" ] && grep -qi '<urlset' /tmp/blue-sitemap.xml; then
+              echo "Production smoke test passed."
+              exit 0
+            fi
+
+            echo "Attempt ${attempt}/12 failed: root=${root_status:-curl-error}, sitemap=${sitemap_status:-curl-error}. Waiting..."
+            sleep 5
+          done
+
+          echo "::error::Production smoke test failed after 12 attempts. Source deploy: ${{ github.event.workflow_run.html_url }}"
+          exit 1

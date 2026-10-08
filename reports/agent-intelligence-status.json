@@ -3,9 +3,9 @@
   "CONFIG": "success",
   "DEPLOY": "success",
   "SMOKE": "success",
-  "SEMANTIC": "success",
-  "SOURCE_SHA": "49a7482e0a46b5bffefda6a5b835f22736e1042d",
-  "run_id": "37834230823",
-  "url": "https://github.com/ngocnhanvo/xuongmunonbaohiem-actions/actions/runs/37834230823",
-  "updated_at": "2026-10-08T19:50:38.067790+00:00"
+  "SEMANTIC": "failure",
+  "SOURCE_SHA": "93f5fffc311bb2107aeae45eec330c16ee04454d",
+  "run_id": "37835736104",
+  "url": "https://github.com/ngocnhanvo/xuongmunonbaohiem-actions/actions/runs/37835736104",
+  "updated_at": "2026-10-08T20:03:19.192565+00:00"
 }

@@ -24,6 +24,9 @@ jobs:
           token: ${{ secrets.SOURCE_REPO_PAT }}
           path: source
           persist-credentials: false
+      - name: Show tested Astro revision
+        working-directory: source
+        run: git rev-parse HEAD
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:

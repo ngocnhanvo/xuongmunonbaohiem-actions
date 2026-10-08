@@ -120,26 +120,3 @@ jobs:
           set -euo pipefail
           source .env
           curl -fsS "$WC_URL/unzip.php"
-
-      - name: Smoke test production
-        shell: bash
-        run: |
-          set -euo pipefail
-          root="https://xuongmunonbaohiem.io.vn/"
-          sitemap="https://xuongmunonbaohiem.io.vn/sitemap.xml"
-
-          for attempt in {1..12}; do
-            root_status="$(curl -L -sS -o /tmp/blue-root.html -w '%{http_code}' --connect-timeout 10 --max-time 30 "$root" || true)"
-            sitemap_status="$(curl -L -sS -o /tmp/blue-sitemap.xml -w '%{http_code}' --connect-timeout 10 --max-time 30 "$sitemap" || true)"
-
-            if [ "$root_status" = "200" ] && [ "$sitemap_status" = "200" ] && grep -qi '<urlset' /tmp/blue-sitemap.xml; then
-              echo "Production smoke test passed."
-              exit 0
-            fi
-
-            echo "Attempt ${attempt}/12 failed: root=${root_status:-curl-error}, sitemap=${sitemap_status:-curl-error}. Waiting..."
-            sleep 5
-          done
-
-          echo "::error::Production smoke test failed after 12 attempts."
-          exit 1

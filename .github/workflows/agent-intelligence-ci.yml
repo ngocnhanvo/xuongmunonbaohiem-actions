@@ -59,6 +59,8 @@ jobs:
           php wp-content/mu-plugins/esc-agent/tests/product-category-feature-routing.php
           php wp-content/mu-plugins/esc-agent/tests/company-fact-preplanner-routing.php
           php wp-content/mu-plugins/esc-agent/tests/contact-quote.php
+          php wp-content/mu-plugins/esc-agent/tests/knowledge-index.php
+          php wp-content/mu-plugins/esc-agent/tests/knowledge-search.php
           php wp-content/mu-plugins/esc-agent/tests/llm-provider-config.php
           php wp-content/mu-plugins/esc-agent/tests/llm-health-router.php
           php wp-content/mu-plugins/esc-agent/tests/llm-provider-clients.php

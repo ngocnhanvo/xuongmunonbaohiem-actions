@@ -1,0 +1,35 @@
+name: Agent Actions Run Monitor
+on:
+  push:
+    branches: [main]
+    paths:
+      - requests/agent-run-monitor.txt
+permissions:
+  actions: read
+  contents: write
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Snapshot Action Hub Agent runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          gh api "/repos/$GITHUB_REPOSITORY/actions/workflows/agent-intelligence-ci.yml/runs?per_page=6" \
+            --jq '{runs: [.workflow_runs[] | {id, status, conclusion, created_at, updated_at, html_url, head_sha}]}' \
+            > reports/agent-intelligence-runs.json
+          cat reports/agent-intelligence-runs.json
+      - name: Persist run snapshot
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/agent-intelligence-runs.json
+          git commit -m "ci(agent): snapshot Actions run status [skip ci]" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main

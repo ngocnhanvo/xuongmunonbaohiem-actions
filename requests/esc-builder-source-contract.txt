@@ -1,1 +1,1 @@
-Run authenticated WordPress API contract after successful PHP FTP deploy 37951888741. Validate /changes and home_00 /table-source. 2026-10-09.
+Diagnose 404 in authenticated home_00 /table-source contract with safe WordPress WP_Error code only, no token/response data. Previous run 37952086718 metadata changes PASS but table source HTTP404. 2026-10-09.

@@ -7,3 +7,5 @@ Check production-like GoogleServices Astro build run triggered by Actions reques
 Snapshot FTP production build/deploy after Actions request 9abcb399a3d8fc97984a98ea6c44923276149161.
 
 Track live Google verification smoke after deploy run 37900345360, request 737c258b87c942cebfc200c88a95fd22d0619aa0.
+
+Track Google lead conversions QA triggered at 95b14206494d866c7122462cb4e3d294be93bc92.

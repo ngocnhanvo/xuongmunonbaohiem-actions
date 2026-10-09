@@ -1,1 +1,1 @@
-Diagnose 404 in authenticated home_00 /table-source contract with safe WordPress WP_Error code only, no token/response data. Previous run 37952086718 metadata changes PASS but table source HTTP404. 2026-10-09.
+One final authenticated integration test after Astro master deploy 215fb4e661b934662aa599cf5c616a77ee851fcc and PHP cbac568d1b7638312df5cea2043ed0e73cae7027. Verify WordPress /changes and /table-source, then Astro iframe refresh_table=home_00 returns HTTP 200 X-ESC-Builder-Section-Refresh=updated; no content modification. 2026-10-09.

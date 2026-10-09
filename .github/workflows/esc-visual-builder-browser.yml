@@ -216,8 +216,9 @@ jobs:
             const updated=(response.headers()['x-esc-builder-sections-updated'] || '').split(',');
             if (!updated.includes('home_00') || !updated.includes('home_01'))
               throw Error('Previously refreshed home_00 was lost when home_01 refreshed: '+updated.join(','));
-            const updatedWrappers=await frame.$eval('[data-tablepress-preview]', els =>
-              [...new Set(els.map(el=>el.getAttribute('data-tablepress-preview')))].filter(Boolean));
+            const updatedWrappers=await frame.evaluate(() =>
+              [...new Set(Array.from(document.querySelectorAll('[data-tablepress-preview]'),
+                el=>el.getAttribute('data-tablepress-preview')))].filter(Boolean));
             if (!updatedWrappers.includes('home_00') || !updatedWrappers.includes('home_01'))
               throw Error('Refreshed tables disappeared from DOM');
             console.log('BUILDER_TWO_MANUAL_SECTIONS_QA=' + JSON.stringify({

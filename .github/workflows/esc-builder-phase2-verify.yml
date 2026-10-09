@@ -59,7 +59,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Focused image unit tests
         working-directory: source
-        run: pnpm exec vitest run src/lib/wordpress/builderImages.test.ts src/lib/wordpress/imageProcessor.preview.test.ts src/lib/wordpress/builderSectionRefresh.test.ts
+        run: pnpm exec vitest run src/lib/wordpress/builderImages.test.ts src/lib/wordpress/imageProcessor.preview.test.ts src/lib/wordpress/builderSectionRefresh.test.ts src/lib/wordpress/builderLivePage.test.ts
       - name: Verify preview isolation
         working-directory: source
         run: |

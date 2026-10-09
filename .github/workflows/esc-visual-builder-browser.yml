@@ -207,6 +207,12 @@ jobs:
             await frame.waitForSelector('[data-esc-builder-refresh-status]',{timeout:20000});
             if (response?.status()!==200 || response.headers()['x-esc-builder-section-refresh']!=='updated')
               throw Error('Refreshing two tables returned stale or non-200 response');
+            console.log('BUILDER_SECOND_MANUAL_REFRESH_DIAGNOSTICS=' + JSON.stringify({
+              status:response.status(),
+              refreshTables:new URL(response.url()).searchParams.get('refresh_tables'),
+              refreshStatus:response.headers()['x-esc-builder-section-refresh'] ?? null,
+              updatedTables:response.headers()['x-esc-builder-sections-updated'] ?? null
+            }));
             const updated=(response.headers()['x-esc-builder-sections-updated'] || '').split(',');
             if (!updated.includes('home_00') || !updated.includes('home_01'))
               throw Error('Previously refreshed home_00 was lost when home_01 refreshed: '+updated.join(','));

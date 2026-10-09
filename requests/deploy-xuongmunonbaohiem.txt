@@ -1,4 +1,7 @@
-Deploy Astro homepage-only mobile layout to production FTP via Actions hub.
-Astro repo: ngocnhanvo/xuongmunonbaohiem-astro@master
-Merge commit: e1d10085fb8cf723d2b132ff5edcf01a3145cea7 (PR #37)
-Changes: home_03 image-only category tiles without duplicate title overlay; home_04..home_08 fixed two-column mobile product cards. ProductDetailsPage.astro is unchanged versus master before merge. QA and production-like Astro build successful in Actions #37911631871. Trigger FTP deploy + remote unzip. Requested 2026-10-09.
+Deploy Blue Sea Astro full product description justification to production FTP via Actions Hub.
+Astro repository: ngocnhanvo/xuongmunonbaohiem-astro
+Production branch: master
+Merge: PR #38, commit 88b35458aaeef0d07ba7c85aac749e8a9fd43512
+Change: ProductDetailsPage.astro applies text-align:justify to the entire WordPress product description region and nested prose while preserving media/table alignment. No homepage change.
+Actions QA run 37914470239 PASSED (4 suites and production-like build), exact github source 367afe541a1e18b7da7d424fbb1cc027ecaa95e4.
+Run central FTP deploy, unzip, and production smoke, 2026-10-09.

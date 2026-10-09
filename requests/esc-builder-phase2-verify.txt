@@ -1,1 +1,1 @@
-Verify final targeted Builder: PHP source c6ed5f7139d925d87ce6d65cb4986539166fcaa4 and Astro github 861920634733f7236e49f770bbf79956eed08216; include all three image/single-section Vitest tests, PHP syntax, and CI contract. Do not deploy. 2026-10-09.
+Final phase2 focused verification: PHP master 2fb170d25f37abf1e992244c9263d26c45627a75; Astro github 8e7e4ac1c914c1e36259bfea52a5aa721f416c70. php-lint, image proxy bypass, scoped refresh tests. No deploy. 2026-10-09.

@@ -1,1 +1,1 @@
-HOTFIX Astro production SSR: restore availability after invalid injected regex. Deploy source ngocnhanvo/xuongmunonbaohiem-astro@master at merge commit 06c8c062a3f066eeb02ed47a77acb13e79202fd1. Validate node --check dist/server/entry.mjs before FTP. 2026-10-09.
+Deploy final ESC Visual Builder section-source inspector correction to Astro production. Merge PR #41 at cc22f1689230d5386250bb753f94851f80009b77. Server syntax guard mandatory. 2026-10-09.

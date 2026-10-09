@@ -1,1 +1,1 @@
-Diagnose missing Builder iframe after successful WordPress admin login. Print sanitized admin title/content and capture screenshot before iframe check. 2026-10-09.
+Run live Chrome QA after WordPress plugin page_on_front fallback deployed; PHP commit 04aadbb909964288430544c18e09d2b233b067e5, FTP job 37924793329 success; Astro production smoke 37924151697 success. 2026-10-09.

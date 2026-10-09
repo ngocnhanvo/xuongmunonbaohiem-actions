@@ -155,6 +155,25 @@ jobs:
             if (firstImage && firstImage.naturalWidth === 0) throw Error('Builder Blue Sea logo did not load');
             if (count === 0) throw Error('No ESC Table wrappers; cannot verify ESC Table section mapping');
             if (JSON.parse(inspector).source !== 'ESC Table' || !JSON.parse(inspector).tableId) throw Error('Inspector did not resolve source as ESC Table');
+            // Regression: the 120-second ticket used to expire while the editor
+            // remained open. Renewal must update iframe history without reload.
+            const initialTicket = new URL(frame.url()).searchParams.get('ticket');
+            await new Promise(r => setTimeout(r, 130000));
+            const rotatedFrameUrl = frame.url();
+            const rotatedTicket = new URL(rotatedFrameUrl).searchParams.get('ticket');
+            if (!initialTicket || !rotatedTicket || rotatedTicket === initialTicket)
+              throw Error('Builder preview ticket was not renewed past 120 seconds');
+            const remainsInteractive = await frame.evaluate(() =>
+              document.documentElement.classList.contains('esc-builder-preview') &&
+              Boolean(document.querySelector('[data-tablepress-preview]')));
+            if (!remainsInteractive) throw Error('Builder iframe lost its DOM during ticket renewal');
+            const refreshedResponse = await frame.goto(rotatedFrameUrl, {waitUntil:'domcontentloaded',timeout:45000});
+            if (!refreshedResponse || refreshedResponse.status() !== 200)
+              throw Error('Builder iframe reload after session renewal HTTP '+(refreshedResponse?.status() ?? 'none'));
+            await frame.waitForSelector('[data-tablepress-preview]', {timeout:20000});
+            console.log('BUILDER_TICKET_130_SECOND_QA=' + JSON.stringify({
+              sessionRenewed:true, originalIframeStayedInteractive:true, iframeReload200:true
+            }));
           } finally { await browser.close(); }
           JS
       - uses: actions/upload-artifact@v4

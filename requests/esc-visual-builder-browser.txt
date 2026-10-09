@@ -1,1 +1,1 @@
-Diagnose ESC Visual Builder HTTP 500 for WordPress page 53390 (Về chúng tôi). Run Chrome authenticated iframe reproduction, capture response status and safe text without ticket. 2026-10-09.
+Diagnose Visual Builder homepage broken images and fonts HTTP 503 from user's Chrome screenshot (2026-10-09). Collect sanitized response statuses/hosts/paths plus naturalWidth, never authenticated ticket query. Do not redeploy yet. 2026-10-09.

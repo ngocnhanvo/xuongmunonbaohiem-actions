@@ -1,2 +1,2 @@
-phase=baseline
-Benchmark current deployed immediate GTM BEFORE deploying delayed GTM or CSP fix. Run five comparable Lighthouse mobile tests. Do not modify website.
+phase=optimized
+Compare 5 mobile Lighthouse runs using exact same GitHub Actions runner workflow/config as baseline 37908305849, after Astro delayed GTM/CSP fix deployed via FTP 37908707107 and smoke passed 37908890721. Keep all tracing independent and do not fake or suppress Lighthouse instrumentation.

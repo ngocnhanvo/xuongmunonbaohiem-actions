@@ -235,7 +235,28 @@ jobs:
               document.documentElement.classList.contains('esc-builder-preview') &&
               Boolean(document.querySelector('[data-tablepress-preview]')));
             if (!remainsInteractive) throw Error('Builder iframe lost its DOM during ticket renewal');
-            const refreshedResponse = await frame.goto(rotatedFrameUrl, {waitUntil:'domcontentloaded',timeout:45000});
+            let refreshedResponse;
+            try {
+              refreshedResponse=await frame.goto(rotatedFrameUrl,{waitUntil:'domcontentloaded',timeout:45000});
+            } catch (error) {
+              const auth=await page.evaluate(async target => {
+                const url=new URL(target);
+                const response=await fetch(location.origin+'/wp-json/esc-builder/v1/verify',{
+                  method:'POST',credentials:'same-origin',
+                  headers:{'Content-Type':'application/json'},
+                  body:JSON.stringify({ticket:url.searchParams.get('ticket'),
+                    page_id:Number(url.pathname.split('/').pop())})
+                });
+                return response.status;
+              },rotatedFrameUrl).catch(()=>0);
+              console.log('BUILDER_FRAME_RELOAD_DIAGNOSTICS='+JSON.stringify({
+                error:String(error.message||error).slice(0,80),
+                wordPressVerifyHTTP:auth,
+                iframeResponses:iframeResponses.slice(-6),
+                httpErrors:responseAudit.slice(-10)
+              }));
+              throw error;
+            }
             if (!refreshedResponse || refreshedResponse.status() !== 200)
               throw Error('Builder iframe reload after session renewal HTTP '+(refreshedResponse?.status() ?? 'none'));
             await frame.waitForSelector('[data-tablepress-preview]', {timeout:20000});

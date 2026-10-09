@@ -1,1 +1,1 @@
-Diagnose Visual Builder homepage broken images and fonts HTTP 503 from user's Chrome screenshot (2026-10-09). Collect sanitized response statuses/hosts/paths plus naturalWidth, never authenticated ticket query. Do not redeploy yet. 2026-10-09.
+Post-deploy Chrome Visual Builder image regression. Astro master 30595c9eb2d987765d40ab8f4c7dc88c3e5e6fad deployed FTP run 37938662978, production smoke 37939389581 passed. Require NO HTTP503 on CSS/JS/font/image and header logo naturalWidth > 0; compare with previous browser audit 37937164222. 2026-10-09.

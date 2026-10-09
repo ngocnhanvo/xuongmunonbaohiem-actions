@@ -37,7 +37,9 @@ jobs:
           git rev-parse HEAD
           ! grep -qE 'getSharedWordPressData\(avas,\s*true' 'src/pages/preview/[...slug].astro'
           grep -q 'noindex' 'src/pages/preview/[...slug].astro'
-          grep -q 'readPublishedPreview' 'src/pages/preview/[...slug].astro'
+          grep -q 'readLiveWordPressPreview' 'src/pages/preview/[...slug].astro'
+          ! grep -q 'writeJsonFile' 'src/lib/wordpress/livePreview.ts'
+          ! grep -q 'getSharedWordPressData' 'src/pages/preview/[...slug].astro'
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -79,8 +81,8 @@ jobs:
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
           status=""
-          for attempt in {1..15}; do
-            status="$(curl -sS --connect-timeout 5 --max-time 20 -D /tmp/preview.hdr -o /tmp/preview.html -w '%{http_code}' http://127.0.0.1:4379/preview/trang-chu || true)"
+          for attempt in {1..4}; do
+            status="$(curl -sS --connect-timeout 5 --max-time 120 -D /tmp/preview.hdr -o /tmp/preview.html -w '%{http_code}' http://127.0.0.1:4379/preview/trang-chu || true)"
             echo "Attempt $attempt: preview HTTP $status"
             [ "$status" = 200 ] && break
             if ! kill -0 "$pid" 2>/dev/null; then
@@ -98,6 +100,8 @@ jobs:
           grep -qi 'blue sea' /tmp/preview.html
           grep -qi 'noindex' /tmp/preview.hdr
           grep -qi 'no-store' /tmp/preview.hdr
+          grep -qi 'x-esc-preview-source: wordpress-live' /tmp/preview.hdr
+          test ! -e ftp-runtime/.cache
           # A separate legacy URL rewrite may intercept unknown preview URLs.
           # Report that investigation separately; don't hide the main page's 200 result.
           missing="$(curl -sS --max-time 8 -o /dev/null -w '%{http_code}' http://127.0.0.1:4379/preview/esc-nonexistent-page-12345 || true)"
@@ -106,4 +110,4 @@ jobs:
           fi
           denied="$(curl -sS --max-time 15 -o /dev/null -w '%{http_code}' http://127.0.0.1:4379/esc-builder/preview/1)"
           test "$denied" = 403
-          echo "PASS: /preview/trang-chu=200; missing=404; builder no-ticket=403; private/noindex headers"
+          echo "PASS: live WP /preview/trang-chu=200; builder no-ticket=403; noindex/no-store and no runtime cache writes"

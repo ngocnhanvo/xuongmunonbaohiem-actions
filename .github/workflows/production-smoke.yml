@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows:
       - Deploy Blue Sea Astro Production
+      - Blue Sea FTP Artifact Recovery
     types:
       - completed
 

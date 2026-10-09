@@ -1,0 +1,2 @@
+phase=baseline
+Benchmark current deployed immediate GTM BEFORE deploying delayed GTM or CSP fix. Run five comparable Lighthouse mobile tests. Do not modify website.

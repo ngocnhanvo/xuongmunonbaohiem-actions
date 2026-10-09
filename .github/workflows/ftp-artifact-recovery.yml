@@ -1,0 +1,85 @@
+name: Blue Sea FTP Artifact Recovery
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Successful build run ID containing blue-sea-ftp-package"
+        type: string
+        required: true
+  push:
+    branches: [main]
+    paths: ['requests/ftp-recovery.txt']
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-deploy
+  cancel-in-progress: false
+
+jobs:
+  ftp-recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select archived package from previous build
+        id: archive
+        env:
+          REQUESTED_RUN: ${{ inputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$REQUESTED_RUN"
+          if [ -z "$run_id" ]; then run_id="$(head -n 1 requests/ftp-recovery.txt | tr -d '\r\n')"; fi
+          [[ "$run_id" =~ ^[0-9]{8,20}$ ]] || { echo "::error::Invalid build run ID"; exit 1; }
+          echo "source_run=$run_id" >> "$GITHUB_OUTPUT"
+      - name: Download exact ZIP from verified build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ steps.archive.outputs.source_run }}
+        run: |
+          set -euo pipefail
+          mkdir -p source/upload
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" --name blue-sea-ftp-package --dir source/upload
+          test -s source/upload/escvn.zip
+          unzip -tq source/upload/escvn.zip
+          echo "Using preserved ZIP from Actions run $SOURCE_RUN; Astro build will NOT run again."
+      - name: Resume FTP upload from archived ZIP
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq -y
+          sudo apt-get install -qq -y lftp
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<'LFTP'
+          set cmd:fail-exit yes
+          set net:max-retries 10
+          set net:reconnect-interval-base 5
+          set net:timeout 40
+          set ftp:passive-mode yes
+          set ssl:verify-certificate no
+          set xfer:clobber yes
+          cd /domains/xuongmunonbaohiem.io.vn/public_html/
+          rm -f .escvn.zip.uploading
+          put -c source/upload/escvn.zip -o .escvn.zip.uploading
+          rm -f escvn.zip
+          mv .escvn.zip.uploading escvn.zip
+          bye
+          LFTP
+      - name: Trigger production unpack
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$ENV_FILE" > /tmp/blue-sea-ftp.env
+          set -a
+          source /tmp/blue-sea-ftp.env
+          set +a
+          test -n "${WC_URL:-}"
+          curl --max-time 60 -fsS "$WC_URL/unzip.php"

@@ -88,6 +88,13 @@ jobs:
         working-directory: source
         run: pnpm run build-git
 
+      - name: Verify compiled standalone server parses before FTP
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check dist/server/entry.mjs
+
       - name: Zip Build Folder
         working-directory: source
         shell: bash

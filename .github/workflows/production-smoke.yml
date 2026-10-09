@@ -36,7 +36,7 @@ jobs:
             sitemap_status="$(curl -L -sS -o /tmp/blue-sitemap.xml -w '%{http_code}' --connect-timeout 10 --max-time 30 "$sitemap" || true)"
             preview_status="$(curl -L -sS -D /tmp/blue-preview-headers -o /tmp/blue-preview.html -w '%{http_code}' --connect-timeout 10 --max-time 35 "$preview" || true)"
 
-            if [ "$root_status" = "200" ] && [ "$sitemap_status" = "200" ] && [ "$preview_status" = "200" ] && grep -qi '<urlset' /tmp/blue-sitemap.xml && grep -qi 'noindex' /tmp/blue-preview-headers && grep -qi 'no-store' /tmp/blue-preview-headers && grep -qi 'blue sea' /tmp/blue-preview.html; then
+            if [ "$root_status" = "200" ] && [ "$sitemap_status" = "200" ] && [ "$preview_status" = "200" ] && grep -qi '<urlset' /tmp/blue-sitemap.xml && grep -qi 'noindex' /tmp/blue-preview-headers && grep -qi 'no-store' /tmp/blue-preview-headers && grep -qi 'x-esc-preview-source: wordpress-live' /tmp/blue-preview-headers && grep -qi 'blue sea' /tmp/blue-preview.html; then
               echo "Production smoke test passed."
               exit 0
             fi

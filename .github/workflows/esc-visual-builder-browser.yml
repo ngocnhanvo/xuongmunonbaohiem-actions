@@ -108,6 +108,7 @@ jobs:
               mobileWidth,desktopWidth,pageErrors:failures.slice(0,6)
             }));
             if (count === 0) throw Error('No ESC Table wrappers; cannot verify ESC Table section mapping');
+            if (JSON.parse(inspector).source !== 'ESC Table' || !JSON.parse(inspector).tableId) throw Error('Inspector did not resolve source as ESC Table');
           } finally { await browser.close(); }
           JS
       - uses: actions/upload-artifact@v4

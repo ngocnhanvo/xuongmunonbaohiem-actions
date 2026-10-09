@@ -1,0 +1,1 @@
+Read-only production Chrome mobile validation at 390px after Astro master merge e1d10085fb8cf723d2b132ff5edcf01a3145cea7, Actions FTP #37912104799 SUCCESS. Assert home_04..home_08 product grids are two columns on mobile, and home_03 category images have no duplicate overlay title. Screenshot as artifact. Do not submit forms or modify WordPress.

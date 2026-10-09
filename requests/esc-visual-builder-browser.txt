@@ -1,1 +1,1 @@
-Second independent Chrome regression to assess intermittent 503 recurrence after Astro PR #45 / commit 30595c9eb2d987765d40ab8f4c7dc88c3e5e6fad deploy. First Chrome run 37939507388 passed with 0 failed resources and good logo/banner; rerun exact same assertions with no code changes, 2026-10-09.
+Diagnose intermittent WP admin Builder HTTP error on second post-deploy Chrome QA run 37939768469 (admin not HTTP 200, prior run 37939507388 passed with zero 503 assets). Log safe HTTP status/headers, rerun once, no Astro/FTP code changes, 2026-10-09.

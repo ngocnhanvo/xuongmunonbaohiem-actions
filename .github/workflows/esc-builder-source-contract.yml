@@ -58,7 +58,9 @@ jobs:
           },timeout=35)
           if table.status_code!=200:
             # Never print ticket, cookie or response body in logs.
-            raise SystemExit('Builder single-table contract HTTP '+str(table.status_code))
+            try: error_code=str(table.json().get('code','unknown'))[:65]
+            except Exception: error_code='non-json-response'
+            raise SystemExit('Builder single-table contract HTTP '+str(table.status_code)+' code='+error_code)
           t=table.json().get('table')
           if not isinstance(t,dict) or t.get('id')!='home_00' or not isinstance(t.get('items'),list):
             raise SystemExit('ESC Table adapter returned unexpected schema (expected id and items)')

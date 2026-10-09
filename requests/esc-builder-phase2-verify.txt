@@ -1,1 +1,1 @@
-Recheck phase 2 after PHP table-source and UI changes (c6ed5f7139d925d87ce6d65cb4986539166fcaa4), Astro github single-section refresh 2de702aa7d877ed2ff2dd54f9cc3645f228a76d8. Run php lint + focused image Vitest before any production. 2026-10-09.
+Verify final targeted Builder: PHP source c6ed5f7139d925d87ce6d65cb4986539166fcaa4 and Astro github 861920634733f7236e49f770bbf79956eed08216; include all three image/single-section Vitest tests, PHP syntax, and CI contract. Do not deploy. 2026-10-09.

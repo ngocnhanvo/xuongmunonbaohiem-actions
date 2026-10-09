@@ -70,6 +70,12 @@ jobs:
             const adminResponse = await page.goto(adminUrl, {waitUntil:'domcontentloaded',timeout:45000});
             if (!adminResponse || adminResponse.status() !== 200) throw Error('WP admin Builder not HTTP 200');
             if (page.url().includes('wp-login.php')) throw Error('WordPress login failed');
+            const pageSummary = await page.evaluate(() => ({
+              title: document.title,
+              content: (document.querySelector('.wrap')?.innerText || document.body.innerText).slice(0,350)
+            }));
+            console.log('BUILDER_ADMIN_DIAGNOSTICS=' + JSON.stringify({url:page.url(), ...pageSummary}));
+            await page.screenshot({path:'reports/esc-builder-admin-before-frame.png',fullPage:false});
             await page.waitForSelector('#esc-vb-frame', {timeout:20000});
             const frameEl = await page.$('#esc-vb-frame');
             const frameSrc = await frameEl.evaluate(el => el.getAttribute('src'));

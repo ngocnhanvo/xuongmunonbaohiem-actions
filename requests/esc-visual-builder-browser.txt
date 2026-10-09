@@ -1,1 +1,1 @@
-Retry authenticated ESC Visual Builder Chrome E2E after Astro production SSR hotfix deployed at 06c8c062a3f066eeb02ed47a77acb13e79202fd1 and production smoke succeeded (run 37924151697). 2026-10-09.
+Diagnose missing Builder iframe after successful WordPress admin login. Print sanitized admin title/content and capture screenshot before iframe check. 2026-10-09.

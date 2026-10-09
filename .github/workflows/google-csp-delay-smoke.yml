@@ -1,0 +1,71 @@
+name: Blue Sea Google CSP + GTM Delay Production Smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/google-csp-delay-smoke.txt'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Assert live server CSP + delayed GTM HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import time
+          from urllib.request import Request, urlopen
+
+          url = "https://xuongmunonbaohiem.io.vn/"
+          response = None
+          for attempt in range(6):
+              try:
+                  req = Request(url, headers={"User-Agent": "BlueSea-CSP-QA/1.0", "Cache-Control": "no-cache"})
+                  response = urlopen(req, timeout=25)
+                  body = response.read().decode("utf-8", errors="replace")
+                  break
+              except Exception as err:
+                  print("Retry", attempt + 1, repr(err))
+                  if attempt == 5: raise
+                  time.sleep(4)
+
+          policies = response.headers.get_all("Content-Security-Policy") or []
+          assert policies, "Production is not returning a CSP header"
+          required_connect = [
+              "https://analytics.google.com",
+              "https://stats.g.doubleclick.net",
+              "https://ad.doubleclick.net",
+              "https://googleads.g.doubleclick.net",
+          ]
+          required_script = ["https://googleads.g.doubleclick.net"]
+          for policy in policies:
+              pieces = {}
+              for directive in policy.split(";"):
+                  parts = directive.strip().split()
+                  if parts: pieces[parts[0]] = parts[1:]
+              for origin in required_connect:
+                  assert origin in pieces.get("connect-src", []), f"CSP connect-src missing {origin}"
+              for origin in required_script:
+                  assert origin in pieces.get("script-src", []), f"CSP script-src missing {origin}"
+              assert "'none'" in pieces.get("default-src", []), "CSP default-src was weakened"
+              assert "'none'" in pieces.get("object-src", []), "CSP object-src was weakened"
+              assert "*" not in pieces.get("connect-src", []), "Wildcard CSP connect-src forbidden"
+
+          for marker in [
+              'name="google-site-verification"',
+              'name="ahrefs-site-verification"',
+              "GTM-N4QNX8C",
+              "__blueSeaLoadGoogleTags",
+              "scheduleGtmFallback",
+              "setTimeout(loadGoogleTags, 8000)",
+          ]:
+              assert marker in body, "Missing expected tracking loader marker: " + marker
+
+          print("PASS: production CSP allows GA4/Ads hosts, retains restrictive policy, and GTM delay is live.")
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("PASS: production CSP GA4/Ads connect/script-src and GTM 8s-after-load/interaction loader.\n")
+          PY

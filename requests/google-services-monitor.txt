@@ -1,3 +1,5 @@
 Check Google/Ahrefs tracking Astro regression results for run triggered by commit 0251c8ccb0c29f05d3f8deb76d3338b0567c89b8.
 
 Track full Astro github verification triggered at Actions request f925a87fdfc51e220f5e585f8ef6560ba54fe116.
+
+Check production-like GoogleServices Astro build run triggered by Actions request 3ea9ff7fc6ae5c114bb9fcfe03beacf62156d8ff.

@@ -1,0 +1,63 @@
+name: Blue Sea Google tracking regression
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/google-services-ci.yml'
+      - 'requests/google-services-ci.txt'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-google-tracking
+  cancel-in-progress: false
+jobs:
+  tracking-qa:
+    name: Validate Astro github tracking integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Actions hub
+        uses: actions/checkout@v4
+        with:
+          path: hub
+      - name: Checkout Astro development source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Record source revision
+        shell: bash
+        run: |
+          echo "Astro github: $(git -C source rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "No FTP or production merge is performed by this validation workflow." >> "$GITHUB_STEP_SUMMARY"
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install source dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Run tracking regression test
+        working-directory: source
+        run: pnpm exec vitest run src/lib/googleServices.test.ts
+      - name: Validate tracking source is confined to shared layout
+        shell: bash
+        working-directory: source
+        run: |
+          set -euo pipefail
+          test "$(grep -c 'GoogleServices' src/astro/components/Layout/Head.astro)" -eq 2
+          grep -q 'googleTagMode === "gtm"' src/astro/components/Layout/Layout.astro
+          if grep -R -n -E 'UA-164564431-1|getflycrm.com' src/astro/components/Layout/GoogleServices.astro src/lib/googleServices.ts; then
+            echo "Disallowed legacy service in new tracking integration" >&2
+            exit 1
+          fi

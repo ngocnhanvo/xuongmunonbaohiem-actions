@@ -1,0 +1,1 @@
+Validate Astro github Google Services integration for Blue Sea. Check Google verification, Ahrefs, GTM GA4 Ads exclusive mode, no Getfly/Google Fonts in integration. Source commit c1cb60f4dad0c17d753ccf5ec34a79ada4ae8daf. Run regression in Actions only.

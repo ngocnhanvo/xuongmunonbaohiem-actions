@@ -1,0 +1,1 @@
+Verify PHP revision hook and Astro direct media URLs on github. PHP master a3c98d0845e34e9c7fdacfdbdf49c9e04b278f11; Astro github 273a1702f62ee20206a1051c16eb906c89443161. Run php -l and focused Vitest; do not deploy. 2026-10-09.

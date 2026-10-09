@@ -1,1 +1,1 @@
-Final phase2 focused verification: PHP master 2fb170d25f37abf1e992244c9263d26c45627a75; Astro github 8e7e4ac1c914c1e36259bfea52a5aa721f416c70. php-lint, image proxy bypass, scoped refresh tests. No deploy. 2026-10-09.
+Final security regression for PHP master 4d1072086367898cc35459b93b22265e3ee70a27, Astro github b4226f6f06eac3963b070e36d89b2136d8cdd946. Check PHP ticket-renewal, rate limits, all three Vitest source/media tests. No deploy. 2026-10-09.

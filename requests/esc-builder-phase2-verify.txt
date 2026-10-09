@@ -1,1 +1,1 @@
-Final focused Phase2 tests include single-flight concurrency: PHP master ce7eb416aba77911aaf370a5821050221d6de13f and Astro github 97674f92ba748b8b2e6350ede941b79d4cd31581. Check PHP syntax, direct media, scoped table and concurrency regression. 2026-10-09.
+Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 commits ahead of master), builder direct images, bounded single section refresh, single-flight, WordPress PHP cbac568d1b7638312df5cea2043ed0e73cae7027; earlier QA success pre-final commits. 2026-10-09.

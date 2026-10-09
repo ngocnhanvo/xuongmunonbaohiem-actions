@@ -36,7 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p reports
-          phase="$(sed -nE 's/^phase=(baseline|optimized)$/\\1/p' requests/google-lighthouse-benchmark.txt | tail -n 1)"
+          phase="$(awk -F= '$1 == "phase" { print $2 }' requests/google-lighthouse-benchmark.txt | tail -n 1)"
           case "$phase" in baseline|optimized) ;; *) echo 'Invalid phase'; exit 1;; esac
           echo "Phase: $phase; Node: $(node --version); Chrome: $CHROME_PATH"
           for index in 1 2 3 4 5; do

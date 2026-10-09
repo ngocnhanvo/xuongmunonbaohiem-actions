@@ -1,0 +1,1 @@
+Read-only browser verification of delayed GTM on deployed Astro master b363b4ca92c056c67e07613b892ac3e05ea52d17. Check load+8s timer, user keydown start, exactly once, no blocked GA4/Ads collection CSP, and never submit customer forms. Lighthouse before/after PASS 37908305849 and 37909112635.

@@ -1,4 +1,5 @@
-Deploy current xuongmunonbaohiem-astro@master through the central Actions Hub and smoke-test production.
-Astro production head: 052350263ef815b9074ea3f162a4d27ffca99ca0
-Purpose: publish ProductDetailsPage null-safe fix for contact-price products and cart navigation fallback.
-Requested at: 2026-10-08T15:19:00+07:00
+Deploy xuongmunonbaohiem-astro@master via central Actions Hub to FTP production with Google Search Console, Ahrefs, GTM, GA4, and Google Ads tracking integrations.
+Production commit: 7ce5ba760a5fd319cbb505847071730a36e64cbd
+Tracking design: GTM default, GA4/Ads via published GTM container, optional direct mode. No Getfly CRM, Google Fonts integration, or retired UA.
+Verified Astro github production-like build: https://github.com/ngocnhanvo/xuongmunonbaohiem-actions/actions/runs/37899950888
+Request date: 2026-10-09.

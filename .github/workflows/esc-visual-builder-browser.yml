@@ -88,7 +88,15 @@ jobs:
             const iframeResponses = [];
             page.on('response', response => { if (response.url().includes('/esc-builder/preview/')) iframeResponses.push({status:response.status(),path:new URL(response.url()).pathname}); });
             const adminResponse = await page.goto(adminUrl, {waitUntil:'domcontentloaded',timeout:45000});
-            if (!adminResponse || adminResponse.status() !== 200) throw Error('WP admin Builder not HTTP 200');
+            console.log('BUILDER_ADMIN_HTTP=' + JSON.stringify({
+              status:adminResponse?.status() ?? null,
+              path:new URL(page.url()).pathname,
+              server:adminResponse?.headers()?.server ?? null,
+              contentType:adminResponse?.headers()?.['content-type'] ?? null,
+              retryAfter:adminResponse?.headers()?.['retry-after'] ?? null,
+              title:await page.title()
+            }));
+            if (!adminResponse || adminResponse.status() !== 200) throw Error('WP admin Builder HTTP ' + (adminResponse?.status() ?? 'none'));
             if (page.url().includes('wp-login.php')) throw Error('WordPress login failed');
             const pageSummary = await page.evaluate(() => ({
               title: document.title,

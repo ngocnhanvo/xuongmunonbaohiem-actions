@@ -123,6 +123,11 @@ jobs:
             }));
             await page.screenshot({path:'reports/esc-vb-page-53390.png',fullPage:false});
             await frame.waitForSelector('main [data-tablepress-preview], main section', {timeout: 45000});
+            const initialLiveStatus=await frame.evaluate(() =>
+              document.querySelector('[data-esc-builder-refresh-status]')?.textContent?.trim() || '');
+            if (!initialLiveStatus) throw Error('Initial Builder did not expose live source status');
+            if (initialLiveStatus.includes('Một số nguồn chưa đồng bộ được'))
+              throw Error('Builder first load has stale dependencies: '+initialLiveStatus.slice(0,320));
             const count = await frame.$$eval('[data-tablepress-preview]', els => els.length);
             const clickable = await frame.$('[data-tablepress-preview]') || await frame.$('main section');
             if (!clickable) throw Error('No selectable section in iframe');
@@ -273,6 +278,8 @@ jobs:
             const freshStatus=await afterReload.evaluate(() =>
               document.querySelector('[data-esc-builder-refresh-status]')?.textContent?.trim() || '');
             if (!freshStatus) throw Error('Builder F5 did not report live WordPress source state');
+            if (freshStatus.includes('Một số nguồn chưa đồng bộ được'))
+              throw Error('Builder F5 has stale dependencies: '+freshStatus.slice(0,320));
             const check=await page.$('#esc-vb-check');
             const bulk=await page.$('#esc-vb-refresh-all');
             if (!check || !bulk) throw Error('Bulk detection controls not present');

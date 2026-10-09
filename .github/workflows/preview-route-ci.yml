@@ -37,6 +37,7 @@ jobs:
           git rev-parse HEAD
           ! grep -qE 'getSharedWordPressData\(avas,\s*true' 'src/pages/preview/[...slug].astro'
           grep -q 'noindex' 'src/pages/preview/[...slug].astro'
+          grep -q 'readPublishedPreview' 'src/pages/preview/[...slug].astro'
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -57,13 +58,24 @@ jobs:
           set -euo pipefail
           pnpm run build-git
           node --check dist/server/entry.mjs
+          test -s dist/client/data/cms-common.json
+          test -s dist/client/data/cms-products.json
+          test -s dist/client/data/page-trang-chu.json
+          echo "Astro build includes self-contained CMS snapshot for preview."
       - name: Start standalone Astro and smoke all preview contracts
         working-directory: source
         shell: bash
         run: |
           set -euo pipefail
+          # Simulate the exact FTP zip layout: deploy copies dist/* to server root.
+          # Do not give the SSR process access to source/.cache or source/public.
+          mkdir -p ftp-runtime
+          ln -s "$(pwd)/dist/server" ftp-runtime/server
+          ln -s "$(pwd)/dist/client" ftp-runtime/client
+          cp .env ftp-runtime/.env
+          test ! -e ftp-runtime/.cache
           export HOST=127.0.0.1 PORT=4379
-          node dist/server/entry.mjs > /tmp/blue-sea-preview.log 2>&1 &
+          (cd ftp-runtime && node server/entry.mjs) > /tmp/blue-sea-preview.log 2>&1 &
           pid=$!
           trap 'kill "$pid" 2>/dev/null || true' EXIT
           status=""

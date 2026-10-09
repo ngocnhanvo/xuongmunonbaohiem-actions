@@ -1,1 +1,1 @@
-Retry Visual Builder PHP FTP upload after fixing mkdir on existing plugin folder. Deploy php/master commit 04aadbb909964288430544c18e09d2b233b067e5, 2026-10-09.
+Deploy phase2 backend ONLY from ngocnhanvo/xuongmunonbaohiem-php@master, revision-index change-index.php plus github-trigger/vcs-hook.php and main plugin. Latest PHP master ce7eb416aba77911aaf370a5821050221d6de13f, PHP lint verified run 37951651914. Verify FTP bytes and invalid change ticket HTTP403. Do not deploy Astro until source contract QA passes. 2026-10-09.

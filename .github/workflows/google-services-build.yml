@@ -53,7 +53,7 @@ jobs:
         run: printf '%s\n' "$ENV_FILE" > .env
       - name: Tracking regression
         working-directory: source
-        run: pnpm exec vitest run src/lib/googleServices.test.ts src/lib/googleLeadConversions.test.ts
+        run: pnpm exec vitest run src/lib/googleServices.test.ts src/lib/googleLeadConversions.test.ts src/lib/googleTrackingRuntime.test.ts
       - name: Production-like Astro build
         working-directory: source
         run: pnpm run build-git

@@ -1,1 +1,1 @@
-Deploy final ESC Visual Builder section-source inspector correction to Astro production. Merge PR #41 at cc22f1689230d5386250bb753f94851f80009b77. Server syntax guard mandatory. 2026-10-09.
+Fix legacy public preview /preview/trang-chu 500. Deploy ngocnhanvo/xuongmunonbaohiem-astro master PR #42 merge 94317dcb56f6413534cc31be9cd1e65ffcc4366b, targeted SSR QA 37927085393 passed. Production smoke must check root/sitemap/preview. 2026-10-09.

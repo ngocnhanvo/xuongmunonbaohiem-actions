@@ -46,6 +46,8 @@ jobs:
           set -euo pipefail
           git -C source rev-parse HEAD
           php -l source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          php -l source/wp-content/plugins/esc-visual-builder/includes/change-index.php
+          php -l source/wp-content/plugins/github-trigger/vcs-hook.php
           grep -Fq "ESC Visual Builder" source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
           grep -Fq "current_user_can('edit_post'" source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
 
@@ -96,11 +98,16 @@ jobs:
           set ssl:verify-certificate no
           mkdir -pf "$REMOTE_DIR"
           cd "$REMOTE_DIR"
+          mkdir -pf includes
+          put source/wp-content/plugins/esc-visual-builder/includes/change-index.php -o includes/change-index.php
+          get includes/change-index.php -o /tmp/esc-vb-revision-remote.php
           put source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php -o esc-visual-builder.php
           get esc-visual-builder.php -o /tmp/esc-visual-builder-remote.php
           bye
           LFTP
           cmp source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php /tmp/esc-visual-builder-remote.php
+          cmp source/wp-content/plugins/esc-visual-builder/includes/change-index.php /tmp/esc-vb-revision-remote.php
+          php -l /tmp/esc-vb-revision-remote.php
           php -l /tmp/esc-visual-builder-remote.php
           echo "ESC Visual Builder plugin byte-verified on FTP"
 
@@ -163,3 +170,6 @@ jobs:
           test "$code" = 403
           grep -q 'invalid_ticket' /tmp/esc-vb-invalid-ticket.json
           echo "Authenticated-only preview endpoint rejects invalid credentials."
+          changed_code="$(curl -sS -o /tmp/esc-vb-changes-deny.json -w '%{http_code}'              -H 'Content-Type: application/json' -d '{"ticket":"invalid","page_id":1,"since":0}'              --max-time 30 "https://$WP_HOST/wp-json/esc-builder/v1/changes")"
+          test "$changed_code" = 403
+          echo "Revision API also rejects unauthorized requests."

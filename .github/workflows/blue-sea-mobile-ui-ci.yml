@@ -50,7 +50,8 @@ jobs:
           pnpm exec vitest run \
             src/astro/tablepress/Home.mobile-product-layout.test.ts \
             src/astro/tablepress/Home.defer-images.test.ts \
-            src/astro/tablepress/Home.safari14.test.ts
+            src/astro/tablepress/Home.safari14.test.ts \
+            src/astro/pages/ProductDetailsPage.justify.test.ts
       - name: Load build environment
         working-directory: source
         env:

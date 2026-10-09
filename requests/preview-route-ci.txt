@@ -1,1 +1,1 @@
-Final phase2 full Astro github 8e7e4ac1c914c1e36259bfea52a5aa721f416c70: SSR Builder section refresh, dynamic metadata and direct WP image origins; preserve legacy /preview/trang-chu live HTTP200, no-store and no runtime build writes. CI only, 2026-10-09.
+Final Astro build on github b4226f6f06eac3963b070e36d89b2136d8cdd946. Strict live API timeout/error fallback for Builder, dynamic metadata, direct backend uploads. Isolated FTP-style SSR /preview live 200 and protected Builder 403. No deploy. 2026-10-09.

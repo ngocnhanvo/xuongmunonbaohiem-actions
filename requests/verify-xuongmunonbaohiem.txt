@@ -1,3 +1,4 @@
-Verify xuongmunonbaohiem-astro@github product detail null DOM control fix.
-Astro head: 87872cb71787066995965d551dfa8409a0d8b1ac
-Purpose: confirm contact-price products do not crash when #btn-text-fallback is absent, cart navigation is null-safe, then run unit tests + Astro guard + build-git.
+Verify Google tracking and verification integration on xuongmunonbaohiem-astro@github.
+Changes: Google Search Console, Ahrefs verification, GTM/GA4/Ads exclusive loader; no Getfly, Google Fonts, or retired UA tracking.
+Astro commit: c1cb60f4dad0c17d753ccf5ec34a79ada4ae8daf
+Run pnpm test:run, Astro inherited diagnostics guard, and production-like build-git in Actions Hub only.

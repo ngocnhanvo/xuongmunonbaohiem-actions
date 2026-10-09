@@ -1,0 +1,1 @@
+Deploy esc-visual-builder PHP plugin from ngocnhanvo/xuongmunonbaohiem-php@master. Verify upload, activate if possible, verify unauthorized ticket is rejected.

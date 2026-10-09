@@ -1,1 +1,1 @@
-Final authenticated ESC Visual Builder browser QA after inspector fix from Astro merge PR #41, commit cc22f1689230d5386250bb753f94851f80009b77. Production smoke run 37925425852 passed. Require selected source ESC Table and non-empty table ID. 2026-10-09.
+Diagnose ESC Visual Builder HTTP 500 for WordPress page 53390 (Về chúng tôi). Run Chrome authenticated iframe reproduction, capture response status and safe text without ticket. 2026-10-09.

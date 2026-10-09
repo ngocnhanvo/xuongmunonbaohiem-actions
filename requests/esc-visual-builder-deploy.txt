@@ -1,1 +1,1 @@
-Deploy PHP-only TablePress JSON mapping hotfix, php master 50820a35e6439e932d9f56c77c8c69ca0eafd10b. Contract 37952287820 confirmed table_missing 404 because TablePress stores tablepress_tables as JSON string; preserve current frontend, lint/upload/byte verify. 2026-10-09.
+Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 only (post mapping source contract returned table_missing). Preserve existing revision index and GitHub trigger. 2026-10-09T22:35+07:00.

@@ -76,7 +76,36 @@ jobs:
                 resourceFailures.push({host:url.host,path:url.pathname.slice(0,180),reason:request.failure()?.errorText?.slice(0,100)});
               } catch {}
             });
-            await page.goto(origin + '/wp-login.php', {waitUntil: 'domcontentloaded', timeout: 45000});
+            // Intermittent WordPress login/admin TTFB can exceed Chrome's
+            // navigation deadline during background cron or hosting pressure.
+            // Retry bounded GET navigation only (never submit credentials twice).
+            async function gotoWpWithRetry(url, label) {
+              let lastError;
+              for (let attempt=1;attempt<=2;attempt++) {
+                const started=Date.now();
+                try {
+                  const response=await page.goto(url,{
+                    waitUntil:'domcontentloaded',timeout:attempt===1?45000:70000
+                  });
+                  const status=response?.status() ?? null;
+                  console.log('BUILDER_WP_NAVIGATION='+JSON.stringify({
+                    label,attempt,status,elapsedMs:Date.now()-started
+                  }));
+                  if (status===200) return response;
+                  if (![429,502,503,504].includes(status)) throw Error(label+' HTTP '+status);
+                } catch(error) {
+                  lastError=error;
+                  console.log('BUILDER_WP_NAVIGATION_RETRY='+JSON.stringify({
+                    label,attempt,elapsedMs:Date.now()-started,
+                    error:String(error?.message||error).slice(0,160)
+                  }));
+                  if (attempt===2) throw error;
+                }
+                if (attempt===1) await new Promise(resolve=>setTimeout(resolve,1800));
+              }
+              throw lastError || Error(label+' unavailable');
+            }
+            await gotoWpWithRetry(origin + '/wp-login.php','login');
             await page.waitForSelector('#user_login', {timeout: 20000});
             await page.type('#user_login', process.env.WP_ADMIN_USERNAME);
             await page.type('#user_pass', process.env.WP_ADMIN_PASSWORD);
@@ -87,7 +116,7 @@ jobs:
             const adminUrl = origin + '/wp-admin/admin.php?page=esc-visual-builder';
             const iframeResponses = [];
             page.on('response', response => { if (response.url().includes('/esc-builder/preview/')) iframeResponses.push({status:response.status(),path:new URL(response.url()).pathname}); });
-            const adminResponse = await page.goto(adminUrl, {waitUntil:'domcontentloaded',timeout:45000});
+            const adminResponse = await gotoWpWithRetry(adminUrl,'visual-builder-admin');
             console.log('BUILDER_ADMIN_HTTP=' + JSON.stringify({
               status:adminResponse?.status() ?? null,
               path:new URL(page.url()).pathname,

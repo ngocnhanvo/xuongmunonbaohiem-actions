@@ -242,6 +242,28 @@ jobs:
             console.log('BUILDER_TICKET_130_SECOND_QA=' + JSON.stringify({
               sessionRenewed:true, originalIframeStayedInteractive:true, iframeReload200:true
             }));
+            // A fresh visit/F5 must use current WordPress Page and ESC Table
+            // sources rather than silently returning the deployed CMS snapshot.
+            const reloaded=await page.reload({waitUntil:'domcontentloaded',timeout:45000});
+            if (reloaded?.status()!==200) throw Error('Builder WordPress admin F5 was not 200');
+            const afterReload=await (await page.$('#esc-vb-frame')).contentFrame();
+            if (!afterReload) throw Error('Builder iframe missing after F5');
+            await afterReload.waitForSelector('[data-tablepress-preview="home_00"]',{timeout:100000});
+            const freshStatus=await afterReload.evaluate(() =>
+              document.querySelector('[data-esc-builder-refresh-status]')?.textContent?.trim() || '');
+            if (!freshStatus) throw Error('Builder F5 did not report live WordPress source state');
+            const check=await page.$('#esc-vb-check');
+            const bulk=await page.$('#esc-vb-refresh-all');
+            if (!check || !bulk) throw Error('Bulk detection controls not present');
+            await check.click();
+            await page.waitForFunction(() => {
+              const node=document.querySelector('#esc-vb-source-state');
+              return Boolean(node && /section|ESC Table|đồng bộ|WordPress/.test(node.textContent||''));
+            },{timeout:20000});
+            console.log('BUILDER_F5_LIVE_QA=' + JSON.stringify({
+              adminHTTP:reloaded.status(), sourceReported:true,
+              freshTablesAvailable:true, bulkControls:true
+            }));
 
           } finally { await browser.close(); }
           JS

@@ -1,5 +1,1 @@
-Deploy xuongmunonbaohiem-astro@master via central Actions Hub to FTP production with Google Search Console, Ahrefs, GTM, GA4, and Google Ads tracking integrations.
-Production commit: 7ce5ba760a5fd319cbb505847071730a36e64cbd
-Tracking design: GTM default, GA4/Ads via published GTM container, optional direct mode. No Getfly CRM, Google Fonts integration, or retired UA.
-Verified Astro github production-like build: https://github.com/ngocnhanvo/xuongmunonbaohiem-actions/actions/runs/37899950888
-Request date: 2026-10-09.
+Deploy xuongmunonbaohiem-astro@master via central Actions Hub to FTP production. Conversion tracking fixes: server-confirmed submission -> GTM dataLayer event 'form' for footer quote, product modal quote and contact. No more dependency on window.alert text, no double-submit or PII in tracking; published GTM container retains Google Ads conversion labels. Astro production merge SHA: 07d1f8cc7b847d6bfa0f2f83da73e1603791c8c7. Actions QA: https://github.com/ngocnhanvo/xuongmunonbaohiem-actions/actions/runs/37905367486 (success). Deploy date 2026-10-09.

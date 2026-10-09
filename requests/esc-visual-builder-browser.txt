@@ -1,1 +1,2 @@
 Post-deploy final Visual Builder browser QA on Astro master merge 215fb4e661b934662aa599cf5c616a77ee851fcc (FTP 37954131299 success; production smoke 37954309423 success). Check auth iframe, selected section metadata, images 503, backend media URLs, desktop/mobile. One run only; no backend data edits. 2026-10-09.
+2026-10-10: Live Chrome Builder regression: verify ticket rotates and iframe remains responsive over 130 seconds, then iframe navigation succeeds HTTP 200. Astro deploy run 37993449538 and PHP deploy run 37993625342 succeeded.

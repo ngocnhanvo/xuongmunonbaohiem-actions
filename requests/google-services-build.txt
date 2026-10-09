@@ -1,1 +1,1 @@
-Production-like build of Astro github Google/Google Search Console/Ahrefs integration with ENV_FILE. Skip inherited non-tracking unit test failures. Test focused tracking + pnpm build-git + rendered HTML markers. Source github c1cb60f4dad0c17d753ccf5ec34a79ada4ae8daf.
+Build and test form conversion migration from window.alert to confirmed server response on Astro github. Run vitest googleLeadConversions + googleServices, production-like build-git, and rendered HTML verification on Actions only. No FTP until approved checks pass.

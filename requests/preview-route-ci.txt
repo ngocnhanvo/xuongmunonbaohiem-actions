@@ -1,1 +1,1 @@
-Final production-candidate Astro github 97674f92ba748b8b2e6350ede941b79d4cd31581. Full build and standalone SSR in FTP layout after single-flight change. Validate /preview/trang-chu WordPress-live 200, no-store, /esc-builder/preview/1 unauth 403. Do not deploy until PHP table-source contract passes. 2026-10-09.
+Verify final Astro github 584b3d05106677a941ab44d6be69e731ac095e91 in FTP-layout SSR; public /preview remains WordPress live, Builder forbidden without ticket and source refresh code does not write shared cache. 2026-10-09.

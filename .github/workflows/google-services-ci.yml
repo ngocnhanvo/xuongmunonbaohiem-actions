@@ -49,7 +49,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Run tracking regression test
         working-directory: source
-        run: pnpm exec vitest run src/lib/googleServices.test.ts
+        run: pnpm exec vitest run src/lib/googleServices.test.ts src/lib/googleLeadConversions.test.ts
       - name: Validate tracking source is confined to shared layout
         shell: bash
         working-directory: source

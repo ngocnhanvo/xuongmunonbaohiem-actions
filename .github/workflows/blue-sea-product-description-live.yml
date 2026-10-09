@@ -1,0 +1,77 @@
+name: Blue Sea Product Description Justification Live QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/blue-sea-product-description-live.txt'
+permissions:
+  contents: read
+jobs:
+  product-description:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+      - name: Install Chromium client
+        run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Confirm deployed WordPress description alignment, read-only
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          import { appendFileSync } from 'node:fs';
+          const browser = await puppeteer.launch({
+            headless: true,
+            executablePath: process.env.CHROME_PATH,
+            args: ['--no-sandbox', '--disable-dev-shm-usage'],
+          });
+          try {
+            const page = await browser.newPage();
+            await page.setViewport({width:1280,height:900,deviceScaleFactor:1});
+            const response = await page.goto(
+              'https://xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-2-ban-chan-ace',
+              {waitUntil:'domcontentloaded', timeout:45000});
+            if (!response || response.status() !== 200) throw new Error('Product detail HTTP status was not 200');
+            await page.waitForSelector('.product-description', {timeout:15000});
+            const info = await page.evaluate(() => {
+              const box=document.querySelector('.product-description');
+              const texts=[...box.querySelectorAll('p, li, blockquote, h1, h2, h3, h4, h5, h6')];
+              const richBlocks=texts.filter(n=>n.textContent?.trim().length);
+              return {
+                boxTextAlign:getComputedStyle(box).textAlign,
+                richBlocks:richBlocks.length,
+                richBlockAlign:richBlocks.slice(0,6).map(n=>({tag:n.tagName,align:getComputedStyle(n).textAlign})),
+                images:box.querySelectorAll('img').length,
+                titleAlign:getComputedStyle(document.querySelector('#data-content-wrapper h1')||box).textAlign,
+              };
+            });
+            console.log('PRODUCT_DESCRIPTION='+JSON.stringify(info));
+            if (info.boxTextAlign !== 'justify') throw new Error('The entire product description container is not justified');
+            if (info.richBlocks && info.richBlockAlign.some(n=>n.align !== 'justify')) {
+              throw new Error('Some product description text blocks are not justified: '+JSON.stringify(info.richBlockAlign));
+            }
+            await page.screenshot({path:'reports/blue-sea-product-description-desktop.png',fullPage:false});
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              'PASS: actual product detail description wrapper and nested text justify both sides; product page HTTP 200. No forms submitted.\n');
+          } finally { await browser.close(); }
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blue-sea-product-desc-${{ github.run_id }}
+          path: reports/
+          retention-days: 7
+          if-no-files-found: warn

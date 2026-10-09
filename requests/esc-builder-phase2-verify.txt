@@ -1,1 +1,2 @@
 Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 commits ahead of master), builder direct images, bounded single section refresh, single-flight, WordPress PHP cbac568d1b7638312df5cea2043ed0e73cae7027; earlier QA success pre-final commits. 2026-10-09.
+2026-10-10: Verify Builder ticket renewal + iframe handshake fix, PHP master dbb15a2b4d3604348dbc6c2ead4988737e485ef5 and Astro github 648a50fd09ab60a8602bcecea9435d3cebaf47b7. PHP syntax, focused Vitest and snapshot isolation only; no FTP.

@@ -1,1 +1,1 @@
-Run read-only authenticated Chrome E2E against deployed WordPress ESC Visual Builder and Astro route, including Desktop/Mobile and section inspector. 2026-10-09.
+Retry authenticated ESC Visual Builder Chrome E2E after Astro production SSR hotfix deployed at 06c8c062a3f066eeb02ed47a77acb13e79202fd1 and production smoke succeeded (run 37924151697). 2026-10-09.

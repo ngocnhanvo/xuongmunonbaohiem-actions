@@ -97,6 +97,9 @@ jobs:
           set net:timeout 20
           set ssl:verify-certificate no
           mkdir -pf "$REMOTE_DIR"
+          cd "${REMOTE_DIR%/esc-visual-builder}/github-trigger"
+          put source/wp-content/plugins/github-trigger/vcs-hook.php -o vcs-hook.php
+          get vcs-hook.php -o /tmp/esc-vb-github-hook-remote.php
           cd "$REMOTE_DIR"
           mkdir -pf includes
           put source/wp-content/plugins/esc-visual-builder/includes/change-index.php -o includes/change-index.php
@@ -106,6 +109,8 @@ jobs:
           bye
           LFTP
           cmp source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php /tmp/esc-visual-builder-remote.php
+          cmp source/wp-content/plugins/github-trigger/vcs-hook.php /tmp/esc-vb-github-hook-remote.php
+          php -l /tmp/esc-vb-github-hook-remote.php
           cmp source/wp-content/plugins/esc-visual-builder/includes/change-index.php /tmp/esc-vb-revision-remote.php
           php -l /tmp/esc-vb-revision-remote.php
           php -l /tmp/esc-visual-builder-remote.php

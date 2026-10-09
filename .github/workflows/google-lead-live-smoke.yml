@@ -1,0 +1,71 @@
+name: Blue Sea confirmed lead tracking live smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/google-lead-live-smoke.yml'
+      - 'requests/google-lead-live-smoke.txt'
+permissions:
+  contents: read
+jobs:
+  read-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Verify deployed HTML and JS bundles without submitting forms
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          import time
+          from urllib.parse import urljoin, urlparse
+          from urllib.request import Request, urlopen
+          from html.parser import HTMLParser
+
+          ORIGIN = "https://xuongmunonbaohiem.io.vn"
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.scripts = []
+              def handle_starttag(self, tag, attrs):
+                  if tag == "script":
+                      src = dict(attrs).get("src")
+                      if src: self.scripts.append(src)
+
+          def get(url):
+              req = Request(url, headers={"User-Agent": "BlueSea-ReadOnly-Tracking-QA/1.0", "Cache-Control": "no-cache"})
+              with urlopen(req, timeout=25) as response:
+                  return response.read().decode("utf-8", errors="replace")
+
+          home = None
+          for attempt in range(5):
+              try:
+                  home = get(ORIGIN + "/")
+                  break
+              except Exception:
+                  if attempt == 4: raise
+                  time.sleep(4)
+          assert home and "GTM-N4QNX8C" in home, "Missing Google Tag Manager in live HTML"
+          assert "google-site-verification" in home, "Verification meta missing"
+
+          parser = Scripts()
+          parser.feed(home)
+          js_urls = []
+          for src in parser.scripts:
+              url = urljoin(ORIGIN + "/", src)
+              parsed = urlparse(url)
+              if parsed.hostname == urlparse(ORIGIN).hostname and (parsed.path.endswith(".js") or parsed.path.endswith(".mjs")):
+                  js_urls.append(url)
+          all_code = home
+          for url in dict.fromkeys(js_urls):
+              all_code += "\n" + get(url)
+          assert "blue-sea:lead-confirmed" in all_code, "Missing contact API success event listener on production"
+          assert "leadSubmitting" in all_code, "Missing in-flight submission guard in production bundle"
+          assert "form_type" in all_code, "Missing typed successful-lead event payload"
+          print(f"PASS: production has GTM, converted-lead event bridge, in-flight guard; JS files inspected={len(js_urls)}")
+          with open(__import__("os").environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write("PASS: production tracking bridge and deduplication bundled on xuongmunonbaohiem.io.vn.\n")
+              f.write("No sample customer leads or Google Ads conversion hits were generated.\n")
+          PY

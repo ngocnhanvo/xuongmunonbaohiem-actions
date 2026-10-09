@@ -1,0 +1,50 @@
+name: Blue Sea Static Asset HTTP Diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/asset-http-qa.txt']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check failing static URLs sequentially
+        shell: bash
+        run: |
+          set -uo pipefail
+          origin='https://xuongmunonbaohiem.io.vn'
+          assets=(
+            '/_astro/Layout.hI_4Tcys.css'
+            '/_astro/ProductDetailsPage.BvxM2i5s.css'
+            '/fonts/quicksand/v37/6xKtdSZaM9iE8KbpRA_hK1QNYuDyPw.woff2'
+            '/wp-content/uploads/2026/09/bluesea.png'
+            '/wp-content/uploads/2026/09/img-mu-bao-hiem-blue-sea.jpg'
+          )
+          for round in 1 2; do
+            for asset in "$\{assets[@]}"; do
+              echo "PROBE=$round$asset"
+              status="$(curl --http1.1 -L -sS --connect-timeout 8 --max-time 24 -D /tmp/headers -o /tmp/body -w '%{http_code}' "$origin$asset" || true)"
+              echo "STATUS=$status CONTENT_SIZE=$(wc -c < /tmp/body) DATE=$(date -u +%FT%TZ)"
+              grep -Ei '^(server|via|retry-after|content-type|cache-control|x-powered-by|cf-cache-status|x-cache|x-served-by):' /tmp/headers | tr -d '\r' || true
+              if [ "$status" != 200 ]; then
+                echo "BODY_START=$(head -c 200 /tmp/body | tr '\n' ' ' | tr '\r' ' ')"
+              fi
+            done
+          done
+      - name: Low concurrency check
+        shell: bash
+        run: |
+          set -uo pipefail
+          origin='https://xuongmunonbaohiem.io.vn'
+          pids=()
+          for n in {1..5}; do
+            (
+              status="$(curl --http1.1 -L -sS --connect-timeout 7 --max-time 30 -o /tmp/asset-body-$n -w '%{http_code}' "$origin/_astro/Layout.hI_4Tcys.css" || true)"
+              echo "CONCURRENT=$n STATUS=$status"
+            ) &
+            pids+=($!)
+          done
+          for p in "$\{pids[@]}"; do wait "$p" || true; done

@@ -1,0 +1,1 @@
+Read-only live Chrome verification of entire WordPress product description justified text at https://xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-2-ban-chan-ace . Astro production merge PR #38: 88b35458aaeef0d07ba7c85aac749e8a9fd43512. FTP Actions 37915000591 success. Inspect computed styles for description wrapper and nested text; no form submits; screenshot optional.

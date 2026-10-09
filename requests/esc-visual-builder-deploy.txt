@@ -1,1 +1,1 @@
-Deploy PHP WordPress Visual Builder selector fallback fix, source php@master commit 04aadbb909964288430544c18e09d2b233b067e5; then verify activation/API, 2026-10-09.
+Retry Visual Builder PHP FTP upload after fixing mkdir on existing plugin folder. Deploy php/master commit 04aadbb909964288430544c18e09d2b233b067e5, 2026-10-09.

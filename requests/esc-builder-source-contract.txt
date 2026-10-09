@@ -1,0 +1,1 @@
+Run authenticated WordPress API contract after successful PHP FTP deploy 37951888741. Validate /changes and home_00 /table-source. 2026-10-09.

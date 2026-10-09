@@ -24,7 +24,7 @@ jobs:
             '/wp-content/uploads/2026/09/img-mu-bao-hiem-blue-sea.jpg'
           )
           for round in 1 2; do
-            for asset in "$\{assets[@]}"; do
+            for asset in "${assets[@]}"; do
               echo "PROBE=$round$asset"
               status="$(curl --http1.1 -L -sS --connect-timeout 8 --max-time 24 -D /tmp/headers -o /tmp/body -w '%{http_code}' "$origin$asset" || true)"
               echo "STATUS=$status CONTENT_SIZE=$(wc -c < /tmp/body) DATE=$(date -u +%FT%TZ)"
@@ -47,4 +47,4 @@ jobs:
             ) &
             pids+=($!)
           done
-          for p in "$\{pids[@]}"; do wait "$p" || true; done
+          for p in "${pids[@]}"; do wait "$p" || true; done

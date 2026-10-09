@@ -19,11 +19,11 @@ jobs:
     steps:
       - name: Validate required connection secrets
         env:
-          SOURCE_REPO_PAT: \${{ secrets.SOURCE_REPO_PAT }}
-          FTP_SERVER: \${{ secrets.FTP_SERVER }}
-          FTP_USERNAME: \${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD: \${{ secrets.FTP_PASSWORD }}
-          WP_ADMIN_URL: \${{ secrets.WP_ADMIN_URL }}
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           set -euo pipefail
           test -n "$SOURCE_REPO_PAT"
@@ -36,7 +36,7 @@ jobs:
         with:
           repository: ngocnhanvo/xuongmunonbaohiem-php
           ref: master
-          token: \${{ secrets.SOURCE_REPO_PAT }}
+          token: ${{ secrets.SOURCE_REPO_PAT }}
           path: source
           persist-credentials: false
 
@@ -52,7 +52,7 @@ jobs:
       - name: Resolve WordPress FTP path and host
         id: wp
         env:
-          WP_ADMIN_URL: \${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -69,11 +69,11 @@ jobs:
 
       - name: Upload only ESC Visual Builder and byte-verify over FTP
         env:
-          FTP_SERVER: \${{ secrets.FTP_SERVER }}
-          FTP_USERNAME: \${{ secrets.FTP_USERNAME }}
-          FTP_PASSWORD: \${{ secrets.FTP_PASSWORD }}
-          FTP_PROTOCOL: \${{ vars.FTP_PROTOCOL }}
-          REMOTE_DIR: \${{ steps.wp.outputs.plugin_dir }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          REMOTE_DIR: ${{ steps.wp.outputs.plugin_dir }}
         shell: bash
         run: |
           set -euo pipefail
@@ -106,13 +106,13 @@ jobs:
 
       - name: Try WordPress plugin activation
         env:
-          WP_HOST: \${{ steps.wp.outputs.host }}
-          WP_ADMIN_USERNAME: \${{ secrets.WP_ADMIN_USERNAME }}
-          WP_ADMIN_PASSWORD: \${{ secrets.WP_ADMIN_PASSWORD }}
+          WP_HOST: ${{ steps.wp.outputs.host }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
         shell: bash
         run: |
           set -euo pipefail
-          if [ -z "\${WP_ADMIN_USERNAME:-}" ] || [ -z "\${WP_ADMIN_PASSWORD:-}" ]; then
+          if [ -z "${WP_ADMIN_USERNAME:-}" ] || [ -z "${WP_ADMIN_PASSWORD:-}" ]; then
             echo "::warning::WP credentials unavailable: plugin uploaded but manual activation required."
             exit 0
           fi
@@ -152,7 +152,7 @@ jobs:
 
       - name: Verify protected WordPress API
         env:
-          WP_HOST: \${{ steps.wp.outputs.host }}
+          WP_HOST: ${{ steps.wp.outputs.host }}
         shell: bash
         run: |
           set -euo pipefail

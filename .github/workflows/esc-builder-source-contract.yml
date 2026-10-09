@@ -74,6 +74,15 @@ jobs:
             table_data=sources.get(table_id,{}).get('table',{})
             if table_data.get('id')!=table_id or not isinstance(table_data.get('items'),list):
               raise SystemExit('Builder batch source invalid: '+table_id)
+          layout=session.post(root+'/wp-json/esc-builder/v1/page-layout',json={
+            'ticket':ticket,'page_id':page_id
+          },timeout=35)
+          if layout.status_code!=200:
+            raise SystemExit('Builder page-layout HTTP '+str(layout.status_code))
+          lp=layout.json().get('page',{})
+          if lp.get('id')!=page_id or not isinstance(lp.get('content',{}).get('rendered'),str):
+            raise SystemExit('Builder current Page layout source invalid')
+          print('ESC Builder live Page HTML source PASS: authenticated editor-only layout fetched.')
           print('ESC Builder live-first page-state PASS: '+str(len(table_ids))+
                 ' ESC Table sources discovered; bounded home_00/home_01 batch PASS.')
           table=session.post(root+'/wp-json/esc-builder/v1/table-source',json={

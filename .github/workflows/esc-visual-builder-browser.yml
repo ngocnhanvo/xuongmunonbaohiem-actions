@@ -54,10 +54,28 @@ jobs:
             args: ['--no-sandbox', '--disable-dev-shm-usage'],
           });
           const failures = [];
+          const resourceFailures = [];
+          const responseAudit = [];
           try {
             const page = await browser.newPage();
             await page.setViewport({width: 1450, height: 900, deviceScaleFactor: 1});
             page.on('pageerror', error => failures.push(error.message.slice(0,300)));
+            page.on('response', response => {
+              if (response.status() < 400) return;
+              try {
+                const url = new URL(response.url());
+                // Never log bearer tokens, credentials or query strings.
+                if (!url.pathname.includes('/wp-login.php')) {
+                  responseAudit.push({status:response.status(),host:url.host,path:url.pathname.slice(0,180),type:response.request().resourceType()});
+                }
+              } catch {}
+            });
+            page.on('requestfailed', request => {
+              try {
+                const url = new URL(request.url());
+                resourceFailures.push({host:url.host,path:url.pathname.slice(0,180),reason:request.failure()?.errorText?.slice(0,100)});
+              } catch {}
+            });
             await page.goto(origin + '/wp-login.php', {waitUntil: 'domcontentloaded', timeout: 45000});
             await page.waitForSelector('#user_login', {timeout: 20000});
             await page.type('#user_login', process.env.WP_ADMIN_USERNAME);
@@ -66,7 +84,7 @@ jobs:
               page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(() => {}),
               page.click('#wp-submit')
             ]);
-            const adminUrl = origin + '/wp-admin/admin.php?page=esc-visual-builder&esc_vb_page=53390';
+            const adminUrl = origin + '/wp-admin/admin.php?page=esc-visual-builder';
             const iframeResponses = [];
             page.on('response', response => { if (response.url().includes('/esc-builder/preview/')) iframeResponses.push({status:response.status(),path:new URL(response.url()).pathname}); });
             const adminResponse = await page.goto(adminUrl, {waitUntil:'domcontentloaded',timeout:45000});
@@ -86,6 +104,15 @@ jobs:
             if (!frame) throw Error('Builder iframe was blocked by browser policy');
             await new Promise(r => setTimeout(r, 1800));
             console.log('BUILDER_PAGE_53390_DIAGNOSTICS=' + JSON.stringify({frameUrlPath:new URL(frame.url()).pathname,frameTitle:await frame.title(),text:(await frame.evaluate(()=>document.body?.innerText||'')).slice(0,450),iframeResponses}));
+            await new Promise(r => setTimeout(r, 3500));
+            const imageAudit = await frame.evaluate(() => Array.from(document.images).slice(0,40).map(img => {
+              const url = new URL(img.currentSrc || img.src || '', location.href);
+              return {host:url.host,path:url.pathname.slice(0,180),naturalWidth:img.naturalWidth,complete:img.complete};
+            }));
+            console.log('BUILDER_IMAGE_HTTP_DIAGNOSTICS=' + JSON.stringify({
+              resources:responseAudit.slice(-60), requests:resourceFailures.slice(-20),
+              images:imageAudit
+            }));
             await page.screenshot({path:'reports/esc-vb-page-53390.png',fullPage:false});
             await frame.waitForSelector('main [data-tablepress-preview], main section', {timeout: 45000});
             const count = await frame.$$eval('[data-tablepress-preview]', els => els.length);

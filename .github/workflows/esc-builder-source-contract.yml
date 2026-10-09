@@ -69,5 +69,23 @@ jobs:
           },timeout=30)
           if unauthorized.status_code!=403:
             raise SystemExit('Invalid Builder ticket was not rejected (expected HTTP 403)')
+          # Full-stack check: one SSR request refreshes ONE section after
+          # ticket verification. No WordPress edits/build/cache writes.
+          live=session.get(src + '&refresh_table=home_00',timeout=110)
+          if live.status_code!=200:
+            raise SystemExit('Builder refreshed iframe HTTP '+str(live.status_code))
+          refresh=live.headers.get('X-ESC-Builder-Section-Refresh','')
+          if refresh!='updated':
+            raise SystemExit('Builder refresh failed or served stale, header='+str(refresh)[:45])
+          parsed=BeautifulSoup(live.text,'html.parser')
+          updated=parsed.select_one('[data-tablepress-preview="home_00"]')
+          if not updated:
+            raise SystemExit('Builder refresh rendered without home_00 wrapper')
+          if not parsed.select_one('[data-esc-builder-refresh-status]'):
+            raise SystemExit('Builder refresh lacks visible update confirmation')
+          image_sources=[img.get('src','') for img in updated.select('img[src]')]
+          direct=sum('/wp-content/uploads/' in url and '/api/images/' not in url for url in image_sources)
+          proxy=sum('/api/images/' in url for url in image_sources)
+          print(f'ESC Builder LIVE SSR PASS: home_00 updated; images={len(image_sources)} direct_uploads={direct} legacy_proxy={proxy} (paths omitted).')
           print('ESC Builder WordPress CONTRACT PASS: changes metadata 200; one home_00 source 200; invalid ticket 403.')
           PY

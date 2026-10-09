@@ -94,7 +94,7 @@ jobs:
           set net:max-retries 2
           set net:timeout 20
           set ssl:verify-certificate no
-          mkdir -p "$REMOTE_DIR"
+          mkdir -pf "$REMOTE_DIR"
           cd "$REMOTE_DIR"
           put source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php -o esc-visual-builder.php
           get esc-visual-builder.php -o /tmp/esc-visual-builder-remote.php

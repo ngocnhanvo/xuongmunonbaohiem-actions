@@ -1,0 +1,95 @@
+name: Blue Sea Delayed GTM Browser E2E (no form submit)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/google-gtm-runtime-e2e.txt'
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout Actions Hub
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+      - name: Install browser client
+        run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Browser verify delayed and interactive GTM without submitting leads
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          import { appendFileSync } from 'node:fs';
+          const url = 'https://xuongmunonbaohiem.io.vn/';
+          const browser = await puppeteer.launch({
+            headless: true,
+            executablePath: process.env.CHROME_PATH,
+            args: ['--no-sandbox', '--disable-dev-shm-usage'],
+          });
+          const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+          const load = async label => {
+            const page = await browser.newPage();
+            const hits = [];
+            const violations = [];
+            page.on('request', req => {
+              if (/www\.googletagmanager\.com\/gtm\.js\?id=GTM-N4QNX8C/.test(req.url())) {
+                hits.push(Date.now());
+              }
+            });
+            page.on('console', msg => {
+              if (/Content Security Policy/i.test(msg.text()) &&
+                  /analytics\.google\.com|stats\.g\.doubleclick\.net|ad\.doubleclick\.net|googleads\.g\.doubleclick\.net/i.test(msg.text())) {
+                violations.push(msg.text().slice(0, 500));
+              }
+            });
+            const res = await page.goto(url, { waitUntil: 'load', timeout: 40000 });
+            if (!res || res.status() !== 200) throw Error(label + ': unexpected HTTP status');
+            const bootExists = await page.evaluate(() => typeof window.__blueSeaLoadGoogleTags === 'function');
+            if (!bootExists) throw Error(label + ': missing delayed GTM bootstrap function');
+            return { page, hits, violations };
+          };
+          try {
+            const first = await load('interaction');
+            await delay(750);
+            if (first.hits.length !== 0) throw Error('GTM loaded eagerly before interaction');
+            await first.page.keyboard.press('ArrowDown');
+            await first.page.waitForFunction(
+              () => !!document.querySelector('script[src*="googletagmanager.com/gtm.js"]'),
+              { timeout: 12000 }
+            );
+            await delay(300);
+            if (first.hits.length !== 1) throw Error('GTM did not load exactly once on first interaction');
+            await delay(9000);
+            if (first.hits.length !== 1) throw Error('GTM double-loaded after delayed fallback');
+            if (first.violations.length) throw Error('GA4/Ads CSP violations: '+ first.violations.join(' | '));
+            await first.page.close();
+            console.log('PASS GTM starts once on real keyboard interaction, no duplicate at +9s');
+
+            const second = await load('fallback');
+            await delay(1200);
+            if (second.hits.length !== 0) throw Error('GTM loaded before deferred fallback');
+            await delay(8500);
+            if (second.hits.length !== 1) throw Error('GTM did not load after delayed timeout: '+second.hits.length);
+            if (second.violations.length) throw Error('GA4/Ads CSP violations: '+ second.violations.join(' | '));
+            await second.page.close();
+            console.log('PASS GTM starts once after load+8s without user interaction');
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              'PASS: no eager GTM; first real keyboard interaction starts exactly one GTM; 8s idle fallback starts GTM; no monitored CSP violations. No lead was submitted.\n');
+          } finally {
+            await browser.close();
+          }
+          JS

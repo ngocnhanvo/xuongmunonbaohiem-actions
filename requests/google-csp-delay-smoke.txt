@@ -1,0 +1,1 @@
+Read-only verification on deployed Astro production after Actions FTP run 37908707107 (commit b363b4ca92c056c67e07613b892ac3e05ea52d17). Check that CSP allows Google reporting hosts while keeping restrictive defaults, and HTML includes deferred GTM loader. No test form submits.

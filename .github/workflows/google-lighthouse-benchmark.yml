@@ -1,0 +1,77 @@
+name: Blue Sea GTM Mobile Benchmark (5 runs)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/google-lighthouse-benchmark.yml'
+      - 'requests/google-lighthouse-benchmark.txt'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-gtm-performance-benchmark
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout Actions Hub
+        uses: actions/checkout@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+      - name: Install Lighthouse 13
+        run: npm install -g lighthouse@13.4.1
+      - name: Run five comparable Lighthouse mobile samples
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          phase="$(sed -nE 's/^phase=(baseline|optimized)$/\\1/p' requests/google-lighthouse-benchmark.txt | tail -n 1)"
+          case "$phase" in baseline|optimized) ;; *) echo 'Invalid phase'; exit 1;; esac
+          echo "Phase: $phase; Node: $(node --version); Chrome: $CHROME_PATH"
+          for index in 1 2 3 4 5; do
+            echo "START lighthouse run $index/5: $phase"
+            lighthouse "https://xuongmunonbaohiem.io.vn/" \
+              --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" \
+              --only-categories=performance \
+              --form-factor=mobile \
+              --throttling-method=simulate \
+              --output=json \
+              --output-path="reports/$phase-$index.json" \
+              --quiet
+          done
+          node --input-type=module <<'JS'
+          import {readFileSync,writeFileSync,appendFileSync} from 'node:fs';
+          const phase=readFileSync('requests/google-lighthouse-benchmark.txt','utf8').match(/^phase=(baseline|optimized)$/m)?.[1];
+          const measurements=Array.from({length:5},(_,i)=>{
+            const a=JSON.parse(readFileSync(`reports/${phase}-${i+1}.json`));
+            return {run:i+1,score:Math.round((a.categories.performance?.score||0)*100),
+              lcpMs:Math.round(a.audits['largest-contentful-paint']?.numericValue||0),
+              tbtMs:Math.round(a.audits['total-blocking-time']?.numericValue||0),
+              fcpMs:Math.round(a.audits['first-contentful-paint']?.numericValue||0),
+              cls:a.audits['cumulative-layout-shift']?.numericValue||0};
+          });
+          const median=k=>[...measurements.map(r=>r[k])].sort((a,b)=>a-b)[2];
+          const summary={phase,median:{score:median('score'),tbtMs:median('tbtMs'),lcpMs:median('lcpMs'),fcpMs:median('fcpMs'),cls:median('cls')},measurements};
+          writeFileSync(`reports/${phase}-summary.json`,JSON.stringify(summary,null,2));
+          console.log('BENCHMARK_SUMMARY='+JSON.stringify(summary));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,`# GTM ${phase}: 5 mobile runs\n\nMedian performance **${summary.median.score}**, TBT **${summary.median.tbtMs} ms**, LCP **${summary.median.lcpMs} ms**.\n\n`);
+          for (const m of measurements) appendFileSync(process.env.GITHUB_STEP_SUMMARY,`Run ${m.run}: Perf ${m.score} / TBT ${m.tbtMs} ms / LCP ${m.lcpMs} ms\n\n`);
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: google-lighthouse-five-${{ github.run_id }}
+          path: reports/
+          retention-days: 14
+          if-no-files-found: warn

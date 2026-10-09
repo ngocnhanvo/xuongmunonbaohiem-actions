@@ -139,6 +139,12 @@ jobs:
               escTableWrappers:count, inspector:JSON.parse(inspector),
               mobileWidth,desktopWidth,pageErrors:failures.slice(0,6)
             }));
+            const critical503 = responseAudit.filter(x => x.status === 503 &&
+              x.host === 'xuongmunonbaohiem.io.vn' &&
+              ['stylesheet', 'script', 'font', 'image'].includes(x.type));
+            if (critical503.length) throw Error('Builder loaded with broken static resources: ' + JSON.stringify(critical503.slice(0,10)));
+            const firstImage = imageAudit.find(x => x.path === '/wp-content/uploads/2026/09/bluesea.png');
+            if (firstImage && firstImage.naturalWidth === 0) throw Error('Builder Blue Sea logo did not load');
             if (count === 0) throw Error('No ESC Table wrappers; cannot verify ESC Table section mapping');
             if (JSON.parse(inspector).source !== 'ESC Table' || !JSON.parse(inspector).tableId) throw Error('Inspector did not resolve source as ESC Table');
           } finally { await browser.close(); }

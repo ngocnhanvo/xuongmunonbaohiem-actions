@@ -1,1 +1,1 @@
-Final security regression for PHP master 4d1072086367898cc35459b93b22265e3ee70a27, Astro github b4226f6f06eac3963b070e36d89b2136d8cdd946. Check PHP ticket-renewal, rate limits, all three Vitest source/media tests. No deploy. 2026-10-09.
+Final focused Phase2 tests include single-flight concurrency: PHP master ce7eb416aba77911aaf370a5821050221d6de13f and Astro github 97674f92ba748b8b2e6350ede941b79d4cd31581. Check PHP syntax, direct media, scoped table and concurrency regression. 2026-10-09.

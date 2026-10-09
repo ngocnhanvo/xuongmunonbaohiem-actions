@@ -1,0 +1,113 @@
+name: ESC Visual Builder Browser QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/esc-visual-builder-browser.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+      - name: Install browser runner
+        run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Assert unauthenticated preview is denied
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sSL -o /tmp/esc-vb-denied.html -w '%{http_code}' --max-time 40 \
+                 https://xuongmunonbaohiem.io.vn/esc-builder/preview/1)"
+          echo "Unauthenticated Astro Builder route: HTTP $code"
+          test "$code" = 403
+      - name: Inspect live WordPress Builder iframe in Chrome
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$WP_ADMIN_URL"
+          test -n "$WP_ADMIN_USERNAME"
+          test -n "$WP_ADMIN_PASSWORD"
+          mkdir -p reports
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const origin = new URL(process.env.WP_ADMIN_URL).origin;
+          const browser = await puppeteer.launch({
+            headless: true, executablePath: process.env.CHROME_PATH,
+            args: ['--no-sandbox', '--disable-dev-shm-usage'],
+          });
+          const failures = [];
+          try {
+            const page = await browser.newPage();
+            await page.setViewport({width: 1450, height: 900, deviceScaleFactor: 1});
+            page.on('pageerror', error => failures.push(error.message.slice(0,300)));
+            await page.goto(origin + '/wp-login.php', {waitUntil: 'domcontentloaded', timeout: 45000});
+            await page.waitForSelector('#user_login', {timeout: 20000});
+            await page.type('#user_login', process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass', process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(() => {}),
+              page.click('#wp-submit')
+            ]);
+            const adminUrl = origin + '/wp-admin/admin.php?page=esc-visual-builder';
+            const adminResponse = await page.goto(adminUrl, {waitUntil:'domcontentloaded',timeout:45000});
+            if (!adminResponse || adminResponse.status() !== 200) throw Error('WP admin Builder not HTTP 200');
+            if (page.url().includes('wp-login.php')) throw Error('WordPress login failed');
+            await page.waitForSelector('#esc-vb-frame', {timeout:20000});
+            const frameEl = await page.$('#esc-vb-frame');
+            const frameSrc = await frameEl.evaluate(el => el.getAttribute('src'));
+            if (!frameSrc || !frameSrc.includes('/esc-builder/preview/')) throw Error('Missing Builder preview URL');
+            const frame = await frameEl.contentFrame();
+            if (!frame) throw Error('Builder iframe was blocked by browser policy');
+            await frame.waitForSelector('main [data-tablepress-preview], main section', {timeout: 45000});
+            const count = await frame.$$eval('[data-tablepress-preview]', els => els.length);
+            const clickable = await frame.$('[data-tablepress-preview]') || await frame.$('main section');
+            if (!clickable) throw Error('No selectable section in iframe');
+            await clickable.evaluate(el => el.scrollIntoView({block:'center'}));
+            await clickable.click({delay:50});
+            await page.waitForFunction(() => {
+              const v=document.querySelector('#esc-vb-inspector')?.textContent || '';
+              return v.includes('"source"');
+            }, {timeout:15000});
+            const inspector = await page.$eval('#esc-vb-inspector', el=>el.textContent);
+            const controls = await page.$$('.esc-vb-size');
+            if (controls.length !== 2) throw Error('Desktop/Mobile controls missing');
+            await controls[1].click();
+            const mobileWidth = await frameEl.evaluate(el=>Math.round(el.getBoundingClientRect().width));
+            if (Math.abs(mobileWidth - 390) > 2) throw Error('Mobile width was not 390px: ' + mobileWidth);
+            await controls[0].click();
+            const desktopWidth = await frameEl.evaluate(el=>Math.round(el.getBoundingClientRect().width));
+            if (desktopWidth < 750) throw Error('Desktop iframe unexpectedly narrow: '+desktopWidth);
+            await page.screenshot({path:'reports/esc-visual-builder-admin.png',fullPage:false});
+            console.log('ESC_VISUAL_BUILDER_QA=' + JSON.stringify({
+              wpAdminHTTP:adminResponse.status(), hasAstroFrame:true,
+              escTableWrappers:count, inspector:JSON.parse(inspector),
+              mobileWidth,desktopWidth,pageErrors:failures.slice(0,6)
+            }));
+            if (count === 0) throw Error('No ESC Table wrappers; cannot verify ESC Table section mapping');
+          } finally { await browser.close(); }
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: esc-visual-builder-browser-qa
+          path: reports/
+          retention-days: 7
+          if-no-files-found: warn

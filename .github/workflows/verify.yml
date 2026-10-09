@@ -118,3 +118,38 @@ jobs:
       - name: Build development branch
         working-directory: source
         run: pnpm run build-git
+
+      - name: Preview SSR runtime regression
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check dist/server/entry.mjs
+          export PORT=4379 HOST=127.0.0.1
+          node dist/server/entry.mjs > /tmp/blue-sea-preview-ssr.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          status=""
+          for attempt in {1..18}; do
+            status="$(curl -sS -o /tmp/blue-sea-preview.html -D /tmp/blue-sea-preview.headers -w '%{http_code}' --max-time 20 "http://127.0.0.1:4379/preview/trang-chu" || true)"
+            if [ "$status" = "200" ]; then break; fi
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "Astro standalone process died."
+              tail -n 60 /tmp/blue-sea-preview-ssr.log
+              exit 1
+            fi
+            sleep 3
+          done
+          if [ "$status" != "200" ]; then
+            echo "::error::/preview/trang-chu HTTP $status, expected 200"
+            tail -n 70 /tmp/blue-sea-preview-ssr.log
+            exit 1
+          fi
+          grep -qi 'blue sea' /tmp/blue-sea-preview.html
+          grep -qi 'noindex' /tmp/blue-sea-preview.headers
+          grep -qi 'no-store' /tmp/blue-sea-preview.headers
+          missing="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "http://127.0.0.1:4379/preview/esc-page-does-not-exist-xyz")"
+          test "$missing" = "404"
+          unauthorized="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "http://127.0.0.1:4379/esc-builder/preview/1")"
+          test "$unauthorized" = "403"
+          echo "Preview SSR runtime PASS: home=200, missing=404, private builder=403, noindex/no-store."

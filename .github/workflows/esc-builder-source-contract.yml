@@ -1,0 +1,71 @@
+name: ESC Builder Source Contract QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/esc-builder-source-contract.txt'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Test authenticated WordPress source contract
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,requests
+          from urllib.parse import urlparse,parse_qs
+          from bs4 import BeautifulSoup
+          root=os.environ['WP_ADMIN_URL'].split('/wp-admin')[0].rstrip('/')
+          session=requests.Session()
+          session.get(root+'/wp-login.php',timeout=30)
+          session.post(root+'/wp-login.php',data={
+            'log':os.environ['WP_ADMIN_USERNAME'],
+            'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In',
+            'redirect_to':root+'/wp-admin/admin.php?page=esc-visual-builder',
+            'testcookie':'1'
+          },timeout=40,allow_redirects=True)
+          page=session.get(root+'/wp-admin/admin.php?page=esc-visual-builder',timeout=40)
+          if 'wp-login.php' in page.url or page.status_code!=200:
+            raise SystemExit('WP admin login or Builder page HTTP error: '+str(page.status_code))
+          iframe=BeautifulSoup(page.text,'html.parser').select_one('#esc-vb-frame')
+          if not iframe: raise SystemExit('Missing Builder iframe')
+          src=iframe.get('src')
+          params=parse_qs(urlparse(src).query)
+          ticket=params.get('ticket',[''])[0]
+          page_id=int(urlparse(src).path.rstrip('/').split('/')[-1])
+          if len(ticket)!=64: raise SystemExit('Invalid Builder preview ticket')
+          verify=session.post(root+'/wp-json/esc-builder/v1/changes',json={
+            'ticket':ticket,'page_id':page_id,'since':0
+          },timeout=35)
+          if verify.status_code!=200:
+            raise SystemExit('Builder changes metadata contract HTTP '+str(verify.status_code))
+          data=verify.json()
+          if not isinstance(data.get('changes'),list) or not isinstance(data.get('pending'),list):
+            raise SystemExit('Invalid changes revision schema')
+          table=session.post(root+'/wp-json/esc-builder/v1/table-source',json={
+            'ticket':ticket,'page_id':page_id,'table_id':'home_00'
+          },timeout=35)
+          if table.status_code!=200:
+            # Never print ticket, cookie or response body in logs.
+            raise SystemExit('Builder single-table contract HTTP '+str(table.status_code))
+          t=table.json().get('table')
+          if not isinstance(t,dict) or t.get('id')!='home_00' or not isinstance(t.get('items'),list):
+            raise SystemExit('ESC Table adapter returned unexpected schema (expected id and items)')
+          unauthorized=session.post(root+'/wp-json/esc-builder/v1/table-source',json={
+            'ticket':'invalid','page_id':page_id,'table_id':'home_00'
+          },timeout=30)
+          if unauthorized.status_code!=403:
+            raise SystemExit('Invalid Builder ticket was not rejected (expected HTTP 403)')
+          print('ESC Builder WordPress CONTRACT PASS: changes metadata 200; one home_00 source 200; invalid ticket 403.')
+          PY

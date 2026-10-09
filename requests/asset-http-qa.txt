@@ -1,1 +1,1 @@
-Diagnose user-reported HTTP 503 during Visual Builder homepage iframe load. Browser QA 37937164222 reproduced intermittent 503 on CSS, JS, same-origin fonts and WP uploads; probe actual headers and status sequential vs 5 parallel requests, 2026-10-09.
+Rerun sequential+concurrent HTTP checks after fixing bash array literal; diagnose intermittent 503 CSS font WordPress images in Builder observed Chrome run 37937164222; 2026-10-09.

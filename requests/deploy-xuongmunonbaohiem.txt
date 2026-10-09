@@ -1,4 +1,1 @@
-Deploy Astro production with ESC Visual Builder phase 1, from ngocnhanvo/xuongmunonbaohiem-astro@master
-Required merge commit: 3dfa2e45621c3ecb478b1f871c77edf3f4b9bc5c
-Runner: xuongmunonbaohiem-actions/.github/workflows/deploy.yml
-Keep existing deploy smoke and FTP unzip; do not change database or ESC Table.
+HOTFIX Astro production SSR: restore availability after invalid injected regex. Deploy source ngocnhanvo/xuongmunonbaohiem-astro@master at merge commit 06c8c062a3f066eeb02ed47a77acb13e79202fd1. Validate node --check dist/server/entry.mjs before FTP. 2026-10-09.

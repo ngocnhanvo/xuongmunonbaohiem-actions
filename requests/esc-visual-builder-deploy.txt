@@ -1,1 +1,2 @@
 Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 only (post mapping source contract returned table_missing). Preserve existing revision index and GitHub trigger. 2026-10-09T22:35+07:00.
+2026-10-10: Deploy ESC Visual Builder PHP master dbb15a2b4d3604348dbc6c2ead4988737e485ef5, ticket renewal synchronization + one-shot iframe recovery. Astro production 0ebad15134d9ec8e707d6da00e2cc5c845504ebe deployed successfully via run 37993449538.

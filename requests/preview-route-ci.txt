@@ -1,0 +1,1 @@
+Run targeted SSR preview regression on Astro github commit 209c37b5444446b29e3bc4093e5def356dbe841f. Verify /preview/trang-chu HTTP 200, 404 unknown page, 403 protected Builder, noindex/no-store; do not deploy until passing. 2026-10-09.

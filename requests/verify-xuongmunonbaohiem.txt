@@ -1,4 +1,1 @@
-Verify Google tracking and verification integration on xuongmunonbaohiem-astro@github.
-Changes: Google Search Console, Ahrefs verification, GTM/GA4/Ads exclusive loader; no Getfly, Google Fonts, or retired UA tracking.
-Astro commit: c1cb60f4dad0c17d753ccf5ec34a79ada4ae8daf
-Run pnpm test:run, Astro inherited diagnostics guard, and production-like build-git in Actions Hub only.
+Verify Astro github preview route fix commit 209c37b5444446b29e3bc4093e5def356dbe841f. Must pass unit tests, Astro build, local SSR /preview/trang-chu HTTP 200, missing preview 404, private Builder 403. 2026-10-09.

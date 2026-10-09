@@ -1,1 +1,4 @@
-Deploy xuongmunonbaohiem-astro@master to FTP after PR #36 merge commit b363b4ca92c056c67e07613b892ac3e05ea52d17. Changes: Google GTM deferred until first user interaction or 8 sec after window.load; confirmation form leads boot GTM before queued event; CSP adds specific analytics.google.com, stats.g.doubleclick.net, ad.doubleclick.net, googleads.g.doubleclick.net origins. No wildcard or CSP removal. Actions QA 37908174436 PASS, 5-run baseline 37908305849 complete. Deploy via Actions Hub only; preserve all other website code.
+Deploy Astro homepage-only mobile layout to production FTP via Actions hub.
+Astro repo: ngocnhanvo/xuongmunonbaohiem-astro@master
+Merge commit: e1d10085fb8cf723d2b132ff5edcf01a3145cea7 (PR #37)
+Changes: home_03 image-only category tiles without duplicate title overlay; home_04..home_08 fixed two-column mobile product cards. ProductDetailsPage.astro is unchanged versus master before merge. QA and production-like Astro build successful in Actions #37911631871. Trigger FTP deploy + remote unzip. Requested 2026-10-09.

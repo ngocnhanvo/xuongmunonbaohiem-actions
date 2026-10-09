@@ -1,2 +1,4 @@
 phase=optimized
 Compare 5 mobile Lighthouse runs using exact same GitHub Actions runner workflow/config as baseline 37908305849, after Astro delayed GTM/CSP fix deployed via FTP 37908707107 and smoke passed 37908890721. Keep all tracing independent and do not fake or suppress Lighthouse instrumentation.
+
+Retry OPTIMIZED 5 samples; earlier Actions 37908949343 failed on first Chrome NO_NAVSTART and has zero valid optimized scores. Keep baseline results of 37908305849 unchanged. Use 3-attempt cap per failed sample.

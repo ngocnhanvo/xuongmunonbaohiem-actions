@@ -1,1 +1,1 @@
-Final Astro build on github b4226f6f06eac3963b070e36d89b2136d8cdd946. Strict live API timeout/error fallback for Builder, dynamic metadata, direct backend uploads. Isolated FTP-style SSR /preview live 200 and protected Builder 403. No deploy. 2026-10-09.
+Final production-candidate Astro github 97674f92ba748b8b2e6350ede941b79d4cd31581. Full build and standalone SSR in FTP layout after single-flight change. Validate /preview/trang-chu WordPress-live 200, no-store, /esc-builder/preview/1 unauth 403. Do not deploy until PHP table-source contract passes. 2026-10-09.

@@ -174,6 +174,47 @@ jobs:
             console.log('BUILDER_TICKET_130_SECOND_QA=' + JSON.stringify({
               sessionRenewed:true, originalIframeStayedInteractive:true, iframeReload200:true
             }));
+            // Only an explicit click on the WordPress refresh button may fetch a
+            // section. Two consecutive refreshes must both survive the reload.
+            async function chooseTable(id) {
+              const table = await frame.$('[data-tablepress-preview="' + id + '"]');
+              if (!table) throw Error('Missing selectable Builder ESC Table ' + id);
+              await table.evaluate(el => el.scrollIntoView({block:'center'}));
+              await table.click({delay:40});
+              await page.waitForFunction(expected => {
+                const val=document.querySelector('#esc-vb-inspector')?.textContent || '';
+                return val.includes('"tableId": "' + expected + '"');
+              }, {timeout:10000}, id);
+            }
+            const initialUrl=frame.url();
+            await chooseTable('home_00');
+            await new Promise(r=>setTimeout(r,1200));
+            if (frame.url()!==initialUrl) throw Error('Selecting home_00 unexpectedly refreshed the iframe');
+            let nextDocument=frame.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000});
+            await page.click('#esc-vb-refresh-section');
+            let response=await nextDocument;
+            if (response?.status()!==200 || response.headers()['x-esc-builder-sections-updated']!=='home_00')
+              throw Error('First manually refreshed table was not home_00');
+            const afterFirst=frame.url();
+            await chooseTable('home_01');
+            await new Promise(r=>setTimeout(r,1200));
+            if (frame.url()!==afterFirst) throw Error('Selecting home_01 unexpectedly refreshed the iframe');
+            nextDocument=frame.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000});
+            await page.click('#esc-vb-refresh-section');
+            response=await nextDocument;
+            if (response?.status()!==200 || response.headers()['x-esc-builder-section-refresh']!=='updated')
+              throw Error('Refreshing two tables returned stale or non-200 response');
+            const updated=(response.headers()['x-esc-builder-sections-updated'] || '').split(',');
+            if (!updated.includes('home_00') || !updated.includes('home_01'))
+              throw Error('Previously refreshed home_00 was lost when home_01 refreshed: '+updated.join(','));
+            const updatedWrappers=await frame.$eval('[data-tablepress-preview]', els =>
+              [...new Set(els.map(el=>el.getAttribute('data-tablepress-preview')))].filter(Boolean));
+            if (!updatedWrappers.includes('home_00') || !updatedWrappers.includes('home_01'))
+              throw Error('Refreshed tables disappeared from DOM');
+            console.log('BUILDER_TWO_MANUAL_SECTIONS_QA=' + JSON.stringify({
+              selectionsDidNotTriggerRefresh:true, bothSectionsUpdated:updated,
+              preservedInDOM:true
+            }));
           } finally { await browser.close(); }
           JS
       - uses: actions/upload-artifact@v4

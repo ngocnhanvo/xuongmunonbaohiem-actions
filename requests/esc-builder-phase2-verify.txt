@@ -1,1 +1,1 @@
-Verify PHP revision hook and Astro direct media URLs on github. PHP master a3c98d0845e34e9c7fdacfdbdf49c9e04b278f11; Astro github 273a1702f62ee20206a1051c16eb906c89443161. Run php -l and focused Vitest; do not deploy. 2026-10-09.
+Recheck phase 2 after PHP table-source and UI changes (c6ed5f7139d925d87ce6d65cb4986539166fcaa4), Astro github single-section refresh 2de702aa7d877ed2ff2dd54f9cc3645f228a76d8. Run php lint + focused image Vitest before any production. 2026-10-09.

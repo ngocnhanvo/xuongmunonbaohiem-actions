@@ -173,9 +173,18 @@ jobs:
             await chooseTable('home_00');
             await new Promise(r=>setTimeout(r,1200));
             if (frame.url()!==initialUrl) throw Error('Selecting home_00 unexpectedly refreshed the iframe');
-            let nextDocument=frame.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000});
+            const waitForManualRefresh = ids => page.waitForResponse(result => {
+              try {
+                const u=new URL(result.url());
+                return result.request().isNavigationRequest() &&
+                  u.pathname===new URL(frame.url()).pathname &&
+                  u.searchParams.get('refresh_tables')===ids;
+              } catch {return false;}
+            }, {timeout:60000});
+            let nextDocument=waitForManualRefresh('home_00');
             await page.click('#esc-vb-refresh-section');
             let response=await nextDocument;
+            await frame.waitForSelector('[data-esc-builder-refresh-status]',{timeout:20000});
             const firstRefreshAudit = {
               status:response?.status() ?? null,
               page:new URL(response?.url() || frame.url()).pathname,
@@ -192,9 +201,10 @@ jobs:
             await chooseTable('home_01');
             await new Promise(r=>setTimeout(r,1200));
             if (frame.url()!==afterFirst) throw Error('Selecting home_01 unexpectedly refreshed the iframe');
-            nextDocument=frame.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000});
+            nextDocument=waitForManualRefresh('home_00,home_01');
             await page.click('#esc-vb-refresh-section');
             response=await nextDocument;
+            await frame.waitForSelector('[data-esc-builder-refresh-status]',{timeout:20000});
             if (response?.status()!==200 || response.headers()['x-esc-builder-section-refresh']!=='updated')
               throw Error('Refreshing two tables returned stale or non-200 response');
             const updated=(response.headers()['x-esc-builder-sections-updated'] || '').split(',');

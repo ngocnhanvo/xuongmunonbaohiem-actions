@@ -1,0 +1,70 @@
+name: ESC Builder Phase 2 Code Verification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/esc-builder-phase2-verify.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esc-builder-phase2-verify
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Require source access token
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: test -n "$SOURCE_REPO_PAT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: backend
+          persist-credentials: false
+      - name: Verify PHP source and syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C backend rev-parse HEAD
+          php -l backend/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          php -l backend/wp-content/plugins/esc-visual-builder/includes/change-index.php
+          php -l backend/wp-content/plugins/github-trigger/vcs-hook.php
+          grep -Fq "vcs_astro_log_written" backend/wp-content/plugins/github-trigger/vcs-hook.php
+          grep -Fq "resync_required" backend/wp-content/plugins/esc-visual-builder/includes/change-index.php
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Focused image unit tests
+        working-directory: source
+        run: pnpm exec vitest run src/lib/wordpress/builderImages.test.ts src/lib/wordpress/imageProcessor.preview.test.ts
+      - name: Verify preview isolation
+        working-directory: source
+        run: |
+          set -euo pipefail
+          grep -Fq 'readLiveWordPressPreview' 'src/pages/preview/[...slug].astro'
+          grep -Fq 'rewriteBuilderImages' 'src/pages/esc-builder/preview/[pageId].astro'
+          ! grep -Fq 'getSharedWordPressData(' 'src/pages/esc-builder/preview/[pageId].astro'
+          grep -Fq 'wp-content/uploads/' src/lib/wordpress/imageProcessor.ts

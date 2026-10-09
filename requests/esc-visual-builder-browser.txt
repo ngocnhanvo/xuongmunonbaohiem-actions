@@ -1,1 +1,1 @@
-Run live Chrome QA after WordPress plugin page_on_front fallback deployed; PHP commit 04aadbb909964288430544c18e09d2b233b067e5, FTP job 37924793329 success; Astro production smoke 37924151697 success. 2026-10-09.
+Final authenticated ESC Visual Builder browser QA after inspector fix from Astro merge PR #41, commit cc22f1689230d5386250bb753f94851f80009b77. Production smoke run 37925425852 passed. Require selected source ESC Table and non-empty table ID. 2026-10-09.

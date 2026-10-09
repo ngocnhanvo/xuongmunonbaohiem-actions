@@ -75,7 +75,7 @@ jobs:
               visited.add(url)
               js = get(url)
               code_parts.append(js)
-              for part in re.findall(r"""['"]((?:\\.\\.?/|/)[^'"]+\\.m?js(?:\\?[^'"]*)?)['"]""", js):
+              for part in re.findall(r"""['"]((?:\.\.?/|/)[^'"]+\.m?js(?:\?[^'"]*)?)['"]""", js):
                   child = urljoin(url, part)
                   if child not in visited: pending.append(child)
           all_code = "\n".join(code_parts)

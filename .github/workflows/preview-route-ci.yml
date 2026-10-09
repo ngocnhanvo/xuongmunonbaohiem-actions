@@ -38,6 +38,8 @@ jobs:
           ! grep -qE 'getSharedWordPressData\(avas,\s*true' 'src/pages/preview/[...slug].astro'
           grep -q 'noindex' 'src/pages/preview/[...slug].astro'
           grep -q 'readLiveWordPressPreview' 'src/pages/preview/[...slug].astro'
+          grep -q 'readPublishedPreview' 'src/pages/esc-builder/preview/[pageId].astro'
+          ! grep -q 'getSharedWordPressData' 'src/pages/esc-builder/preview/[pageId].astro'
           ! grep -q 'writeJsonFile' 'src/lib/wordpress/livePreview.ts'
           ! grep -q 'getSharedWordPressData' 'src/pages/preview/[...slug].astro'
       - uses: pnpm/action-setup@v4

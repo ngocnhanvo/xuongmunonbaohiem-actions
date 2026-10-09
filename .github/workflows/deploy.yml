@@ -108,17 +108,47 @@ jobs:
           cd ..
           rm -rf dist deploy
 
-      - name: Sync files via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      # Preserve the output of a successful build so a transient FTP failure
+      # does not force a second identical Astro build on manual recovery.
+      - name: Archive deployment package for FTP recovery
+        uses: actions/upload-artifact@v4
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./source/upload/
-          server-dir: /domains/xuongmunonbaohiem.io.vn/public_html/
-          timeout: 600000
-          security: "loose"
-          dangerous-clean-slate: false
+          name: blue-sea-ftp-package
+          path: source/upload/escvn.zip
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+      - name: Sync files via resumable FTP
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y -qq
+          sudo apt-get install -y -qq lftp
+          test -s source/upload/escvn.zip
+          # The old escvn.zip is not replaced until the new package is fully sent.
+          # FTP data sockets can drop during a 47MB upload (EPIPE); "put -c"
+          # resumes the partial transfer after reconnect, without rebuilding.
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<'LFTP'
+          set cmd:fail-exit yes
+          set net:max-retries 10
+          set net:reconnect-interval-base 5
+          set net:timeout 40
+          set ftp:passive-mode yes
+          set ssl:verify-certificate no
+          set xfer:clobber yes
+          cd /domains/xuongmunonbaohiem.io.vn/public_html/
+          rm -f .escvn.zip.uploading
+          put -c source/upload/escvn.zip -o .escvn.zip.uploading
+          rm -f escvn.zip
+          mv .escvn.zip.uploading escvn.zip
+          bye
+          LFTP
+          echo "Resumable FTP transfer completed; archive staged for remote unzip."
 
       - name: Trigger Remote Unzip
         working-directory: source

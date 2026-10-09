@@ -1,0 +1,90 @@
+name: Blue Sea Mobile Homepage Live UI QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/blue-sea-mobile-home-live.txt'
+permissions:
+  contents: read
+jobs:
+  mobile-home:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+      - name: Install browser client
+        run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify live mobile homepage layout without modifying data
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          import { appendFileSync } from 'node:fs';
+
+          const browser = await puppeteer.launch({
+            headless: true,
+            executablePath: process.env.CHROME_PATH,
+            args: ['--no-sandbox', '--disable-dev-shm-usage'],
+          });
+          try {
+            const page = await browser.newPage();
+            await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+            const response = await page.goto('https://xuongmunonbaohiem.io.vn/', {
+              waitUntil: 'domcontentloaded',
+              timeout: 45000,
+            });
+            if (!response || response.status() !== 200) {
+              throw new Error('Mobile homepage did not respond with HTTP 200');
+            }
+            await page.waitForSelector('.home-product-catalog__grid', {timeout: 15000});
+            const result = await page.evaluate(() => {
+              const grids = [...document.querySelectorAll('.home-product-catalog__grid')];
+              const productGrids = grids.filter(grid => grid.children.length >= 2).map(grid => {
+                const children = [...grid.children];
+                const a = children[0].getBoundingClientRect();
+                const b = children[1].getBoundingClientRect();
+                const columns = getComputedStyle(grid).gridTemplateColumns;
+                return { columns, sameRow: Math.abs(a.top - b.top) < 4, items: children.length,
+                  width: grid.getBoundingClientRect().width };
+              });
+              const categoryTiles = [...document.querySelectorAll('a.home-category-tile')];
+              const imageTiles = categoryTiles.filter(el => el.querySelector('img'));
+              const duplicatedLabels = imageTiles.filter(el => el.textContent?.trim().length);
+              return {productGrids, categoryCount: categoryTiles.length, imageTileCount: imageTiles.length,
+                duplicatedLabels: duplicatedLabels.length, viewport: innerWidth};
+            });
+            console.log('MOBILE_LAYOUT='+JSON.stringify(result));
+            if (result.productGrids.length < 1) throw new Error('Could not find a homepage helmet product grid with two items');
+            if (result.productGrids.some(x => !x.sameRow)) throw new Error('Helmet grid is not rendered in two mobile columns');
+            if (result.categoryCount < 4 || result.imageTileCount < 4) {
+              throw new Error('Expected at least four image category tiles');
+            }
+            if (result.duplicatedLabels !== 0) throw new Error('Category image contains an overlapping duplicate text title');
+            await page.screenshot({path:'reports/blue-sea-mobile-home-390.png',fullPage:true});
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              'PASS: live homepage at 390px renders two helmet product columns and category image cards with no duplicate title.\n');
+          } finally {
+            await browser.close();
+          }
+          JS
+      - name: Upload mobile layout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blue-sea-mobile-home-${{ github.run_id }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 7

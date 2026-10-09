@@ -1,1 +1,1 @@
-Targeted QA for Astro github 7647e37d753922d109cebe1c81ea7e99d3445d58. ESC Visual Builder iframe must use readPublishedPreview from deployed cms JSON; no getSharedWordPressData or runtime .cache writes. Keep /preview/trang-chu live WordPress SSR 200 and builder no-ticket 403, 2026-10-09.
+Pre-deploy full Astro build/FTP-layout SSR regression for Visual Builder targeted WordPress section refresh, Astro github commit 98844f8a69da264cf5bec7d73336df6ce2fb3d79. Must preserve /preview/trang-chu live HTTP200 no-store, Builder unauthorized 403, no cache writes. 2026-10-09.

@@ -1,0 +1,1 @@
+Run read-only authenticated Chrome E2E against deployed WordPress ESC Visual Builder and Astro route, including Desktop/Mobile and section inspector. 2026-10-09.

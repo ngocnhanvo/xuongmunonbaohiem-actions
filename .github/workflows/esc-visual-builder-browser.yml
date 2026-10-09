@@ -157,23 +157,6 @@ jobs:
             if (JSON.parse(inspector).source !== 'ESC Table' || !JSON.parse(inspector).tableId) throw Error('Inspector did not resolve source as ESC Table');
             // Regression: the 120-second ticket used to expire while the editor
             // remained open. Renewal must update iframe history without reload.
-            const initialTicket = new URL(frame.url()).searchParams.get('ticket');
-            await new Promise(r => setTimeout(r, 130000));
-            const rotatedFrameUrl = frame.url();
-            const rotatedTicket = new URL(rotatedFrameUrl).searchParams.get('ticket');
-            if (!initialTicket || !rotatedTicket || rotatedTicket === initialTicket)
-              throw Error('Builder preview ticket was not renewed past 120 seconds');
-            const remainsInteractive = await frame.evaluate(() =>
-              document.documentElement.classList.contains('esc-builder-preview') &&
-              Boolean(document.querySelector('[data-tablepress-preview]')));
-            if (!remainsInteractive) throw Error('Builder iframe lost its DOM during ticket renewal');
-            const refreshedResponse = await frame.goto(rotatedFrameUrl, {waitUntil:'domcontentloaded',timeout:45000});
-            if (!refreshedResponse || refreshedResponse.status() !== 200)
-              throw Error('Builder iframe reload after session renewal HTTP '+(refreshedResponse?.status() ?? 'none'));
-            await frame.waitForSelector('[data-tablepress-preview]', {timeout:20000});
-            console.log('BUILDER_TICKET_130_SECOND_QA=' + JSON.stringify({
-              sessionRenewed:true, originalIframeStayedInteractive:true, iframeReload200:true
-            }));
             // Only an explicit click on the WordPress refresh button may fetch a
             // section. Two consecutive refreshes must both survive the reload.
             async function chooseTable(id) {
@@ -193,8 +176,18 @@ jobs:
             let nextDocument=frame.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000});
             await page.click('#esc-vb-refresh-section');
             let response=await nextDocument;
-            if (response?.status()!==200 || response.headers()['x-esc-builder-sections-updated']!=='home_00')
-              throw Error('First manually refreshed table was not home_00');
+            const firstRefreshAudit = {
+              status:response?.status() ?? null,
+              page:new URL(response?.url() || frame.url()).pathname,
+              refreshTables:new URL(response?.url() || frame.url()).searchParams.get('refresh_tables'),
+              legacyTable:new URL(response?.url() || frame.url()).searchParams.get('refresh_table'),
+              refreshStatus:response?.headers()?.['x-esc-builder-section-refresh'] ?? null,
+              tablesHeader:response?.headers()?.['x-esc-builder-sections-updated'] ?? null,
+              banner:await frame.$eval('[data-esc-builder-refresh-status]',node=>node.textContent).catch(()=>null)
+            };
+            console.log('BUILDER_FIRST_MANUAL_REFRESH_DIAGNOSTICS=' + JSON.stringify(firstRefreshAudit));
+            if (firstRefreshAudit.status!==200 || firstRefreshAudit.tablesHeader!=='home_00')
+              throw Error('First manual refresh unexpected response: '+JSON.stringify(firstRefreshAudit));
             const afterFirst=frame.url();
             await chooseTable('home_01');
             await new Promise(r=>setTimeout(r,1200));
@@ -215,6 +208,24 @@ jobs:
               selectionsDidNotTriggerRefresh:true, bothSectionsUpdated:updated,
               preservedInDOM:true
             }));
+            const initialTicket = new URL(frame.url()).searchParams.get('ticket');
+            await new Promise(r => setTimeout(r, 130000));
+            const rotatedFrameUrl = frame.url();
+            const rotatedTicket = new URL(rotatedFrameUrl).searchParams.get('ticket');
+            if (!initialTicket || !rotatedTicket || rotatedTicket === initialTicket)
+              throw Error('Builder preview ticket was not renewed past 120 seconds');
+            const remainsInteractive = await frame.evaluate(() =>
+              document.documentElement.classList.contains('esc-builder-preview') &&
+              Boolean(document.querySelector('[data-tablepress-preview]')));
+            if (!remainsInteractive) throw Error('Builder iframe lost its DOM during ticket renewal');
+            const refreshedResponse = await frame.goto(rotatedFrameUrl, {waitUntil:'domcontentloaded',timeout:45000});
+            if (!refreshedResponse || refreshedResponse.status() !== 200)
+              throw Error('Builder iframe reload after session renewal HTTP '+(refreshedResponse?.status() ?? 'none'));
+            await frame.waitForSelector('[data-tablepress-preview]', {timeout:20000});
+            console.log('BUILDER_TICKET_130_SECOND_QA=' + JSON.stringify({
+              sessionRenewed:true, originalIframeStayedInteractive:true, iframeReload200:true
+            }));
+
           } finally { await browser.close(); }
           JS
       - uses: actions/upload-artifact@v4

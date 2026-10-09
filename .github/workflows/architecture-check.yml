@@ -99,7 +99,11 @@ jobs:
           assert 'FTP_SERVER' in deploy
           assert 'FTP_USERNAME' in deploy
           assert 'FTP_PASSWORD' in deploy
-          assert 'Smoke test production' in deploy
+          # Smoke is intentionally a separate workflow_run after deploy.
+          assert 'node --check dist/server/entry.mjs' in deploy
+          smoke_production = Path('.github/workflows/production-smoke.yml').read_text(encoding='utf-8')
+          assert 'workflow_run:' in smoke_production
+          assert 'Deploy Blue Sea Astro Production' in smoke_production
           assert 'requests/deploy-xuongmunonbaohiem.txt' in deploy
 
           assert 'repository: ngocnhanvo/xuongmunonbaohiem-astro' in smoke

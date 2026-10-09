@@ -1,0 +1,76 @@
+name: Blue Sea Google services Astro build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/google-services-build.yml'
+      - 'requests/google-services-build.txt'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-google-services-build
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Validate source and environment secrets
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          test -n "$SOURCE_REPO_PAT"
+          test -n "$ENV_FILE"
+      - name: Checkout Astro github branch (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Source revision
+        working-directory: source
+        run: git rev-parse HEAD
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Load build environment
+        working-directory: source
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: printf '%s\n' "$ENV_FILE" > .env
+      - name: Tracking regression
+        working-directory: source
+        run: pnpm exec vitest run src/lib/googleServices.test.ts
+      - name: Production-like Astro build
+        working-directory: source
+        run: pnpm run build-git
+      - name: Validate bundled Google verification markers
+        working-directory: source
+        run: |
+          set -euo pipefail
+          found=0
+          while IFS= read -r -d '' html; do
+            if grep -q 'name="google-site-verification"' "$html" \
+               && grep -q 'name="ahrefs-site-verification"' "$html"; then
+              found=$((found+1))
+              break
+            fi
+          done < <(find dist -type f -name '*.html' -print0)
+          if [ "$found" -eq 0 ]; then
+            echo 'Tracking verification markers missing in built HTML' >&2
+            exit 1
+          fi
+          echo "Verification tags rendered in Astro dist." >> "$GITHUB_STEP_SUMMARY"

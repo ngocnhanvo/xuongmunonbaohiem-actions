@@ -1,1 +1,3 @@
 Validate Astro github home_03 category photos no duplicate overlay title, home_04 through home_08 two-column mobile even below 430px, and WordPress product description justified. Build and focused tests via Actions only. No FTP before pass. Date: 2026-10-09.
+
+Rerun focused 18 customer-request and homepage responsive checks after separating 3 preexisting gallery sticky class expectations; both Astro master and github use lg:top-16, gallery intentionally unchanged. Then Astro production-like build.

@@ -1,0 +1,62 @@
+name: Blue Sea Mobile Home and Product UI QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/blue-sea-mobile-ui-ci.yml'
+      - 'requests/blue-sea-mobile-ui-ci.txt'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-mobile-ui-qa
+  cancel-in-progress: false
+jobs:
+  astro-mobile-ui:
+    name: Validate mobile products and WordPress product description
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out Astro development source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Print source revision
+        working-directory: source
+        run: |
+          git rev-parse HEAD
+          echo "Astro github $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Run focused layout tests
+        working-directory: source
+        run: |
+          pnpm exec vitest run \
+            src/astro/tablepress/Home.mobile-product-layout.test.ts \
+            src/astro/tablepress/Home.defer-images.test.ts \
+            src/astro/tablepress/Home.safari14.test.ts \
+            src/astro/pages/ProductDetailsPage.gallery.test.ts \
+            src/astro/pages/ProductDetailsPage.quote.test.ts
+      - name: Load build environment
+        working-directory: source
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          test -n "$ENV_FILE"
+          printf '%s\n' "$ENV_FILE" > .env
+      - name: Production-like Astro build
+        working-directory: source
+        run: pnpm run build-git

@@ -1,1 +1,1 @@
-Pre-deploy full Astro build/FTP-layout SSR regression for Visual Builder targeted WordPress section refresh, Astro github commit 98844f8a69da264cf5bec7d73336df6ce2fb3d79. Must preserve /preview/trang-chu live HTTP200 no-store, Builder unauthorized 403, no cache writes. 2026-10-09.
+Final phase2 full Astro github 8e7e4ac1c914c1e36259bfea52a5aa721f416c70: SSR Builder section refresh, dynamic metadata and direct WP image origins; preserve legacy /preview/trang-chu live HTTP200, no-store and no runtime build writes. CI only, 2026-10-09.

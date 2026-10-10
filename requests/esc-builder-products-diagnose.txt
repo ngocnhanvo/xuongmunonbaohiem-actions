@@ -1,1 +1,1 @@
-Production Chrome assert Products Page 53504 banner + H1 must match /preview/san-pham after Astro master 7c0bdf1e deploy PASS 38072344680. Report any product list source differences; read-only, no writes or duplicate build.
+Final Chrome production assertion: Page Sản phẩm ID 53504 Builder must match /preview/san-pham banner, heading AND first product. Astro master 64e9af5ea5fed68b1a6275a046c1777500d07b4f; deploy PASS 38072998260. No writes.

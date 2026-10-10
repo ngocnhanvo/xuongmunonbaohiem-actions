@@ -52,3 +52,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Verify generalized static ESC Table images home_02/img, home_09/icon and background, home_11/img, home_13/img with exact row+field+table routing; API home_03..08,10,12 and banner home_00 excluded. PHP master bb312d3f; Astro github 5107166b. Ensure existing home_01 and text regression PASS before FTP.
 
 2026-10-10: Regression after Chrome multi-image QA 38057558797 identified typed ALT input event still used legacy row-only postMessage; corrected PHP master 71199842. Verify ALL three ALT draft dispatch locations carry tableId+field before FTP. Existing Astro remains unchanged.
+
+2026-10-10: Verify home_00 slider banner editable image + ALT from ESC Table, preserve row identity across mobile/desktop filters, sync <picture><source srcset> and IMG, Cancel restores both and preserve home_01..13 regressions. Astro github 3b21ce54, PHP master b9a36399. Source QA only before FTP.

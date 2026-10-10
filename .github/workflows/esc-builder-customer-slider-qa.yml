@@ -1,0 +1,36 @@
+name: ESC Builder Home 13 Slider QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/esc-builder-customer-slider-qa.yml'
+      - 'requests/esc-builder-customer-slider-qa.txt'
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install test dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Check home_13 arrow clicks bypass preview capture
+        working-directory: source
+        run: pnpm exec vitest run src/lib/wordpress/builderCustomerSlider.test.mjs

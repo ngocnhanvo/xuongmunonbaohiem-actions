@@ -1,0 +1,111 @@
+name: Chrome QA - ESC Builder Item Popup and Section Order
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-items-sections-chrome.txt']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-items-sections-browser
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Test schema popup, clone, section preview and Cancel without WordPress writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const key of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[key])throw Error('Missing '+key);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({
+            executablePath:process.env.CHROME_PATH,headless:true,
+            args:['--no-sandbox','--disable-dev-shm-usage']});
+          const result={page:248,sectionCount:0,inputs:[],popup:false,
+            duplicate:false,reorder:false,undo:false,iframeStable:false,writeCalls:0};
+          try {
+            const page=await browser.newPage();
+            await page.setViewport({width:1510,height:950});
+            page.on('request',req=>{
+              if(req.method()==='POST'&&
+                 /\/esc-builder\/v1\/(?:insert-item|save-section-order|save-image|save-text|save-page-text)/.test(req.url()))result.writeCalls++;
+            });
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:60000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit'),
+            ]);
+            if(page.url().includes('/wp-login.php'))throw Error('WordPress login failed');
+            await page.goto(wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:70000});
+            const frameElement=await page.waitForSelector('#esc-vb-frame',{timeout:25000});
+            const frame=await frameElement.contentFrame();
+            if(!frame)throw Error('Builder iframe unavailable');
+            await frame.waitForSelector('[data-tablepress-preview="home_00"]',{timeout:60000});
+            const url=frame.url();
+            await frame.$eval('[data-tablepress-preview="home_00"]',node=>node.click());
+            await page.waitForFunction(()=>document.getElementById('esc-vb-item-panel')?.hidden===false,
+              {timeout:20000});
+            await page.click('#esc-vb-item-new');
+            await page.waitForFunction(()=>document.getElementById('esc-vb-item-dialog')?.open===true,
+              {timeout:22000});
+            result.popup=true;
+            result.inputs=await page.evaluate(()=>[
+              ...document.querySelectorAll('#esc-vb-item-fields [data-esc-item-field]')].map(el=>el.getAttribute('data-esc-item-field')));
+            if(!result.inputs.includes('mobile')||!result.inputs.includes('title'))
+              throw Error('Schema popup missing banner fields');
+            if(!await page.$eval('#esc-vb-item-fields',root=>root.textContent.includes('image')))
+              throw Error('Popup missing Media image input');
+            await page.click('#esc-vb-item-dismiss');
+            await page.waitForFunction(()=>!document.getElementById('esc-vb-item-dialog')?.open,{timeout:8000});
+            const imageTarget=await frame.$('[data-tablepress-preview="home_00"] [data-esc-builder-image-row="0"]');
+            if(imageTarget){
+              await imageTarget.click();
+              await page.waitForFunction(()=>!document.getElementById('esc-vb-item-duplicate')?.disabled,{timeout:10000});
+              await page.click('#esc-vb-item-duplicate');
+              await page.waitForFunction(()=>document.getElementById('esc-vb-item-dialog')?.open===true,{timeout:22000});
+              result.duplicate=true;
+              await page.click('#esc-vb-item-dismiss');
+            }
+            await page.click('#esc-vb-section-order-open');
+            await page.waitForFunction(()=>document.querySelectorAll('#esc-vb-section-order-list li').length===14,
+              {timeout:18000});
+            result.sectionCount=await page.$$eval('#esc-vb-section-order-list li',nodes=>nodes.length);
+            const original=await frame.$$eval('[data-tablepress-preview]',nodes=>[
+              ...new Set(nodes.map(el=>el.getAttribute('data-tablepress-preview')))]);
+            // The second section belongs to the same group as the first.
+            await page.$eval('#esc-vb-section-order-list li:nth-child(2) button',el=>el.click());
+            await page.waitForFunction(()=>[
+              ...document.querySelectorAll('#esc-vb-section-order-list li span')].map(el=>el.textContent).slice(0,2)
+              .join('|').includes('home_01|1. home_00'),{timeout:9000}).catch(()=>{});
+            const edited=await frame.$$eval('[data-tablepress-preview]',nodes=>[
+              ...new Set(nodes.map(el=>el.getAttribute('data-tablepress-preview')))]);
+            result.reorder=edited[0]==='home_01'&&edited[1]==='home_00';
+            if(!result.reorder)throw Error('Section order was not previewed in iframe');
+            await page.click('#esc-vb-section-order-cancel');
+            await page.waitForFunction(()=>document.getElementById('esc-vb-section-order-body')?.hidden===true,{timeout:8000});
+            const restored=await frame.$$eval('[data-tablepress-preview]',nodes=>[
+              ...new Set(nodes.map(el=>el.getAttribute('data-tablepress-preview')))]);
+            result.undo=JSON.stringify(original)===JSON.stringify(restored);
+            result.iframeStable=frame.url()===url;
+            if(!result.undo||!result.iframeStable)throw Error('Undo or iframe URL changed');
+            if(result.writeCalls!==0)throw Error('QA unexpectedly wrote customer content');
+            console.log('ESC_BUILDER_ITEMS_SECTIONS_QA_PASS='+JSON.stringify(result));
+          } finally {await browser.close();}
+          JS

@@ -84,18 +84,23 @@ jobs:
                   return n;})()
               })));
             console.log('BUILDER_PAGE_PART_DOM='+JSON.stringify(partAudit.slice(0,30)));
-            const nodes=await frame['
+            const nodes=await frame.evaluate(() =>
+              [...document.querySelectorAll('[data-esc-builder-html-part] *')].map((el,index)=>({
+                index,text:(el.textContent||'').trim(),
+                childElements:el.children.length,tag:el.tagName
+              })));
             let found=null;
             let attempts=0;
-            for(const node of nodes.slice(0,130)){
-              const meta=await node.evaluate(el=>({
-                text:(el.textContent||'').trim(),childElements:el.children.length,
-                tag:el.tagName
-              }));
+            for(const meta of nodes.slice(0,130)){
               if(meta.childElements || meta.text.length<2 || meta.text.length>260 ||
                  ['SCRIPT','STYLE','SVG','OPTION','NOSCRIPT','TEMPLATE'].includes(meta.tag))continue;
-              await node.evaluate(el=>el.scrollIntoView({block:'center'}));
-              const clicked=await node.click({delay:35}).then(()=>true).catch(()=>false);
+              const clicked=await frame.evaluate(index=>{
+                const el=document.querySelectorAll('[data-esc-builder-html-part] *')[index];
+                if(!el)return false;
+                el.scrollIntoView({block:'center'});
+                el.click();
+                return true;
+              },meta.index).catch(()=>false);
               if(!clicked)continue;
               attempts++;
               await new Promise(r=>setTimeout(r,950));

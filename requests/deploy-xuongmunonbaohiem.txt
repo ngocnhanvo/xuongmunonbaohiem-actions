@@ -23,3 +23,5 @@ Deploy tested Astro master PR #47 merge 215fb4e661b934662aa599cf5c616a77ee851fcc
 2026-10-10: Deploy Astro master ff3587635c4b98546179d0f2373420c6ffd8403e PR63. Fix homepage home_02 video heading click/drag selecting exact video_title field; backend PHP master b403f2b3 FTP verified PASS run 38043274083; source QA run 38043212953 PASS. Single Astro build and FTP, post-deploy Chrome QA. Preserve all user content.
 
 2026-10-10: Deploy Astro master 1800e41d3b514e7508667efc4f45d50f8e0b97dd PR64 for home_01 editable images: six stable gallery row handles, iframe image preview/Cancel and first-image background sync. PHP backend FTP PASS 38046468762 and image source contract PASS 38046582445 (6 rows; security guards). Source QA PASS 38046405281. Single build/FTP, then production Chrome image QA; no customer data writes.
+
+2026-10-10: Deploy Astro master 998e33e3d7c1ca9acaedd8db29fa3b0ddc056e98 PR65 for home_01 ALT draft/ack and Cancel. WordPress PHP ALT-only/image+ALT master 5b3e84b0 FTP PASS 38053939423; source QA PASS 38053805525; production no-write ALT security contract PASS 38054109784. Build/FTP once, smoke and Chrome non-writing ALT preview QA.

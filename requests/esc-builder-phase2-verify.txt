@@ -36,3 +36,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Retry exact Editor whitespace and partial replacement fixtures after correcting double-backslash regexp in PHP master 806a7e8a. Source test 38041829641 caught front/back indentation bug; rerun before FTP.
 
 2026-10-10: Verify homepage home_02 video-title field hint: Astro github 470b87d5, WordPress PHP master b403f2b3. Exact field marker and click/drag routing tests. Preserve existing ESC Table/Page Editor behavior and do not write customer content.
+
+2026-10-10: Verify home_01 image picker MVP: PHP master f8e6c9b6, Astro github a50f698c. Assert PHP image cell schema URL/single IMG, media REST security, srcset preservation, JS modal syntax, iframe click/preview/cancel handlers; no WP customer writes or deployment until source PASS.

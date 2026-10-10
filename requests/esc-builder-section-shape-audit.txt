@@ -1,1 +1,1 @@
-Follow-up read-only audit: inspect actual WordPress Page slug trang-chu/homepage rather than unrelated 53463. No writes; verify table shortcode gaps.
+Read-only audit of home Page 248 wrapper opening/closing tag sequence between 14 ESC Table shortcodes. Print only tag names, not customer HTML or data. No writes.

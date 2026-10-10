@@ -161,27 +161,38 @@ jobs:
             if(await page.$eval('#esc-vb-edit-title',el=>el.value)!==original)
               throw Error('Cancel did not restore the original');
             if(frame.url()!==frameUrl)throw Error('Page Editor preview reloaded iframe');
-            const partial=await frame.evaluate(()=>{
-              const container=document.querySelector('[data-esc-builder-html-part]');
-              const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT);
-              let node;
-              while((node=walker.nextNode())){
-                if(!node.parentElement ||
-                    node.parentElement.closest('script,style,svg,textarea,pre,code,template,noscript'))continue;
-                const full=node.nodeValue||'';
-                if(full.trim().length<15 || full.length>1500)continue;
-                const first=full.search(/\\S/);
-                const start=first+2,end=Math.min(first+10,full.length);
-                if(start>=end || !full.slice(start,end).trim())continue;
-                const range=document.createRange();
-                range.setStart(node,start);range.setEnd(node,end);
-                const selection=window.getSelection();
-                selection.removeAllRanges();selection.addRange(range);
-                node.parentElement.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
-                return {selected:full.slice(start,end),full,start,end};
+            const partial=await frame.evaluate((rows)=>{
+              const scopes=[...document.querySelectorAll('[data-esc-builder-html-part]')];
+              for(const scope of scopes){
+                const part=Number(scope.getAttribute('data-esc-builder-html-part'));
+                const walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT);
+                const nodes=[];
+                let node;
+                while((node=walker.nextNode())){
+                  if(!node.parentElement ||
+                     node.parentElement.closest('script,style,svg,textarea,template,noscript,pre,code'))continue;
+                  const full=node.nodeValue||'';
+                  if(!full.trim() || full.length>4000 || /[<>]/.test(full.trim()) ||
+                     /\\[[a-z_][^\\]]*\\]/i.test(full))continue;
+                  nodes.push(node);
+                }
+                for(const row of rows.filter(r=>r.part===part)){
+                  const matched=nodes[row.node_index];
+                  if(!matched || matched.nodeValue!==row.full_text ||
+                     matched.nodeValue.trim().length<10)continue;
+                  const full=matched.nodeValue;
+                  const first=full.search(/\\S/),start=first+2,end=Math.min(first+9,full.length);
+                  if(start>=end || !full.slice(start,end).trim())continue;
+                  const range=document.createRange();
+                  range.setStart(matched,start);range.setEnd(matched,end);
+                  const selection=window.getSelection();
+                  selection.removeAllRanges();selection.addRange(range);
+                  matched.parentElement.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
+                  return {selected:full.slice(start,end),full,start,end};
+                }
               }
               return null;
-            });
+            },pageRows);
             if(!partial)throw Error('No single-node selectable substring on this Page');
             await new Promise(r=>setTimeout(r,1250));
             const partialState=await page.evaluate(()=>{

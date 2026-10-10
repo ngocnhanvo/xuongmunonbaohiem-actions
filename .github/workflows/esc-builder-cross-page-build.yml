@@ -1,0 +1,59 @@
+name: Verify Blue Sea Builder Cross-Page Astro Build
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/esc-builder-cross-page-build.txt
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-visual-builder-cross-page-build-qa
+  cancel-in-progress: true
+jobs:
+  builder-build-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout Blue Sea Astro development branch
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: source
+      - name: Show precise revision
+        working-directory: source
+        run: git rev-parse HEAD
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Write build environment
+        working-directory: source
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENV_FILE"
+          printf '%s\n' "$ENV_FILE" > .env
+      - name: Compile development Builder and public pages without deploy
+        working-directory: source
+        run: pnpm run build-git
+      - name: Verify standalone server syntax
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check dist/server/entry.mjs
+          test -d dist/client
+          echo "Builder Astro development branch full build: PASS"

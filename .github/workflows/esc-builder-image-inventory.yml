@@ -1,0 +1,69 @@
+name: ESC Builder Image Source Inventory
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-image-inventory.txt']
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check homepage ESC Table static vs API image columns (read only)
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,re,json,requests
+          from bs4 import BeautifulSoup
+          from urllib.parse import urlparse,parse_qs
+          root=os.environ['WP_ADMIN_URL'].split('/wp-admin')[0].rstrip('/')
+          session=requests.Session()
+          session.get(root+'/wp-login.php',timeout=30)
+          res=session.post(root+'/wp-login.php',data={
+            'log':os.environ['WP_ADMIN_USERNAME'],'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In','redirect_to':root+'/wp-admin/admin.php?page=esc-visual-builder',
+            'testcookie':'1'},timeout=45)
+          if 'wp-login.php' in res.url:raise SystemExit('WordPress login failure')
+          admin=session.get(root+'/wp-admin/admin.php?page=esc-visual-builder',timeout=45)
+          frame=BeautifulSoup(admin.text,'html.parser').select_one('#esc-vb-frame')
+          if not frame:raise SystemExit('No builder iframe')
+          url=urlparse(frame.get('src',''))
+          ticket=parse_qs(url.query).get('ticket',[''])[0]
+          page_id=int(url.path.rstrip('/').split('/')[-1])
+          nonce=re.search(r'const restNonce\s*=\s*["\x27]([\w]+)["\x27]',admin.text)
+          if not nonce:raise SystemExit('Missing WP nonce')
+          ids=[f'home_{i:02d}' for i in range(14)]
+          res=session.post(root+'/wp-json/esc-builder/v1/table-batch',
+            json={'ticket':ticket,'page_id':page_id,'table_ids':ids},
+            headers={'X-WP-Nonce':nonce.group(1)},timeout=80)
+          if res.status_code!=200:raise SystemExit('Batch HTTP '+str(res.status_code))
+          body=res.json()
+          print('INVENTORY_BATCH_KEYS='+str(list(body.keys())))
+          sources=body.get('sources') or body.get('tables') or {}
+          for key in ids:
+            item=sources.get(key) or {}
+            table=item.get('table') or item
+            rows=table.get('items') or []
+            meta=table.get('meta') or {}
+            keys=list(rows[0].keys()) if rows else []
+            imgfields={}
+            for field in ['img','image','icon','background','thumbnail','banner','poster']:
+              values=[str(x.get(field) or '') for x in rows if isinstance(x,dict)]
+              populated=[v for v in values if v]
+              if not populated:continue
+              def shape(v):
+                return ('img_html' if '<img' in v.lower() else 'api_placeholder' if v.lower().startswith(('api-','api_'))
+                  else 'url' if v.startswith(('https://','http://','/')) else 'other')
+              imgfields[field]={'count':len(populated),'shapes':list(sorted(set(map(shape,populated)))),
+                 'has_html_alt':any('alt=' in v for v in populated),
+                 'has_img_src':any('src=' in v for v in populated)}
+            print('ESC_IMAGE_INVENTORY='+json.dumps({'id':key,'items':len(rows),'fields':keys[:26],
+              'imageFields':imgfields,'metaApi':bool(meta.get('api')),
+              'hasData':bool(table)},ensure_ascii=False))
+          PY

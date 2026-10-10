@@ -1,0 +1,102 @@
+name: Chrome QA - Safe Builder Header Navigation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [requests/esc-builder-header-safe-navigation-browser.txt]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify header switches Page in WordPress, never breaks preview iframe
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const key of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[key])throw Error('Missing '+key);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({headless:true,executablePath:process.env.CHROME_PATH,
+            args:['--no-sandbox','--disable-dev-shm-usage']});
+          try {
+            const page=await browser.newPage();
+            await page.setViewport({width:1540,height:1000});
+            let writeCalls=0;
+            page.on('request',req=>{
+              if(req.method()!=='GET'&&/\/(?:save-image|save-page-image|save-text|save-page-text)(?:\?|$)/.test(req.url()))
+                writeCalls++;
+            });
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:50000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:35000}).catch(()=>{}),
+              page.click('#wp-submit'),
+            ]);
+            if(page.url().includes('/wp-login.php'))throw Error('WordPress login failed');
+            const initial=wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=53463';
+            await page.goto(initial,{waitUntil:'domcontentloaded',timeout:50000});
+            const iframe=await page.waitForSelector('#esc-vb-frame',{timeout:20000});
+            const frame=await iframe.contentFrame();
+            if(!frame)throw Error('Builder iframe unavailable');
+            await frame.waitForSelector('#main-header',{timeout:55000});
+            if(!frame.url().includes('/esc-builder/preview/53463'))throw Error('Wrong original Page preview');
+            const before=frame.url();
+            const target=await frame.evaluate(()=>{
+              const links=[...document.querySelectorAll('#main-header a[href]')];
+              return links.find(a=>{
+                try{return new URL(a.href).pathname.replace(/\/$/,'')==='/san-pham';}catch{return false;}
+              })?.getAttribute('href')||null;
+            });
+            if(!target)throw Error('Expected Products Page navigation link missing in header');
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}),
+              frame.evaluate(href=>{
+                const link=[...document.querySelectorAll('#main-header a[href]')].find(a=>a.getAttribute('href')===href);
+                if(!link)throw Error('Header link disappeared');
+                link.click();
+              },target),
+            ]);
+            const next=new URL(page.url());
+            if(next.searchParams.get('esc_vb_page')!=='53504')throw Error('Parent Builder did not safely switch to Products Page: '+next.searchParams.get('esc_vb_page'));
+            const nextIframe=await page.waitForSelector('#esc-vb-frame',{timeout:20000});
+            const second=await nextIframe.contentFrame();
+            if(!second)throw Error('New iframe unavailable');
+            await second.waitForSelector('#main-header',{timeout:45000});
+            if(!second.url().includes('/esc-builder/preview/53504'))throw Error('Missing fresh Page-bound preview after navigation');
+            if(before===second.url())throw Error('Page switch did not issue fresh ticket');
+            const external=await second.evaluate(()=>{
+              const origin=location.origin;
+              const a=[...document.querySelectorAll('#main-header a[href]')].find(link=>{
+                try{return new URL(link.href).origin!==origin;}catch{return false;}
+              });
+              if(!a)return null;
+              a.click();
+              return a.getAttribute('href');
+            });
+            if(external){
+              await page.waitForFunction(()=>Boolean(document.querySelector('#esc-vb-navigation-feedback')?.textContent?.includes('Liên kết này')),
+                {timeout:8000});
+              if(second.isDetached() || !second.url().includes('/esc-builder/preview/53504'))
+                throw Error('External header link navigated the ticketed iframe');
+            }
+            if(writeCalls!==0)throw Error('QA must not save WordPress customer content');
+            console.log('PASS_SAFE_BUILDER_HEADER='+JSON.stringify({
+              from:53463,to:53504,headerClickIntercepted:true,
+              freshTicket:true,externalBlocked:!!external,iframeHealthy:true,writeCalls,
+            }));
+          } finally {await browser.close();}
+          JS

@@ -1,1 +1,1 @@
-Final full build of Blue Sea Astro github 57c5e7490aa055c5612159687978bde8080c08a0, including original WordPress image URL fixes. No deploy, no FTP. Previous build passed at earlier revision; validate this changed revision only.
+Regression: Builder Products Page ID 53504 has Action ProductsPage but /preview/san-pham uses ProductsSSRPage. Check SSR banner/title render and full build from Astro github 7c0bdf1e1875505201bf498cd6b44c37f19e83ae. No FTP/deploy until pass.

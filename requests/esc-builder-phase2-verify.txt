@@ -14,3 +14,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Verify home_02 text editing: PHP master 228d63e9977a083312c812650cbb883b0824862e and Astro github 5b76bf15209b8e5b30ab9c87bdc95ab1a027e1af; parse inline JS and PHP syntax, preserve prior home_00/home_01 behavior.
 
 2026-10-10: Verify home_03..13 bounded ESC Table text editor, PHP master 580b015b and Astro github c0004c9c. PHP lint, Astro inline JS syntax, focused regression tests. No live writes.
+
+2026-10-10: Verify Visual Builder WordPress Page Editor post_content literal text feature. PHP master a97017a9; Astro github eea2240d. Test bounded HTML token inventory, syntax, UI, Astro preview, existing ESC Table regressions; no customer data writes.

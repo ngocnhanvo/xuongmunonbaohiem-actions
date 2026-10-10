@@ -1,0 +1,111 @@
+name: ESC Builder Multi Media Chrome QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-multi-media-browser.txt']
+permissions:
+  contents: read
+jobs:
+  media:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify Media image replacement preview and Cancel for new sections
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const origin=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({headless:true,executablePath:process.env.CHROME_PATH,
+            args:['--no-sandbox','--disable-dev-shm-usage']});
+          try {
+            const page=await browser.newPage();
+            await page.setViewport({width:1440,height:900});
+            const writes=[],errors=[];
+            page.on('request',r=>{try{
+              if(new URL(r.url()).pathname.endsWith('/esc-builder/v1/save-image'))writes.push(r.method());
+            }catch{}});
+            page.on('pageerror',e=>errors.push(e.message));
+            async function go(url){
+              let last;
+              for(let i=0;i<2;i++)try{
+                const resp=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+                if(resp?.status()===200)return;
+                last=Error('HTTP '+resp?.status());
+              }catch(e){last=e;}throw last;
+            }
+            await go(origin+'/wp-login.php');
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login failed');
+            await go(origin+'/wp-admin/admin.php?page=esc-visual-builder');
+            const frame=await (await page.waitForSelector('#esc-vb-frame')).contentFrame();
+            if(!frame)throw Error('Builder iframe not found');
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:100000});
+            const initialFrameUrl=frame.url();
+            const cases=[{table:'home_09',field:'icon',row:0},
+                         {table:'home_09',field:'background',row:0}];
+            const checked=[];
+            for(const item of cases) {
+              const root='[data-tablepress-preview="'+item.table+'"] ';
+              const selector=root+'img[data-esc-builder-image-field="'+item.field+'"][data-esc-builder-image-row="'+item.row+'"]';
+              await frame.waitForSelector(selector,{timeout:20000});
+              const original=await frame.$eval(selector,img=>({
+                src:img.getAttribute('src'),srcset:img.getAttribute('srcset'),alt:img.getAttribute('alt')
+              }));
+              const clickable=item.field==='background' ?
+                root+'[data-esc-builder-bg-edit]' : selector;
+              await frame.$eval(clickable,el=>
+                el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
+              await page.waitForFunction(label=>
+                !document.querySelector('#esc-vb-image-choose')?.disabled &&
+                document.querySelector('#esc-vb-image-caption')?.textContent?.includes(label),
+                {timeout:40000},item.table+' · '+item.field+' · dòng 1');
+              await page.click('#esc-vb-image-choose');
+              await page.waitForSelector('.media-modal',{visible:true,timeout:22000});
+              await page.waitForFunction(()=>
+                document.querySelectorAll('.media-modal .attachments .attachment').length>2,
+                {timeout:50000});
+              const attachments=await page.$$('.media-modal .attachments .attachment');
+              await attachments[Math.min(2,attachments.length-1)].click({delay:40});
+              await page.waitForFunction(()=>
+                !document.querySelector('.media-modal .media-button-select')?.disabled,
+                {timeout:15000});
+              await page.click('.media-modal .media-button-select');
+              await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled,
+                {timeout:22000});
+              const draft=await frame.$eval(selector,img=>({
+                src:img.getAttribute('src'),srcset:img.getAttribute('srcset'),alt:img.getAttribute('alt')
+              }));
+              if(!draft.src?.startsWith('https://') || draft.src===original.src ||
+                 draft.srcset!==null || draft.alt!==original.alt)
+                throw Error('Image draft not isolated for '+item.field);
+              await page.click('#esc-vb-image-cancel');
+              await frame.waitForFunction(({selector,previous})=>{
+                const img=document.querySelector(selector);
+                return img?.getAttribute('src')===previous.src &&
+                  img.getAttribute('srcset')===previous.srcset &&
+                  img.getAttribute('alt')===previous.alt;
+              },{timeout:15000},{selector,previous:original});
+              if(frame.url()!==initialFrameUrl)throw Error('iframe reloaded');
+              checked.push({table:item.table,field:item.field,mediaPreview:true,cancelRestored:true});
+            }
+            if(writes.length || errors.length)throw Error('Unexpected write or browser error: '+errors.slice(0,2));
+            console.log('ESC_MULTI_MEDIA_CHROME_PASS='+JSON.stringify({
+              checked,iframeReloaded:false,customerWrites:0
+            }));
+          }finally{await browser.close()}
+          JS

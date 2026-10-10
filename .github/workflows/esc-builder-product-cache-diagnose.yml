@@ -1,0 +1,35 @@
+name: Inspect Deployed Product Page Cache
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-product-cache-diagnose.txt']
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Inspect deployed Page JSON and public product routes read-only
+        run: |
+          python3 - <<'PY'
+          import requests
+          host='https://xuongmunonbaohiem.io.vn'
+          for path in ['/data/page-san-pham.json','/data/cms-common.json','/san-pham',
+                       '/preview/san-pham','/ssr/products/san-pham/null']:
+              try:
+                  r=requests.get(host+path,timeout=30)
+                  payload={'path':path,'status':r.status_code,'bytes':len(r.content)}
+                  if 'json' in path and r.ok:
+                      x=r.json()
+                      if isinstance(x,dict):
+                          if 'page-san-pham' in path:
+                              payload.update({'action':x.get('action'),'key':x.get('key'),'slug':x.get('slug')})
+                          else:
+                              found=[p for p in x.get('pages',[]) if p.get('slug')=='san-pham']
+                              payload['matchingPages']=[{'action':p.get('action'),'key':p.get('key'),'slug':p.get('slug')} for p in found]
+                  print(payload)
+              except Exception as e:
+                  print({'path':path,'error':str(e)[:180]})
+          PY

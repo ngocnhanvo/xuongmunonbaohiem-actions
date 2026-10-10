@@ -1,1 +1,1 @@
-Validate updated item-section-ui after readonly field protection, drag and drop and preview confirmation: run PHP tests and syntax, JS syntax, Astro unit tests, full build; no WordPress write or FTP.
+Regression for visual section root reorder: move full decorated DOM blocks, preserve nested-group constraints, keep popup schema and readonly data safeguards. Current Astro github and PHP master, PHP+JS syntax, unit tests, full build. QA only, no FTP.

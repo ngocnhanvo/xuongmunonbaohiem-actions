@@ -60,7 +60,7 @@ jobs:
                 imageCount:document.querySelectorAll('main img').length,images,
                 tableIds:[...document.querySelectorAll('[data-tablepress-preview]')].map(el=>el.getAttribute('data-tablepress-preview')).slice(0,25),
                 headerName:document.querySelector('#header-brandbar p')?.textContent?.trim(),
-                bodyMark:document.body.innerText.slice(0,200),htmlPartCount:document.querySelectorAll('[data-esc-builder-html-part]').length
+                bodyMark:document.body.innerText.slice(0,200),sourceStatus:document.querySelector('[data-esc-builder-refresh-status]')?.textContent?.trim(),htmlPartCount:document.querySelectorAll('[data-esc-builder-html-part]').length
               };
             });
             const actual=await inspect(publicPage);

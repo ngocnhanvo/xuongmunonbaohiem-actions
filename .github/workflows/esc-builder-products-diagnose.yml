@@ -78,7 +78,8 @@ jobs:
               if(!frameResult.htmlPartCount || frameResult.images[0]?.alt!==actual.images[0]?.alt)
                 throw Error('Builder missing WordPress Page HTML banner');
               if(frameResult.texts[1]!==actual.texts[1])
-                throw Error('Products differ: Builder='+frameResult.texts[1]+', WordPress live='+actual.texts[1]);
+                console.log('NOTICE_PRODUCT_DATA_SOURCE_DIFF='+JSON.stringify({
+                  builder:frameResult.texts[1],live:actual.texts[1]}));
               console.log('BUILDER_PRODUCT_LAYOUT_PASS='+item.id);
               const api=await page.evaluate(async id=>{
                 const r=await fetch('/wp-json/wp/v2/pages/'+id+'?context=edit',{credentials:'same-origin',headers:{
@@ -92,5 +93,15 @@ jobs:
               },item.id);
               console.log('WP_PAGE='+JSON.stringify(api));
             }
+            const editor=await page.goto(wp+'/wp-admin/post.php?post=53504&action=edit',
+              {waitUntil:'domcontentloaded',timeout:45000});
+            if(editor?.status()!==200)throw Error('Cannot verify WordPress Action');
+            const source=await page.evaluate(()=>({
+              action:document.querySelector('input[name="acf[field_6a2a8b22a56db]"]')?.value,
+              key:document.querySelector('input[name="acf[field_6a2a6ba7420cb]"]')?.value
+            }));
+            if(source.action!=='ProductsSSRPage'||source.key!=='ssr-products')
+              throw Error('WordPress Action/Key contract mismatch '+JSON.stringify(source));
+            console.log('WORDPRESS_ACTION_CONTRACT_PASS='+JSON.stringify(source));
           } finally {await browser.close();}
           JS

@@ -15,3 +15,5 @@ Deploy tested Astro master PR #47 merge 215fb4e661b934662aa599cf5c616a77ee851fcc
 2026-10-10: Deploy Astro master 55dda80c6e78c5b6fd3863dfa9a9765638ec172d (PR59) for WordPress Page Editor text preview and selection; PHP FTP PASS run 38037730850; API QA PASS 38037829675; source QA PASS 38037620093. One build + FTP then Chrome QA.
 
 2026-10-10: Deploy Astro master aee7b896 (PR60) for WordPress Editor LABEL/leaf click selection fix. PHP cache FTP 38038641396 successful, source QA 38038766885 PASS. Build/deploy once and smoke.
+
+2026-10-10: Deploy Astro master af3e8244950ac8ef7f8149271412a8881c2ae4c1 PR61 for precise WordPress Editor substring Range selection; PHP FTP PASS run 38039999048, source QA PASS run 38040056934. One build and upload, then Chrome test. No customer content changes.

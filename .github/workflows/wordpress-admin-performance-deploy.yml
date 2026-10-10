@@ -56,8 +56,13 @@ jobs:
         run: |
           set -euo pipefail
           php -l wp-content/mu-plugins/disable-plugins-for-api.php
+          php -l wp-content/mu-plugins/esc-admin-menu-bridge.php
           php -l wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
+          php -l wp-content/mu-plugins/tests/admin-performance-plugin-pages.php
+          php -l wp-content/mu-plugins/tests/admin-performance-content-menu-bridge.php
           php wp-content/mu-plugins/tests/admin-performance-custom-content-ajax.php
+          php wp-content/mu-plugins/tests/admin-performance-plugin-pages.php
+          php wp-content/mu-plugins/tests/admin-performance-content-menu-bridge.php
           grep -Fq "'the-paste/index.php'" wp-content/mu-plugins/disable-plugins-for-api.php
 
       - name: Resolve WordPress FTP path
@@ -120,13 +125,18 @@ jobs:
           cd "$REMOTE_MU_PLUGINS"
           put "source/wp-content/mu-plugins/disable-plugins-for-api.php" -o "disable-plugins-for-api.php"
           get "disable-plugins-for-api.php" -o /tmp/disable-plugins-for-api.remote.php
+          put "source/wp-content/mu-plugins/esc-admin-menu-bridge.php" -o "esc-admin-menu-bridge.php"
+          get "esc-admin-menu-bridge.php" -o /tmp/esc-admin-menu-bridge.remote.php
 
           bye
           LFTP
 
           cmp source/wp-content/mu-plugins/disable-plugins-for-api.php /tmp/disable-plugins-for-api.remote.php
-          rm -f /tmp/disable-plugins-for-api.remote.php
-          echo "Admin performance runtime deployed and byte-verified."
+          cmp source/wp-content/mu-plugins/esc-admin-menu-bridge.php /tmp/esc-admin-menu-bridge.remote.php
+          php -l /tmp/disable-plugins-for-api.remote.php
+          php -l /tmp/esc-admin-menu-bridge.remote.php
+          rm -f /tmp/disable-plugins-for-api.remote.php /tmp/esc-admin-menu-bridge.remote.php
+          echo "Admin performance and Visual Builder menu routing byte-verified."
 
       - name: Smoke test WordPress backend
         shell: bash

@@ -26,3 +26,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Verify partial selection on Page Editor text (PHP master f0cccd0e, Astro github 802f908c), preserve HTML entities, exact node index matching, unchanged ESC Tables, PHP lint/JS unit tests. No customer content writes.
 
 2026-10-10: Rerun only isolated Page text replacement fixture after adding esc_html stub; original run 38039747323 passed syntax/JS/unit tests but isolated PHP fixture missed WP stub. Do not change customer data.
+
+2026-10-10: Verify final Astro github c5c8dd59 selection anchored by document Range after mousedown/mouseup, safe tokenizer alignment; PHP master f0cccd0e already verified in 38039816851. No customer data writes.

@@ -19,3 +19,5 @@ Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 
 2026-10-10: Publish PHP master c96ea7d0 Page manifest reuse to reduce repeated WordPress API calls when clicking several Editor text nodes. Code QA 38038599058 success. Deploy only WP plugin, Astro unchanged.
 
 2026-10-10: Deploy selected-only text edit WordPress backend f0cccd0e, page-text.php and text-editor-ui.php. Source QA run 38039816851 PASS, no customer content changes. Upload plugin via FTP and byte-verify; do not redeploy Astro yet.
+
+2026-10-10: Publish PHP master bf31f5b04d2e782a38f2799447545301f0e35022, one-line null selected WordPress Editor guard after Chrome run 38040295965. Source QA PASS 38040487351. Upload WP plugin and byte-verify once; do not rebuild Astro yet.

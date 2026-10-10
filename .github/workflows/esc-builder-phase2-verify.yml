@@ -113,10 +113,13 @@ jobs:
                            'esc-vb-seo-title','esc-vb-seo-caption','esc-vb-seo-description']) {
             if(!shell.includes('id="'+id+'"')) throw Error('Missing image SEO field: '+id);
           }
-          if(!imageScript.includes("invoke(readUrl,{row})") ||
+          if(!imageScript.includes("invoke(readUrl,{row,field,table_id:tableId})") ||
              !imageScript.includes("updateSEO()") ||
-             !imageScript.includes("html_alt:current.seo?.html_alt"))
-            throw Error('Image SEO must come from selected WordPress row and Media preview');
+             !imageScript.includes("html_alt:current.seo?.html_alt") ||
+             !imageScript.includes("table_id:tableId,expected_version:source.version") ||
+             !imageScript.includes("current.tableId") ||
+             !imageScript.includes("current.field"))
+            throw Error('Image SEO source and save must use exact table/field/row');
           if(!shell.includes('textarea id="esc-vb-seo-html-alt"') ||
              !imageScript.includes("isAltDirty()") ||
              !imageScript.includes("altInput.addEventListener('input'") ||
@@ -135,6 +138,31 @@ jobs:
              !astro.includes('esc-vb-image-selected') ||
              !astro.includes('esc-vb-image-preview-ack'))
             throw Error('Gallery preview and selection handshake missing');
+          const expanded={
+            home_02:'img',home_09:'icon',home_11:'img',home_13:'img'
+          };
+          for(const [id,field] of Object.entries(expanded)) {
+            const part=readFileSync('source/src/astro/tablepress/Home_'+id.slice(-2)+'.astro','utf8');
+            if(!part.includes('data-esc-builder-image-field="'+field+'"') ||
+               !part.includes('data-esc-builder-image-row='))
+              throw Error(id+' not annotated with exact field and row');
+            if(!imageScript.includes(id)) throw Error('Sidebar missing allowlist for '+id);
+          }
+          const why=readFileSync('source/src/astro/tablepress/Home_09.astro','utf8');
+          if(!why.includes('data-esc-builder-image-field="background"') ||
+             !why.includes('data-esc-builder-bg-edit'))
+            throw Error('home_09 background does not have builder-only selector');
+          if(!astro.includes('const editableImageColumns = {') ||
+             !astro.includes('function findEditableImage(tableId,row,field)') ||
+             !astro.includes('data-esc-builder-bg-edit'))
+            throw Error('Scoped image preview handler missing');
+          const imagePHP=readFileSync('backend/wp-content/plugins/esc-visual-builder/includes/image-editor.php','utf8');
+          if(!imagePHP.includes("'home_09' => ['icon', 'background']") ||
+             !imagePHP.includes("esc_vb_image_requested_field(") ||
+             !imagePHP.includes("'field' => $field") ||
+             !imagePHP.includes("esc_vb_text_authorize($request)"))
+            throw Error('Backend static image field whitelist or auth missing');
+          console.log('Expanded ESC Table static image source contract PASS');
           console.log('home_01 image editor source contract PASS');
           const extract=readFileSync('source/src/astroutils/ExtractHTML.astro','utf8');
           if(!extract.includes('data-esc-builder-html-part')) throw Error('Editor HTML part annotations missing');
@@ -265,6 +293,15 @@ jobs:
           if(esc_vb_image_replace_cell($raw,'javascript:alert(1)')!==false)
             exit("Non-HTTPS replacement accepted\n");
           if(esc_vb_image_column(['id','title','image'])!==2)exit("Column lookup failed\n");
+          $allowed=esc_vb_image_allowed_fields();
+          if(($allowed['home_02'] ?? [])!==['img'] ||
+             ($allowed['home_09'] ?? [])!==['icon','background'] ||
+             ($allowed['home_11'] ?? [])!==['img'] ||
+             ($allowed['home_13'] ?? [])!==['img'] ||
+             isset($allowed['home_03']) || isset($allowed['home_04']) ||
+             isset($allowed['home_10']) || isset($allowed['home_12']))
+             exit("Editable ESC Table allowlist includes API images or misses static fields\n");
+          echo "Expanded ESC Table image allowlist PASS\n";
           $seo=esc_vb_image_seo_metadata('<img src="/uploads/old.jpg" alt="Sản xuất &amp; in logo">','https://admin.example.test/uploads/old.jpg');
           if($seo['html_alt']!=='Sản xuất & in logo' ||
              !$seo['attachment_found'] || $seo['media_alt']!=='Khu vực sản xuất mũ bảo hiểm' ||

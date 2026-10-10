@@ -43,7 +43,7 @@ jobs:
           parsed=urlparse(src)
           ticket=parse_qs(parsed.query).get('ticket',[''])[0]
           page_id=int(parsed.path.rstrip('/').split('/')[-1])
-          match=re.search(r'const restNonce\\s*=\\s*["\\x27]([a-zA-Z0-9]+)["\\x27]',resp.text)
+          match=re.search('const restNonce[ ]*=[ ]*["]([a-zA-Z0-9]+)["]',resp.text)
           if len(ticket)!=64 or not match: raise SystemExit('Builder credential metadata missing')
           headers={'X-WP-Nonce':match.group(1)}
           endpoint=root+'/wp-json/esc-builder/v1/'
@@ -61,7 +61,7 @@ jobs:
           invalid=session.post(endpoint+'editable-page-text',json={'ticket':'invalid','page_id':page_id},headers=headers,timeout=30)
           if invalid.status_code!=403: raise SystemExit('Invalid ticket must return HTTP403')
           if fields:
-            first=next((r for r in fields if '\\n' not in r['title'] and len(r['title'])<120),None)
+            first=next((r for r in fields if chr(10) not in r['title'] and len(r['title'])<120),None)
             if first:
               entry={**base,'part':first['part'],'offset':first['offset'],
                 'original_hash':first['hash'],'title':first['title'],

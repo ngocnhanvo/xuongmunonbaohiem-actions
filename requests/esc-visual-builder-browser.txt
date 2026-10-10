@@ -15,3 +15,4 @@ Post-deploy final Visual Builder browser QA on Astro master merge 215fb4e661b934
 2026-10-10: Chrome QA after Astro PR55 d7cc76fe deployed in run 38018620577. Verify image-title preview indicator persists across rows without reload and previous Builder regression checks.
 2026-10-10: Retry Chrome Builder test with corrected Astro targetOrigin for synthetic preview title events. Production builds unchanged.
 2026-10-10: Final Chrome test: correct Puppeteer plural element selector. Previous run already passed no-reload saved overlays and draft Cancel.
+2026-10-10: Diagnose manual refresh status after saved-preview regression passes. Production source unchanged.

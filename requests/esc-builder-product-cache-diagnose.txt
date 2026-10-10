@@ -1,1 +1,1 @@
-Post-recovery check: validate /data/page-san-pham.json and cms-common.json Action ProductsSSRPage and /san-pham + /preview/san-pham both HTTP 200 after one-off Page cache refresh deploy 38075519772 SUCCESS. Read only.
+Final read-only verification after permanent cache guard Astro master 5ef018e69b72c304fa9fa512c5960e7c8a003afc deploy 38075821764 and smoke 38075934594 SUCCESS. Check page-san-pham + cms-common actions ProductsSSRPage and SSR/public preview both 200. No writes.

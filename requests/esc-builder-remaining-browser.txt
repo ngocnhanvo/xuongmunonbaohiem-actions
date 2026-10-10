@@ -1,0 +1,1 @@
+2026-10-10: Post-deploy live browser QA on home_03..home_13 for Astro master be50e7bd and PHP master 580b015b. Test local draft/cancel only on home_03,home_04,home_09,home_10,home_11,home_12; no WordPress writes. Both FTP deploys PASS (PHP 38032726547, Astro 38032847641).

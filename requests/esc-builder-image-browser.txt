@@ -8,3 +8,5 @@
 2026-10-10: Final read-only Chrome production QA after image SEO PHP FTP SUCCESS run 38052577614 and API contract SUCCESS 38052695827 (attachment linked true). Check SEO fields visible on first home_01 image, preview new Media SEO, Cancel restores original Alt and metadata, no iframe reload/no save POST/no customer content writes. Do not redeploy.
 
 2026-10-10: Final Chrome QA after WP PHP FTP success 38053939423 and Astro FTP success 38054375214. Verify home_01 editable ESC Table ALT textarea, ALT-only draft (no image change), combined Media image+ALT draft, Save button correctly enabled, Cancel restores IMG src/srcset/alt, no iframe reload or WP saves. Do not repeat deployments or write customer data.
+
+2026-10-10: Retry ALT Chrome browser QA after correcting form-field assertion (run 38054509682 timed out waiting for textarea textContent rather than value). Production PHP/Astro FTP already PASS; no repeated deploy, no customer writes.

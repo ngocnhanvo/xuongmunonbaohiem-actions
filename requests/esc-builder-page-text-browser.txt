@@ -4,3 +4,5 @@ Final browser QA after Astro production PR60 deploy 38038831704 and PHP Page tex
 2026-10-10: Final Chrome live partial Range QA after PHP FTP PASS 38040547324 and Astro FTP PASS 38040639908. Verify exact selected substring in Editor, preview acknowledged to enable Save, Cancel restores, iframe unchanged, no WP writes. Prior failure 38040295965 fixed by nodeIndex ACK and null guard.
 
 2026-10-10: Diagnose why synthetic Range selection on Page 51979 does not choose selected substring after whole-line Chrome regression PASS. Emit only field lengths/mapping and feedback, no text or writes; preceding run 38040745033 failed partial only.
+
+2026-10-10: Inspect page token mapping for Range selection failure 38040898865. Only lengths and equality of full decoded text; no customer text, no writes.

@@ -179,6 +179,36 @@ jobs:
               'table':table_id,'readHTTP':200,'staleHTTP':409,'noOpSaveHTTP':200,
               'rows':len(edt['rows'])
             }))
+          # home_02 must expose its 5 visible text fields, including the
+          # HTML-backed description as safe plain text. Read and stale-write
+          # guard only: never modify customer content in this QA.
+          home02=session.post(root+'/wp-json/esc-builder/v1/editable-text',json={
+            'ticket':ticket,'page_id':page_id,'table_id':'home_02'
+          },headers=edit_headers,timeout=40)
+          if home02.status_code!=200:
+            raise SystemExit('home_02 text editor read HTTP '+str(home02.status_code)+
+                             ' code='+str(home02.json().get('code',''))[:70])
+          h2=home02.json()
+          fields={row.get('field'):row for row in h2.get('rows',[])}
+          expected={'eyebrow','title','video_title','button_text','description'}
+          if not expected.issubset(fields):
+            raise SystemExit('home_02 missing editable fields: '+str(sorted(expected-set(fields))))
+          for field in expected:
+            if not fields[field].get('editable') or len(fields[field].get('hash',''))!=64:
+              raise SystemExit('home_02 field not editable: '+field)
+          description=fields['description']
+          if '<p>' in description['title'] or '</' in description['title']:
+            raise SystemExit('home_02 HTML leaked into plain-text editor')
+          stale02=session.post(root+'/wp-json/esc-builder/v1/save-text',json={
+            'ticket':ticket,'page_id':page_id,'table_id':'home_02',
+            'field':'description','row':0,'title':description['title'],
+            'original_hash':description['hash'],'expected_version':'0'*64
+          },headers=edit_headers,timeout=40)
+          if stale02.status_code!=409:
+            raise SystemExit('home_02 rejected stale-version guard: '+str(stale02.status_code))
+          print('ESC_BUILDER_HOME02_TEXT_CONTRACT='+str({
+            'field_count':len(fields),'required_fields_editable':True,
+            'description_plain_text':True,'staleHTTP':409,'wroteContent':False}))
           # Full-stack check: one SSR request refreshes ONE section after
           # ticket verification. No WordPress edits/build/cache writes.
           live=session.get(src + '&refresh_table=home_00',timeout=110)

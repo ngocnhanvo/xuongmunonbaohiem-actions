@@ -153,7 +153,51 @@ jobs:
             if(await page.$eval('#esc-vb-edit-title',el=>el.value)!==original)
               throw Error('Cancel did not restore the original');
             if(frame.url()!==frameUrl)throw Error('Page Editor preview reloaded iframe');
+            const partial=await frame.evaluate(()=>{
+              const container=document.querySelector('[data-esc-builder-html-part]');
+              const walker=document.createTreeWalker(container,NodeFilter.SHOW_TEXT);
+              let node;
+              while((node=walker.nextNode())){
+                if(!node.parentElement ||
+                    node.parentElement.closest('script,style,svg,textarea,pre,code,template,noscript'))continue;
+                const full=node.nodeValue||'';
+                if(full.trim().length<15 || full.length>1500)continue;
+                const first=full.search(/\\S/);
+                const start=first+2,end=Math.min(first+10,full.length);
+                if(start>=end || !full.slice(start,end).trim())continue;
+                const range=document.createRange();
+                range.setStart(node,start);range.setEnd(node,end);
+                const selection=window.getSelection();
+                selection.removeAllRanges();selection.addRange(range);
+                node.parentElement.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
+                return {selected:full.slice(start,end),full,start,end};
+              }
+              return null;
+            });
+            if(!partial)throw Error('No single-node selectable substring on this Page');
+            await page.waitForFunction(value=>document.querySelector('#esc-vb-edit-title')?.value===value,
+              {timeout:16000},partial.selected);
+            const chosen=await page.$eval('#esc-vb-edit-title',el=>el.value);
+            if(chosen===partial.full)throw Error('Editor selected entire text instead of the substring');
+            const partialMarker='__VB_PARTIAL_DRAFT_ONLY__';
+            await page.$eval('#esc-vb-edit-title',(el,value)=>{
+              el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));
+            },chosen+partialMarker);
+            await frame.waitForFunction(value=>[...document.querySelectorAll('[data-esc-builder-html-part]')]
+              .some(el=>el.textContent.includes(value)),{timeout:12000},partialMarker);
+            if(!(await page.$eval('#esc-vb-edit-save',el=>!el.disabled)))
+              throw Error('Partial text preview did not enable Save');
+            await page.click('#esc-vb-edit-cancel');
+            await frame.waitForFunction(value=>[...document.querySelectorAll('[data-esc-builder-html-part]')]
+              .every(el=>!el.textContent.includes(value)),{timeout:12000},partialMarker);
+            if(await page.$eval('#esc-vb-edit-title',el=>el.value)!==partial.selected)
+              throw Error('Cancel failed to restore partial selected text');
+            if(frame.url()!==frameUrl)throw Error('Partial selection reloaded iframe');
             if(writes.length)throw Error('Chrome QA unexpectedly wrote WordPress Page content');
+            console.log('ESC_BUILDER_PAGE_PARTIAL_PASS='+JSON.stringify({
+              selectionLength:partial.selected.length,wholeLength:partial.full.length,
+              preview:true,cancel:true,iframeReloaded:false,writes:0
+            }));
             console.log('ESC_BUILDER_PAGE_EDITOR_BROWSER_PASS='+JSON.stringify({
               pageId,selectedTag:found.tag,
               candidateWordCount:found.wordCount,

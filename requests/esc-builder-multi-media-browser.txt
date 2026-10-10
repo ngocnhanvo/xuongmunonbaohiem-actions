@@ -1,0 +1,1 @@
+2026-10-10: One focused Chrome QA after PHP FTP 38057845327, Astro FTP 38057220816, source QA 38057779868 and ALT Chrome QA 38057986541 PASS. Open WP Media on home_09 icon and background, preview new image, verify src/srcset/alt and Cancel return, no save-image POST or customer changes. Avoid repeating prior tests or builds.

@@ -105,6 +105,7 @@ jobs:
           <?php
           define('ABSPATH', '/');
           function add_action($hook, $callback) {}
+          function esc_html($text) {return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');}
           require 'backend/wp-content/plugins/esc-visual-builder/includes/page-text.php';
           $fixture = '<!-- wp:html --><section><h2>Tiêu đề &amp; mô tả</h2><p>Đoạn chữ <strong>in đậm</strong>.</p><script>var secret="skip";</script><style>.a{color:red}</style></section><!-- /wp:html -->[table id=home_02 /]<section><h3>Đoạn tiếp theo</h3></section>';
           $parts=esc_vb_page_text_parts($fixture);

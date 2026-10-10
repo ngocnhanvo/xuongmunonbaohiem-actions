@@ -1,1 +1,1 @@
-Read-only Chrome QA for ESC Table Dynamic Popup, Item clone, Page 248 section order preview/Cancel. PHP FTP 38081383923 PASS, Astro deploy 38081489615 PASS, smoke 38081592073 PASS. DO NOT save customer data. Verify iframe remains stable.
+Chrome read-only diagnosis of section preview mismatch after run 38081644456. Print DOM parent relationships and editor feedback; no save or customer writes.

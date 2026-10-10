@@ -133,9 +133,44 @@ jobs:
                 throw Error('Preview action unexpectedly reloaded iframe for '+field);
               audit.push({field,draftVisible:true,cancelRestored:true,iframeUnchanged:true});
             }
+            // Regression: clicking video banner must select video_title, not
+            // the top 'eyebrow' row, even if the text is reused elsewhere.
+            for(const field of ['video_title','eyebrow']) {
+              const el=await frame.$('[data-tablepress-preview="home_02"] [data-esc-builder-field="'+field+'"]');
+              if(!el)throw Error('Missing source field marker '+field);
+              await el.evaluate(node=>node.scrollIntoView({block:'center'}));
+              await el.click({delay:50});
+              await page.waitForFunction(expected=>
+                document.querySelector('#esc-vb-edit-row')?.value===expected,
+                {timeout:20000},field);
+              const inspector=await page.$eval('#esc-vb-inspector',el=>el.textContent);
+              if(!inspector.includes('"field": "'+field+'"'))
+                throw Error('Inspector lost precise source field '+field);
+            }
+            // Drag-select part of the video heading AFTER selecting eyebrow:
+            // a drag can finish without any click event.
+            await frame.$eval('[data-tablepress-preview="home_02"] [data-esc-builder-field="video_title"]',el=>{
+              const node=[...el.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&n.nodeValue.trim());
+              if(!node)throw Error('No text node for video heading');
+              const text=node.nodeValue;
+              const from=text.search(/\\S/);
+              const range=document.createRange();
+              range.setStart(node,from);
+              range.setEnd(node,Math.min(text.length,from+Math.max(4,Math.min(12,text.trim().length))));
+              const sel=window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+              el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));
+            });
+            await page.waitForFunction(()=>
+              document.querySelector('#esc-vb-edit-row')?.value==='video_title',
+              {timeout:20000});
+            const headingText=await frame.$eval('[data-esc-builder-field="video_title"]',el=>el.textContent.trim());
+            const editorText=await page.$eval('#esc-vb-edit-title',el=>el.value);
+            if(headingText!==editorText)throw Error('Video heading did not open exact matching editor field');
             if(saves.length) throw Error('Browser QA must not write any WordPress content');
             console.log('BUILDER_HOME02_CHROME_QA='+JSON.stringify({
-              allFiveFieldsEditable:true,fields:audit,wordPressSaves:0,
+              allFiveFieldsEditable:true,exactVideoClick:true,exactVideoDrag:true,fields:audit,wordPressSaves:0,
               iframeReloaded:false,pageErrors:errors.slice(0,5)
             }));
           } finally {

@@ -1,0 +1,1 @@
+Production Chrome QA safe header navigation, no writes. Blue Sea Astro master f17c51bf2b5a23af49e5b79dc088c3d48f708002 deployed run 38077621399; WordPress PHP master 3fc62f916418d41b262becf89d7b02543a5860f7 verified FTP run 38077563058. Reproduce User Page 53463 clicking /san-pham, require Page 53504 fresh Builder ticket, block external nav, ensure no iframe error.

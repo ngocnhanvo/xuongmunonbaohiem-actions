@@ -105,7 +105,7 @@ jobs:
                   parentClass:node.parentElement?.className?.toString().slice(0,80),
                   ancestorTable:Boolean(node.parentElement?.closest('[data-tablepress-preview]'))})).slice(0,38));
               const status=await page.$eval('#esc-vb-section-order-status',el=>el.textContent);
-              const list=await page.$eval('#esc-vb-section-order-list li',nodes=>nodes.map(n=>n.textContent?.trim()).slice(0,4));
+              const list=await page.evaluate(()=>[...document.querySelectorAll('#esc-vb-section-order-list li')].map(n=>n.textContent?.trim()).slice(0,4));
               console.log('SECTION_REORDER_DIAG='+JSON.stringify({original,edited,status,list,diagnostic}));
               throw Error('Section order was not previewed in iframe');
             }

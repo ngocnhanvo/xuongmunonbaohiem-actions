@@ -2,3 +2,5 @@
 2026-10-10: Diagnose Page 51979 Editor HTML DOM/selection routing. Previous Chrome QA 38038102207 found no selectable candidate; output only tag counts, no user content. Do not perform Save.
 
 2026-10-10: Retry Browser QA after correcting selector enumeration (prior run 38038218245 stopped before first candidate; Page DOM shows 1 editor part with 4 text nodes). No writes.
+
+2026-10-10: Fix workflow YAML truncated selector before runtime (runs 38038307570, 38038319671 had no jobs). DOM-index click test now valid; no writes.

@@ -1,4 +1,5 @@
-ESC Visual Builder portable QA (latest adapter/test revision).
-ESC Astro github revision: f5a4c9da3f40eea165d25eaecf39bb5813a8c3f8
-Blue Sea and ESC backend adapters: lint + regression.
-No build, FTP, Chrome production, or smoke test.
+ESC Visual Builder port QA final gate.
+ESC Astro github: f5a4c9da3f40eea165d25eaecf39bb5813a8c3f8
+ESC PHP master: ec8d825b944bf311c875bfb9b5cc7ba5f1e0fbac
+Blue Sea PHP master: e1980d1771c8411a0f0b688d3b143e909968ad9e
+Only PHP lint/config regressions and scoped Astro vitest. No FTP, build, or production smoke.

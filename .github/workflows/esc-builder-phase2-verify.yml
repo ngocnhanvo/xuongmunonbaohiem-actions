@@ -65,6 +65,23 @@ jobs:
       - name: Focused image unit tests
         working-directory: source
         run: pnpm exec vitest run src/lib/wordpress/builderImages.test.ts src/lib/wordpress/imageProcessor.preview.test.ts src/lib/wordpress/builderSectionRefresh.test.ts src/lib/wordpress/builderLivePage.test.ts
+      - name: Check Builder inline JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const astro=readFileSync('source/src/pages/esc-builder/preview/[pageId].astro','utf8');
+          const script=astro.match(/<script is:inline define:vars=\\{\\{[^>]+>([\\s\\S]*?)<\\/script>/);
+          if (!script) throw Error('Astro Builder inline script not found');
+          new Function(script[1]);
+          const php=readFileSync('backend/wp-content/plugins/esc-visual-builder/includes/text-editor-ui.php','utf8');
+          const editor=php.match(/<script>([\\s\\S]*?)<\\/script>/);
+          if (!editor) throw Error('WordPress title editor inline script not found');
+          const stubbed=editor[1].replace(/<\\?php echo[^>]*\\?>/g,'"test-value"');
+          new Function(stubbed);
+          console.log('Builder Astro + WordPress editor inline JS syntax PASS');
+          NODE
       - name: Verify preview isolation
         working-directory: source
         run: |

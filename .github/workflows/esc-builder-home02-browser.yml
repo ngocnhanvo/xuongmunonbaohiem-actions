@@ -153,7 +153,7 @@ jobs:
               const node=[...el.childNodes].find(n=>n.nodeType===Node.TEXT_NODE&&n.nodeValue.trim());
               if(!node)throw Error('No text node for video heading');
               const text=node.nodeValue;
-              const from=text.search(/\\S/);
+              const from=Math.max(0,text.indexOf(text.trim()));
               const range=document.createRange();
               range.setStart(node,from);
               range.setEnd(node,Math.min(text.length,from+Math.max(4,Math.min(12,text.trim().length))));

@@ -40,3 +40,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Verify home_01 image picker MVP: PHP master f8e6c9b6, Astro github a50f698c. Assert PHP image cell schema URL/single IMG, media REST security, srcset preservation, JS modal syntax, iframe click/preview/cancel handlers; no WP customer writes or deployment until source PASS.
 
 2026-10-10: Retry source QA home_01 image editor after correcting malformed Actions YAML in 6b595db0. Only lint/source fixtures; no customer data or deployment.
+
+2026-10-10: Revalidate home_01 on PHP master f30739ff: six IMG cells actually store root-relative /wp-content/uploads paths, so API now normalizes for preview but preserves relative src on save. Test relative URL parsing, HTML preservation, text regression; no WP data writes.

@@ -86,11 +86,24 @@ jobs:
                 (document.querySelector('#esc-vb-image-caption')?.textContent||'').includes(value) &&
                 !document.querySelector('#esc-vb-seo-html-alt')?.disabled,
                 {timeout:45000},item.table+' · '+item.field+' · dòng 1');
+              console.log('ESC_MULTI_IMAGE_START='+item.table+'/'+item.field);
               const initial=await page.$eval('#esc-vb-seo-html-alt',el=>el.value);
               const next='__ESC_MULTI_IMAGE_ALT_QA_'+item.table+'_'+item.field+'__';
               await page.$eval('#esc-vb-seo-html-alt',(el,value)=>{
                 el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));
               },next);
+              await new Promise(r=>setTimeout(r,500));
+              const previewState=await frame.$eval(imgSelector,el=>({
+                changed:el.getAttribute('alt')?.startsWith('__ESC_MULTI_IMAGE_ALT_QA_')||false
+              }));
+              const sidebarState=await page.evaluate(()=>({
+                selected:(document.getElementById('esc-vb-image-caption')?.textContent||'').slice(0,80),
+                saveDisabled:document.getElementById('esc-vb-image-save')?.disabled,
+                feedback:(document.getElementById('esc-vb-image-feedback')?.textContent||'').slice(0,150)
+              }));
+              console.log('ESC_MULTI_IMAGE_PREVIEW_DIAG='+JSON.stringify({
+                table:item.table,field:item.field,previewState,sidebarState
+              }));
               await frame.waitForFunction(({selector,alt})=>
                 document.querySelector(selector)?.getAttribute('alt')===alt,
                 {timeout:16000},{selector:imgSelector,alt:next});

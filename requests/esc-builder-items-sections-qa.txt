@@ -1,0 +1,1 @@
+QA-only approval batch: generic ESC Table item popup + native TablePress model create/duplicate and shortcode section ordering. PHP master 1751ba11a1a16f1d4c52365eafa8fab1d220b6d8; Astro github dcc3ddc56de82837b3d88c93dab9c1e285699cf6. Validate parser, source guards, two-header row integrity, Media, draft preview and full build; NO FTP.

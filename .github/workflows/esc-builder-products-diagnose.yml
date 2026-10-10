@@ -78,8 +78,7 @@ jobs:
               if(!frameResult.htmlPartCount || frameResult.images[0]?.alt!==actual.images[0]?.alt)
                 throw Error('Builder missing WordPress Page HTML banner');
               if(frameResult.texts[1]!==actual.texts[1])
-                console.log('NOTICE_PRODUCTS_SOURCE_DIFF='+JSON.stringify({
-                  builder:frameResult.texts[1],live:actual.texts[1]}));
+                throw Error('Products differ: Builder='+frameResult.texts[1]+', WordPress live='+actual.texts[1]);
               console.log('BUILDER_PRODUCT_LAYOUT_PASS='+item.id);
               const api=await page.evaluate(async id=>{
                 const r=await fetch('/wp-json/wp/v2/pages/'+id+'?context=edit',{credentials:'same-origin',headers:{

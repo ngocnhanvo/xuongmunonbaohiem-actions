@@ -8,3 +8,5 @@ One final authenticated integration test after Astro master deploy 215fb4e661b93
 2026-10-10: Retry phase2 REST editor contract after fixing nonce regex in QA; PHP deploy succeeded; perform only read, stale 409, same-value no-op save.
 2026-10-10: Verify live WordPress home_01 section_title read, stale HTTP409, unchanged save HTTP200; PHP deploy 38027776979 and Astro deploy 38027673306 both PASS. No edits to customer content.
 2026-10-10: Production QA for home_02 text editor after WP FTP PASS 38030303115 and Astro FTP PASS 38030389615; verify five editable fields incl HTML description, reject stale 409, no customer data writes. Astro master 6dd7c5c7 and PHP master 228d63e9.
+
+2026-10-10: Schema-only audit of home_03..13 to safely open text editor. Log metadata names and column keys but no customer text and no writes.

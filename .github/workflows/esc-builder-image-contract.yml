@@ -98,6 +98,27 @@ jobs:
           if any(not x.get('editable') or len(x.get('hash',''))!=64 or
             not str(x.get('url','')).startswith('http') for x in images):
             raise SystemExit('Gallery row metadata invalid')
+          selected=session.post(endpoint+'editable-images',
+            json={**payload,'row':0},headers=headers,timeout=45)
+          if selected.status_code!=200:
+            raise SystemExit('Selected image SEO read HTTP '+str(selected.status_code))
+          selected_data=selected.json()
+          selected_items=selected_data.get('images',[])
+          selected_seo=next((x.get('seo') for x in selected_items if x.get('row')==0),None)
+          needed=('html_alt','attachment_found','media_alt','title','caption','description')
+          if not isinstance(selected_seo,dict) or any(k not in selected_seo for k in needed):
+            raise SystemExit('Selected image SEO fields unavailable')
+          if not isinstance(selected_seo['attachment_found'],bool) or any(
+            not isinstance(selected_seo[k],str) for k in needed if k!='attachment_found'):
+            raise SystemExit('Selected image SEO values have invalid types')
+          if selected_data.get('version')!=data['version']:
+            raise SystemExit('SEO read changed image source version')
+          print('HOME01_IMAGE_SEO_READ_PASS='+str({
+            'row':0,'fields':len(needed),
+            'alt_present':bool(selected_seo['html_alt']),
+            'attachment_linked':selected_seo['attachment_found'],
+            'read_http':200,'writes':0
+          }))
           bad=session.post(endpoint+'editable-images',
             json={**payload,'ticket':'invalid'},headers=headers,timeout=30)
           if bad.status_code!=403:raise SystemExit('Ticket access guard failed '+str(bad.status_code))

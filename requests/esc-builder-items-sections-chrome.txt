@@ -1,1 +1,1 @@
-Read-only Chrome diagnostic repeat only because prior diagnostic used incorrect $eval selector. Capture iframe DOM hierarchy, preview reorder acknowledgement and true mismatch, no WordPress writes.
+Read-only Chrome QA actual Builder Page 248: produce verified DOM parent diagnostic when preview does not reorder. Diagnostic now uses document.querySelectorAll correctly. No WordPress content writes.

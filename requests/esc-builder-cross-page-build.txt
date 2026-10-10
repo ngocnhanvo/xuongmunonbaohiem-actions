@@ -1,0 +1,1 @@
+Verify the complete Blue Sea Astro build on github branch 2a077692ad83c403146e2b8f682571248a958219 after cross-page images and Auto Discovery. Build-only, no FTP, no production deploy.

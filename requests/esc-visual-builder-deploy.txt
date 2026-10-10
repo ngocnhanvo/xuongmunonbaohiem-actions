@@ -23,3 +23,5 @@ Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 
 2026-10-10: Publish PHP master bf31f5b04d2e782a38f2799447545301f0e35022, one-line null selected WordPress Editor guard after Chrome run 38040295965. Source QA PASS 38040487351. Upload WP plugin and byte-verify once; do not rebuild Astro yet.
 
 2026-10-10: Deploy PHP master 806a7e8a9ffa21015ceaa79253b7504e25a167d9. Visual Builder WordPress Editor textarea now shows entire row and preselects dragged substring; partial-save fast path keeps bytes outside selected text. Code QA run 38041934979 PASS. Upload plugin via FTP and byte verify. Do not rebuild Astro (unchanged), no user content writes.
+
+2026-10-10: Fix homepage home_02 selecting video heading opens wrong eyebrow row. Deploy PHP master b403f2b36d49fe27684f3cfd6d627302e54b1c07 via FTP (exact selected field hint). Source QA 38043212953 PASS. Do not deploy Astro before PHP. No WP customer content changes.

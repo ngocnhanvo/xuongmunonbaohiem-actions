@@ -39,13 +39,17 @@ jobs:
           nonce=re.search(r'const restNonce\s*=\s*["\x27]([\w]+)["\x27]',admin.text)
           if not nonce:raise SystemExit('Missing WP nonce')
           ids=[f'home_{i:02d}' for i in range(14)]
-          res=session.post(root+'/wp-json/esc-builder/v1/table-batch',
-            json={'ticket':ticket,'page_id':page_id,'table_ids':ids},
-            headers={'X-WP-Nonce':nonce.group(1)},timeout=80)
-          if res.status_code!=200:raise SystemExit('Batch HTTP '+str(res.status_code))
-          body=res.json()
-          print('INVENTORY_BATCH_KEYS='+str(list(body.keys())))
-          sources=body.get('sources') or body.get('tables') or {}
+          sources={}
+          for start in range(0,len(ids),4):
+            chunk=ids[start:start+4]
+            res=session.post(root+'/wp-json/esc-builder/v1/table-batch',
+              json={'ticket':ticket,'page_id':page_id,'table_ids':chunk},
+              headers={'X-WP-Nonce':nonce.group(1)},timeout=80)
+            if res.status_code!=200:
+              raise SystemExit('Batch HTTP '+str(res.status_code)+' for '+','.join(chunk))
+            body=res.json()
+            sources.update(body.get('sources') or body.get('tables') or {})
+          print('INVENTORY_BATCH_COUNT='+str(len(sources)))
           for key in ids:
             item=sources.get(key) or {}
             table=item.get('table') or item

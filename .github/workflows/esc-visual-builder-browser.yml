@@ -241,10 +241,13 @@ jobs:
               const previewTarget = '[QA in-memory] ' + sourceTitle;
               const beforePreviewURL = frame.url();
               await page.evaluate(({activeRow,sourceTitle,previewTarget,origin}) => {
-                document.querySelector('#esc-vb-frame')?.contentWindow?.postMessage({
+                const previewFrame = document.querySelector('#esc-vb-frame');
+                // postMessage targetOrigin is the destination iframe Astro origin,
+                // not the sending WordPress admin origin.
+                previewFrame?.contentWindow?.postMessage({
                   type:'esc-vb-title-saved',tableId:'home_00',row:activeRow,
                   original:sourceTitle,value:previewTarget
-                },origin);
+                },new URL(previewFrame.src).origin);
               }, {activeRow,sourceTitle,previewTarget,origin});
               await frame.waitForFunction(value =>
                 document.querySelector('[data-esc-builder-local-saves]')?.textContent?.includes(value),
@@ -260,10 +263,11 @@ jobs:
               if (!persisted || frame.url()!==beforePreviewURL)
                 throw Error('Saved preview overlay disappeared on row switch or navigated the iframe');
               await page.evaluate(({activeRow,sourceTitle,previewTarget,origin}) => {
-                document.querySelector('#esc-vb-frame')?.contentWindow?.postMessage({
+                const previewFrame = document.querySelector('#esc-vb-frame');
+                previewFrame?.contentWindow?.postMessage({
                   type:'esc-vb-title-saved',tableId:'home_00',row:activeRow,
                   original:previewTarget,value:sourceTitle
-                },origin);
+                },new URL(previewFrame.src).origin);
               }, {activeRow,sourceTitle,previewTarget,origin});
               await frame.waitForFunction(value =>
                 !document.querySelector('[data-esc-builder-local-saves]')?.textContent?.includes(value),

@@ -1,0 +1,3 @@
+Production Chrome QA for ESC Builder cross-page HTML/ESC Table image and Alt preview+cancel.
+Deployment 38070327429 PASS, post-deploy smoke 38070432121 PASS, PHP deployment 38069916645 PASS.
+Do not save customer data or rerun old home page QA.

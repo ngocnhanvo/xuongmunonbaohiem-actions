@@ -94,7 +94,7 @@ jobs:
           if lp.get('id')!=page_id or not isinstance(lp.get('content',{}).get('rendered'),str):
             raise SystemExit('Builder current Page layout source invalid')
           print('ESC Builder live Page HTML source PASS: authenticated editor-only layout fetched.')
-          for ids in [['home_04','home_05','home_06','home_07'],['home_08']]:
+          for ids in [['home_03','home_04','home_05','home_06'],['home_07','home_08','home_09','home_10'],['home_11','home_12','home_13']]:
             scan=session.post(root+'/wp-json/esc-builder/v1/table-batch',json={
               'ticket':ticket,'page_id':page_id,'table_ids':ids
             },timeout=45)
@@ -105,7 +105,11 @@ jobs:
               print('BUILDER_TABLE_DEPENDENCY='+str({
                 'id':tid,'api':(tab.get('meta') or {}).get('api'),
                 'rows':len(tab.get('items') or []),
-                'first_fields':list(first.keys())[:12],
+                'first_fields':list(first.keys())[:25],
+                'name_chars':len(str(tab.get('name',''))),
+                'title_chars':len(str(tab.get('title',''))),
+                'description_chars':len(str(tab.get('description',''))),
+                'settings_keys':list((tab.get('settings') or {}).keys())[:15],
                 'sample_key':str(first.get('key',first.get('_id',first.get('api-key',''))))[:35]
               }))
           print('ESC Builder live-first page-state PASS: '+str(len(table_ids))+

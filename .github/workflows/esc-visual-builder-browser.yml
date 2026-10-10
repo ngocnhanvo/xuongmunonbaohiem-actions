@@ -347,6 +347,54 @@ jobs:
             await chooseTable('home_01');
             await new Promise(r=>setTimeout(r,1200));
             if (frame.url()!==afterFirst) throw Error('Selecting home_01 unexpectedly refreshed the iframe');
+            // home_01 H2 comes from table.name, not six image-row title cells.
+            // Never write customer text during QA: draft, Cancel and mock local save only.
+            await page.waitForFunction(() => {
+              const select=document.querySelector('#esc-vb-edit-row');
+              return select?.querySelector('option[value="section"]') &&
+                document.querySelector('#esc-vb-edit-title')?.disabled===false;
+            },{timeout:45000});
+            await page.select('#esc-vb-edit-row','section');
+            const h2Original = await frame.$eval('[data-tablepress-preview="home_01"] h2',
+              el=>el.textContent.trim());
+            const storedSection = await page.$eval('#esc-vb-edit-title',el=>el.value.trim());
+            if (h2Original!==storedSection || !h2Original)
+              throw Error('home_01 table.name did not match the rendered section heading');
+            const h2Draft = h2Original + ' [QA section draft]';
+            await page.$eval('#esc-vb-edit-title',(el,value)=>{
+              el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));
+            },h2Draft);
+            await frame.waitForFunction(value => document.querySelector('[data-tablepress-preview="home_01"] h2')?.textContent?.includes(value),
+              {timeout:12000},h2Draft);
+            if (!(await page.$eval('#esc-vb-edit-save', el=>!el.disabled)))
+              throw Error('Editing section heading did not enable Save');
+            await page.click('#esc-vb-edit-cancel');
+            const headingAfterCancel = await frame.$eval('[data-tablepress-preview="home_01"] h2',el=>el.textContent.trim());
+            if (headingAfterCancel!==h2Original) throw Error('Cancel did not restore section heading');
+            const simulatedSave = h2Original + ' [QA saved heading]';
+            await page.evaluate(({oldText,value}) => {
+              const iframe=document.querySelector('#esc-vb-frame');
+              iframe.contentWindow.postMessage({
+                type:'esc-vb-title-saved',tableId:'home_01',field:'section_title',
+                row:'section',original:oldText,value
+              },new URL(iframe.src).origin);
+            },{oldText:h2Original,value:simulatedSave});
+            await frame.waitForFunction(value => document.querySelector('[data-tablepress-preview="home_01"] h2')?.textContent?.includes(value),
+              {timeout:12000},simulatedSave);
+            await page.evaluate(({oldText,value}) => {
+              const iframe=document.querySelector('#esc-vb-frame');
+              iframe.contentWindow.postMessage({
+                type:'esc-vb-title-saved',tableId:'home_01',field:'section_title',
+                row:'section',original:oldText,value
+              },new URL(iframe.src).origin);
+            },{oldText:simulatedSave,value:h2Original});
+            await frame.waitForFunction(value => document.querySelector('[data-tablepress-preview="home_01"] h2')?.textContent?.trim()===value,
+              {timeout:12000},h2Original);
+            if (frame.url()!==afterFirst) throw Error('Section heading preview caused unexpected reload');
+            console.log('BUILDER_HOME_01_SECTION_HEADING_QA='+JSON.stringify({
+              editorUsesTableName:true,draftRendered:true,cancelRestored:true,
+              localSaveWithoutReload:true,customerDataWritten:false
+            }));
             nextDocument=waitForManualRefresh('home_00,home_01');
             await page.click('#esc-vb-refresh-section');
             response=await nextDocument;

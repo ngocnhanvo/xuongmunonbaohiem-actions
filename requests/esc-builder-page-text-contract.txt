@@ -1,1 +1,2 @@
 2026-10-10: Test after FTP deploy run 38037730850 PASS for WordPress Editor Page text endpoints. Do not change customer data; test authenticated read, stale-version 409, no-op and unchanged page hash.
+2026-10-10: After initial Page Editor API PASS with homepage candidates=0, scan up to 8 other WordPress Pages for HTML text tokens (read only). Confirm at least one real page can use new editor; do not modify content.

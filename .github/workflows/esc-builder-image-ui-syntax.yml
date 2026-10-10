@@ -1,0 +1,29 @@
+name: Verify Builder Image Editor JavaScript
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [requests/esc-builder-image-ui-syntax.txt]
+permissions:
+  contents: read
+jobs:
+  php-embedded-js:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: source
+      - name: Render and parse image editor JavaScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          php source/wp-content/plugins/esc-visual-builder/tests/image-ui-script.test.php >/tmp/esc-builder-image-ui.js
+          node --check /tmp/esc-builder-image-ui.js
+          grep -Fq 'esc-vb-page-image-selected' /tmp/esc-builder-image-ui.js
+          grep -Fq 'pageSaveUrl' /tmp/esc-builder-image-ui.js
+          echo "WordPress Builder image editor JavaScript syntax PASS"

@@ -1,0 +1,1 @@
+2026-10-10: Browser QA WordPress Visual Builder Page ID 51979: click literal Editor text, draft updates iframe, Cancel restores; no save POST or customer writes. After PHP FTP PASS 38037993029 and Astro FTP PASS 38037910794 and production smoke PASS 38037995976.

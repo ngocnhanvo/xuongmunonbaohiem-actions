@@ -2,3 +2,5 @@
 2026-10-10: Diagnose gallery Chrome QA run 38046787655 where Save remained disabled after selecting Media. Log control states and URL scheme only (no user content or media URLs), no WordPress writes. Do not repeat deployments.
 
 2026-10-10: Diagnose WordPress Media attachment type, URL scheme and host before selecting (Chrome run 38046982295 had Media picker valid but image rejected by URL/ID guard). No URLs or content printed and no saves.
+
+2026-10-10: Resume final Chrome QA once after PHP master 11f4160642e03fb1605f21cdf346273869d62ae3 URL normalization and FTP PASS run 38047397153; preceding Chrome run 38047128279 was before PHP correction. Verify Media selected image preview, gallery background, Cancel, no WP writes, no iframe reload. Do not rerun deploy or source checks.

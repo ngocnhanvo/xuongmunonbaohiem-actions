@@ -1,1 +1,1 @@
-Read-only debug after product source parity test failed 38073140832: print exact Builder live/fallback source status with same WordPress Page 53504, no writes or build.
+Final read-only production Chrome QA: WordPress Page 53504 Action ProductsSSRPage key ssr-products (migrated run 38074812208), Astro master 8da1390d66f17f173a01082b34b148ae1af3e496 deployed run 38074877715 and smoke PASS 38074977435. Assert Builder and /preview/san-pham banner/H1 parity; product data differences logged separately. No writes.

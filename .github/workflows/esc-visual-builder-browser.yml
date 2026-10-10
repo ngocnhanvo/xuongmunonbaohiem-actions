@@ -278,7 +278,7 @@ jobs:
                 customerDataWritten:false
               }));
             }
-            const controls = await page.$('.esc-vb-size');
+            const controls = await page.$$('.esc-vb-size');
             if (controls.length !== 2) throw Error('Desktop/Mobile controls missing');
             await controls[1].click();
             const mobileWidth = await frameEl.evaluate(el=>Math.round(el.getBoundingClientRect().width));

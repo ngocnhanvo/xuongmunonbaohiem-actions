@@ -113,6 +113,11 @@ jobs:
                            'esc-vb-seo-title','esc-vb-seo-caption','esc-vb-seo-description']) {
             if(!shell.includes('id="'+id+'"')) throw Error('Missing image SEO field: '+id);
           }
+          if(imageScript.includes("esc-vb-image-alt-draft',{row:current.row"))
+            throw Error('Typed ALT draft must carry tableId and field');
+          if((imageScript.match(/post\('esc-vb-image-alt-draft'/g)||[]).length!==3 ||
+             (imageScript.match(/post\('esc-vb-image-alt-draft',\{tableId:current.tableId,field:current.field/g)||[]).length!==3)
+            throw Error('Every ALT draft dispatch must be table/field scoped');
           if(!imageScript.includes("invoke(readUrl,{row,field,table_id:tableId})") ||
              !imageScript.includes("updateSEO()") ||
              !imageScript.includes("html_alt:current.seo?.html_alt") ||

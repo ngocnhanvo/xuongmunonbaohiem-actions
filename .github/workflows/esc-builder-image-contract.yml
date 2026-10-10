@@ -1,0 +1,82 @@
+name: ESC Builder home_01 Image Contract QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/esc-builder-image-contract.txt'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Verify WordPress gallery image source without writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,re,requests
+          from bs4 import BeautifulSoup
+          from urllib.parse import urlparse,parse_qs
+          root=os.environ['WP_ADMIN_URL'].split('/wp-admin')[0].rstrip('/')
+          session=requests.Session()
+          session.get(root+'/wp-login.php',timeout=30)
+          response=session.post(root+'/wp-login.php',data={
+            'log':os.environ['WP_ADMIN_USERNAME'],
+            'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In',
+            'redirect_to':root+'/wp-admin/admin.php?page=esc-visual-builder',
+            'testcookie':'1'
+          },timeout=45)
+          if 'wp-login.php' in response.url:raise SystemExit('WordPress login failed')
+          page=session.get(root+'/wp-admin/admin.php?page=esc-visual-builder',timeout=45)
+          html=page.text
+          frame=BeautifulSoup(html,'html.parser').select_one('#esc-vb-frame')
+          if not frame:raise SystemExit('Builder iframe missing')
+          url=urlparse(frame.get('src',''))
+          ticket=parse_qs(url.query).get('ticket',[''])[0]
+          page_id=int(url.path.rstrip('/').split('/')[-1])
+          nonce=re.search('const restNonce[ ]*=[ ]*["]([a-zA-Z0-9]+)["]',html)
+          if len(ticket)!=64 or not nonce:raise SystemExit('Builder authorization unavailable')
+          headers={'X-WP-Nonce':nonce.group(1)}
+          payload={'ticket':ticket,'page_id':page_id,'table_id':'home_01'}
+          endpoint=root+'/wp-json/esc-builder/v1/'
+          source=session.post(endpoint+'editable-images',json=payload,headers=headers,timeout=45)
+          if source.status_code!=200:
+            raise SystemExit('Gallery source HTTP '+str(source.status_code)+' error '+str(source.json().get('code',''))[:70])
+          data=source.json()
+          images=data.get('images',[])
+          if data.get('table_id')!='home_01' or len(data.get('version',''))!=64:
+            raise SystemExit('Incorrect image editing source')
+          if len(images)!=6 or sorted(x.get('row') for x in images)!=list(range(6)):
+            raise SystemExit('Expected six supported factory gallery image cells, got '+str({
+              'count':len(images),'rows':[x.get('row') for x in images]
+            }))
+          if any(not x.get('editable') or len(x.get('hash',''))!=64 or
+            not str(x.get('url','')).startswith('http') for x in images):
+            raise SystemExit('Gallery row metadata invalid')
+          bad=session.post(endpoint+'editable-images',
+            json={**payload,'ticket':'invalid'},headers=headers,timeout=30)
+          if bad.status_code!=403:raise SystemExit('Ticket access guard failed '+str(bad.status_code))
+          invalid=session.post(endpoint+'save-image',json={
+            **payload,'row':0,'attachment_id':0,
+            'expected_version':data['version'],'original_hash':images[0]['hash']
+          },headers=headers,timeout=30)
+          if invalid.status_code!=400:
+            raise SystemExit('Invalid attachment must be rejected; got '+str(invalid.status_code))
+          verify=session.post(endpoint+'editable-images',json=payload,headers=headers,timeout=45)
+          if verify.status_code!=200 or verify.json().get('version')!=data['version']:
+            raise SystemExit('Gallery source changed during read-only QA')
+          print('HOME01_IMAGE_CONTRACT_PASS='+str({
+            'table_id':'home_01','image_rows':len(images),
+            'read_http':200,'bad_ticket_http':403,
+            'bad_media_http':400,'source_unchanged':True,'writes':0
+          }))
+          PY

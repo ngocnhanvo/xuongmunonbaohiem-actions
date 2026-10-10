@@ -41,6 +41,14 @@ jobs:
             await page.setViewport({width:1360,height:900,deviceScaleFactor:1});
             const writes=[];
             const errors=[];
+            let pageRows=[];
+            page.on('response',async response=>{
+              try{
+                if(new URL(response.url()).pathname.endsWith('/esc-builder/v1/editable-page-text') &&
+                   response.status()===200)
+                  pageRows=(await response.json()).rows||[];
+              }catch{}
+            });
             page.on('pageerror',e=>errors.push(String(e.message).slice(0,160)));
             page.on('request',r=>{
               try{if(new URL(r.url()).pathname.endsWith('/esc-builder/v1/save-page-text'))
@@ -187,10 +195,20 @@ jobs:
                 inspector:(document.querySelector('#esc-vb-inspector')?.textContent||'').slice(0,650),
               };
             });
+            const inspector=await page.$eval('#esc-vb-inspector',el=>el.textContent);
+            let hint={};try{hint=JSON.parse(inspector||'{}').selection||{};}catch{}
+            const inPart=pageRows.filter(row=>row.part===hint.part);
             console.log('ESC_PAGE_PARTIAL_DIAGNOSTIC='+JSON.stringify({
               selectedLen:partial.selected.length,sourceLen:partial.full.length,
               match:partialState.textLength===partial.selected.length,
               fieldSelected:partialState.fieldSelected,
+              hintPart:hint.part,nodeIndex:hint.nodeIndex,
+              sourceRows:inPart.map(row=>({
+                nodeIndex:row.node_index,length:row.full_text?.length,
+                same:row.full_text===hint.original,
+                normalized:String(row.full_text||'').replace(/\\s+/g,' ').trim()===
+                  String(hint.original||'').replace(/\\s+/g,' ').trim()
+              })),
               feedback:partialState.feedback,
               inspectorHasSelection:partialState.inspector.includes('"selection"'),
             }));

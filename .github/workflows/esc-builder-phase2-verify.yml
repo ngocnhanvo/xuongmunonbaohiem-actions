@@ -93,6 +93,18 @@ jobs:
           if(!extract.includes('data-esc-builder-html-part')) throw Error('Editor HTML part annotations missing');
           if(!astro.includes('patchPageEditorText(')) throw Error('Page HTML preview patching missing');
           if(!editor.includes('pageSaveUrl')) throw Error('Editor Page text save endpoint missing');
+          const home02=readFileSync('source/src/astro/tablepress/Home_02.astro','utf8');
+          const homeFields=['eyebrow','title','video_title','description','button_text'];
+          for(const field of homeFields) {
+            if(!home02.includes('data-esc-builder-field="'+field+'"'))
+              throw Error('home_02 missing exact text source marker '+field);
+          }
+          if(!astro.includes('target.closest("[data-esc-builder-field]")') ||
+             !astro.includes('fieldNode?.getAttribute("data-esc-builder-field")') ||
+             !editor.includes("const fieldMatch = selected === 'home_02'") ||
+             !editor.includes('section.field || null'))
+            throw Error('Builder home_02 field hint not routed from click/drag into editor');
+          console.log('home_02 explicit source-field selection contract PASS');
           if(!astro.includes('selectedPageRange(') || !astro.includes('pageEditorPosition('))
             throw Error('Precise Editor Range selection hooks missing');
           if(!editor.includes('textarea.value = row?.title ||')) throw Error('Page Editor textarea must show full row');

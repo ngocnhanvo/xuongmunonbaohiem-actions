@@ -1,4 +1,3 @@
-NVN Auto Discovery regression and PHP adapter lint.
-ESC Astro github=e84f9a5c2a8ce2347dde9d842376c49887b44160
-ESC PHP master=86ee289a9eee61fcf6a2dd627da9294ffec90b5b
-No deployment or production build. Test new automatic table discovery and API-data isolation.
+NVN Auto Discovery QA retry after fixing Vitest path resolution.
+ESC Astro github 710f984b0a10a263a5ac728433eebb9e475de860.
+PHP adapter previously passed; rerun same focused workflow at updated source. No FTP/build.

@@ -55,6 +55,10 @@ jobs:
               pattern=re.compile(r'\[table\s+id\s*=\s*["\x27]?([a-zA-Z0-9_-]{1,80})(?:["\x27])?\s*/\]',re.I)
               matches=list(pattern.finditer(raw))
               gaps=[raw[matches[i].end():matches[i+1].start()] for i in range(len(matches)-1)]
+              if obj.get('slug')=='trang-chu':
+                for i,gap in enumerate(gaps):
+                  tags=[('<' + ('/' if t.startswith('</') else '') + re.match(r'</?([a-zA-Z][\\w:-]*)',t).group(1).lower() + '>') for t in re.findall(r'</?[a-zA-Z][^>]*>',gap)]
+                  print('GAP_TAGS',i,repr(tags),'has_text',bool(re.sub(r'<[^>]*>','',gap).strip()),'bytes',len(gap))
               print('PAGE_SECTION_AUDIT',page_id,'slug',obj.get('slug'),
                 'table_count',len(matches),'ids',[m.group(1) for m in matches],
                 'non_whitespace_between',sum(bool(g.strip()) for g in gaps),

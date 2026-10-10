@@ -1,0 +1,109 @@
+name: Deploy Blue Sea Builder Item and Section Modules
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-items-sections-php-deploy.txt']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-item-section-php-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: source
+      - name: Run local source verification before FTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd source/wp-content/plugins/esc-visual-builder
+          for file in esc-visual-builder.php includes/item-manager.php includes/section-order.php includes/item-section-ui.php; do php -l "$file"; done
+          php tests/items-and-sections.test.php
+          php tests/item-ui-script.test.php >/tmp/esc-item-ui.js
+          node --check /tmp/esc-item-ui.js
+          grep -Fq "esc_vb_item_section_ui_scripts" esc-visual-builder.php
+      - name: Upload only four Builder files, then byte-verify
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for v in FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do test -n "${!v:-}"; done
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y lftp
+          export REMOTE_DIR="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          url=os.environ["WP_ADMIN_URL"]
+          parsed=urlparse(url if "://" in url else "https://"+url)
+          if not parsed.hostname:raise SystemExit('Invalid WP_ADMIN_URL')
+          print('/domains/'+parsed.hostname+'/public_html/wp-content/plugins/esc-visual-builder')
+          PY
+          )"
+          url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          proto=os.environ.get('FTP_PROTOCOL') or 'ftp'
+          if proto not in ('ftp','ftps','sftp'):raise SystemExit('Unsupported protocol')
+          print(proto+'://'+quote(os.environ['FTP_USERNAME'],safe='')+':'+
+                quote(os.environ['FTP_PASSWORD'],safe='')+'@'+os.environ['FTP_SERVER'])
+          PY
+          )"
+          lftp "$url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set ssl:verify-certificate no
+          cd "$REMOTE_DIR"
+          mkdir -pf includes
+          put source/wp-content/plugins/esc-visual-builder/includes/item-manager.php -o includes/item-manager.php
+          get includes/item-manager.php -o /tmp/esc-item-manager-remote.php
+          put source/wp-content/plugins/esc-visual-builder/includes/section-order.php -o includes/section-order.php
+          get includes/section-order.php -o /tmp/esc-section-order-remote.php
+          put source/wp-content/plugins/esc-visual-builder/includes/item-section-ui.php -o includes/item-section-ui.php
+          get includes/item-section-ui.php -o /tmp/esc-item-section-ui-remote.php
+          put source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php -o esc-visual-builder.php
+          get esc-visual-builder.php -o /tmp/esc-builder-remote.php
+          bye
+          LFTP
+          cmp source/wp-content/plugins/esc-visual-builder/includes/item-manager.php /tmp/esc-item-manager-remote.php
+          cmp source/wp-content/plugins/esc-visual-builder/includes/section-order.php /tmp/esc-section-order-remote.php
+          cmp source/wp-content/plugins/esc-visual-builder/includes/item-section-ui.php /tmp/esc-item-section-ui-remote.php
+          cmp source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php /tmp/esc-builder-remote.php
+          php -l /tmp/esc-builder-remote.php
+          php -l /tmp/esc-item-manager-remote.php
+          php -l /tmp/esc-section-order-remote.php
+          php -l /tmp/esc-item-section-ui-remote.php
+          echo 'Verified four Builder PHP files over FTP.'
+      - name: Verify WordPress REST plugin remained active
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          src=os.environ["WP_ADMIN_URL"]
+          print(urlparse(src if "://" in src else "https://"+src).hostname)
+          PY
+          )"
+          for attempt in 1 2 3; do
+            curl -fsS --connect-timeout 10 --max-time 30 "https://$host/wp-json/" >/dev/null && break
+            sleep 3
+          done
+          curl -fsS --connect-timeout 10 --max-time 30 "https://$host/wp-json/" >/dev/null
+          echo "WordPress REST running; never sent an item/section write."

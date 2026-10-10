@@ -1,1 +1,1 @@
-Read-only scan of WordPress Page 53463 and Products 53504: ESC Table shortcode IDs, count and intervening HTML flags. Ensure section-order drag/drop is supported before enabling UI; no data writes.
+Follow-up read-only audit: inspect actual WordPress Page slug trang-chu/homepage rather than unrelated 53463. No writes; verify table shortcode gaps.

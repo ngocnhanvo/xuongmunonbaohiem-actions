@@ -42,7 +42,7 @@ jobs:
           if not nonce:raise SystemExit('REST nonce missing')
           headers={'X-WP-Nonce':nonce.group(1)}
           endpoint=root+'/wp-json/esc-builder/v1/'
-          sources=[('home_01','img'),('home_02','img'),('home_09','icon'),
+          sources=[('home_00','image'),('home_01','img'),('home_02','img'),('home_09','icon'),
                    ('home_09','background'),('home_11','img'),('home_13','img')]
           results=[]
           for table,field in sources:
@@ -72,13 +72,13 @@ jobs:
               'selected_row':item['row'],'seo':True,'stale_save_http':stale.status_code})
           for table,field in [('home_03','api-img'),('home_04','api-image'),
                              ('home_10','api-img'),('home_12','api-img'),
-                             ('home_09','title'),('home_00','image')]:
+                             ('home_09','title')]:
             response=sess.post(endpoint+'editable-images',json={
               'ticket':ticket,'page_id':pageid,'table_id':table,'field':field
             },headers=headers,timeout=30)
             if response.status_code!=403:
               raise SystemExit(table+'/'+field+' forbidden field accepted: '+str(response.status_code))
           print('ESC_MULTI_IMAGE_CONTRACT_PASS='+json.dumps({
-            'sources':results,'blocked_api_sources':6,'customer_writes':0
+            'sources':results,'blocked_api_sources':5,'customer_writes':0
           }))
           PY

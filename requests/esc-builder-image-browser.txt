@@ -10,3 +10,5 @@
 2026-10-10: Final Chrome QA after WP PHP FTP success 38053939423 and Astro FTP success 38054375214. Verify home_01 editable ESC Table ALT textarea, ALT-only draft (no image change), combined Media image+ALT draft, Save button correctly enabled, Cancel restores IMG src/srcset/alt, no iframe reload or WP saves. Do not repeat deployments or write customer data.
 
 2026-10-10: Retry ALT Chrome browser QA after correcting form-field assertion (run 38054509682 timed out waiting for textarea textContent rather than value). Production PHP/Astro FTP already PASS; no repeated deploy, no customer writes.
+
+2026-10-10: Retry Chrome ALT-only+combined draft after correcting remaining obsolete textarea textContent pending SEO check; previous run 38054672490 passed ALT-only interaction but failed QA assertion, no customer writes. PHP/Astro already FTP deployed.

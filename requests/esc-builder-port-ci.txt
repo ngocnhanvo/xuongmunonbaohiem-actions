@@ -1,2 +1,4 @@
-Run first-time portable ESC Visual Builder adapter QA for Blue Sea and ESC.vn.
-No deploy, FTP, or production smoke rerun.
+ESC Visual Builder portable QA (latest adapter/test revision).
+ESC Astro github revision: f5a4c9da3f40eea165d25eaecf39bb5813a8c3f8
+Blue Sea and ESC backend adapters: lint + regression.
+No build, FTP, Chrome production, or smoke test.

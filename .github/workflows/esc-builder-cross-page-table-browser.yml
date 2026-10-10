@@ -1,0 +1,138 @@
+name: Chrome QA - ESC Table Images Across Pages
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/esc-builder-cross-page-table-browser.txt
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-cross-page-browser-qa
+  cancel-in-progress: true
+jobs:
+  visual-editor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: stable
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify editing an ESC Table image outside the home Page
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const required=['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'];
+          for(const env of required)if(!process.env[env])throw Error('Missing required '+env);
+          const origin=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({
+            headless:true,executablePath:process.env.CHROME_PATH,
+            args:['--no-sandbox','--disable-dev-shm-usage']
+          });
+          const stats={pagesVisited:0,source:'',selectedPage:'',altDraft:false,
+            altCancel:false,iframeStable:false,customerWrites:0,errors:[]};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1400,height:920});
+            page.on('pageerror',e=>stats.errors.push(String(e.message)));
+            page.on('request',request=>{
+              if(/\/esc-builder\/v1\/(?:save-image|save-page-image|save-text|save-page-text)/.test(request.url()))
+                stats.customerWrites++;
+            });
+            const goto=async url=>{
+              const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:65000});
+              if(response?.status()!==200)throw Error('HTTP '+response?.status()+' at '+url);
+            };
+            await goto(origin+'/wp-login.php');
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:40000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('/wp-login.php'))throw Error('WordPress login not authenticated');
+            const base=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
+            await goto(base);
+            const options=await page.$$eval('#esc-vb-page option',nodes=>
+              nodes.map(o=>({id:o.value,title:o.textContent?.trim()||'',selected:o.selected})));
+            const others=options.filter(o=>!o.selected).sort((a,b)=>
+              Number(/giới thiệu|về chúng tôi|about|dịch vụ|liên hệ/i.test(b.title))-
+              Number(/giới thiệu|về chúng tôi|about|dịch vụ|liên hệ/i.test(a.title)));
+            if(!others.length)throw Error('No second Page with editor access');
+            let found=null;
+            for(const item of others.slice(0,12)){
+              await goto(base+'&esc_vb_page='+encodeURIComponent(item.id));
+              stats.pagesVisited++;
+              const el=await page.waitForSelector('#esc-vb-frame',{timeout:20000});
+              const frame=await el.contentFrame();
+              if(!frame)continue;
+              try{
+                await frame.waitForSelector('body',{timeout:20000});
+                await frame.waitForFunction(()=>document.readyState==='complete',
+                  {timeout:18000});
+                const candidate=await frame.evaluate(()=>{
+                  // This workflow specifically tests Table images on a non-home Page.
+                  // HTML image behavior was already verified in the separate QA.
+                  const tagged=[...document.querySelectorAll(
+                    '[data-tablepress-preview] img[data-esc-builder-image-row][data-esc-builder-image-field]')]
+                    .find(img=>img.getBoundingClientRect().width>10);
+                  if(!tagged)return null;
+                  const source=tagged.closest('[data-tablepress-preview]');
+                  return {kind:'table',table:source?.getAttribute('data-tablepress-preview'),
+                    row:tagged.getAttribute('data-esc-builder-image-row'),
+                    field:tagged.getAttribute('data-esc-builder-image-field')};
+                });
+                if(candidate){found={...candidate,item,frame};break;}
+              }catch{}
+            }
+            if(!found)throw Error('Could not find an editable ESC Table image on the first 12 non-home Pages');
+            const {frame,item}=found;
+            stats.selectedPage=item.title;
+            stats.source=found.kind;
+            const frameUrl=frame.url();
+            if(found.kind==='html'){
+              await frame.evaluate(({part,index})=>{
+                const root=document.querySelector('[data-esc-builder-html-part="'+part+'"]');
+                const img=root?.querySelectorAll('img')[index];
+                if(!img)throw Error('Selected Page HTML image disappeared');
+                img.click();
+              },{part:found.part,index:found.index});
+            }else{
+              const selector='[data-tablepress-preview="'+found.table+'"] img'+
+                '[data-esc-builder-image-row="'+found.row+'"]'+
+                '[data-esc-builder-image-field="'+found.field+'"]';
+              await frame.$eval(selector,img=>img.click());
+            }
+            await page.waitForFunction(()=>document.querySelector('#esc-vb-image-editor')?.style.display==='block' &&
+              !document.querySelector('#esc-vb-image-choose')?.disabled,{timeout:22000});
+            const before=await page.$eval('#esc-vb-seo-html-alt',el=>el.value);
+            await page.$eval('#esc-vb-seo-html-alt',(input,initial)=>{
+              input.value=(initial||'')+' [QA preview only]';
+              input.dispatchEvent(new Event('input',{bubbles:true}));
+            },before);
+            await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled &&
+              !document.querySelector('#esc-vb-image-cancel')?.disabled,{timeout:14000});
+            stats.altDraft=true;
+            await page.click('#esc-vb-image-cancel');
+            await page.waitForFunction(initial=>
+              document.querySelector('#esc-vb-seo-html-alt')?.value===initial &&
+              document.querySelector('#esc-vb-image-cancel')?.disabled,
+              {timeout:14000},before);
+            stats.altCancel=true;
+            stats.iframeStable=frame.url()===frameUrl;
+            if(!stats.iframeStable)throw Error('Image edit unexpectedly reloaded Builder iframe');
+            if(stats.customerWrites)throw Error('QA must not call a WordPress save endpoint');
+            if(stats.errors.length)throw Error('Browser exceptions: '+stats.errors.slice(0,3).join('; '));
+            console.log('ESC_CROSS_PAGE_IMAGE_QA_PASS='+JSON.stringify(stats));
+          }finally{await browser.close();}
+          JS

@@ -213,6 +213,48 @@ jobs:
           print('ESC_BUILDER_HOME02_TEXT_CONTRACT='+str({
             'field_count':len(fields),'required_fields_editable':True,
             'description_plain_text':True,'staleHTTP':409,'wroteContent':False}))
+          # Remaining homepage ESC Tables are typed: a live API source is
+          # only allowed to edit its ESC Table heading, never external post/
+          # product/category text. Static tables also expose their own cells.
+          readonly_dynamic={'home_03','home_04','home_05','home_06',
+                            'home_07','home_08','home_10','home_12'}
+          static_fields={'home_09':{'title','description'},
+                         'home_11':{'title'},'home_13':{'customer'}}
+          for index in range(3,14):
+            tid='home_'+str(index).zfill(2)
+            resp=session.post(root+'/wp-json/esc-builder/v1/editable-text',
+              json={'ticket':ticket,'page_id':page_id,'table_id':tid},
+              headers=edit_headers,timeout=40)
+            if resp.status_code!=200:
+              raise SystemExit(tid+' editable-text HTTP '+str(resp.status_code))
+            payload=resp.json()
+            section=payload.get('section_title') or {}
+            if not section.get('editable') or len(section.get('hash',''))!=64:
+              raise SystemExit(tid+' section heading is not editable')
+            rows=payload.get('rows',[])
+            present={entry.get('field') for entry in rows}
+            if tid in static_fields:
+              if not static_fields[tid].issubset(present):
+                raise SystemExit(tid+' missing static fields: '+str(static_fields[tid]-present))
+            elif tid=='home_10':
+              if present-{'section_description'}:
+                raise SystemExit('home_10 exposes unexpected API-backed text')
+            elif rows:
+              raise SystemExit(tid+' exposes API-backed row as editable ESC Table data')
+            if any(not isinstance(row.get('title'),str) for row in rows):
+              raise SystemExit(tid+' has invalid edit row')
+            print('BUILDER_REMAINING_EDIT_FIELDS='+str({
+              'id':tid,'heading':True,'fields':sorted(present),
+              'rowCount':len(rows),'write':False}))
+          stale03=session.post(root+'/wp-json/esc-builder/v1/save-text',json={
+            'ticket':ticket,'page_id':page_id,'table_id':'home_03',
+            'field':'section_title','row':'section',
+            'title':'ESC QA unchanged','original_hash':'0'*64,
+            'expected_version':'0'*64
+          },headers=edit_headers,timeout=40)
+          if stale03.status_code!=409:
+            raise SystemExit('home_03 stale heading guard HTTP '+str(stale03.status_code))
+          print('BUILDER_REMAINING_EDIT_CONTRACT_PASS: home_03..13 read-only QA; stale 409; customer data not written.')
           # Full-stack check: one SSR request refreshes ONE section after
           # ticket verification. No WordPress edits/build/cache writes.
           live=session.get(src + '&refresh_table=home_00',timeout=110)

@@ -1,0 +1,1 @@
+2026-10-10: After PHP FTP PASS 38043274083 and Astro FTP PASS 38043423393 (Astro master ff358763, PHP master b403f2b3), run Chrome QA on homepage home_02. Verify video_title via click and drag select (not eyebrow), all 5 editable fields unchanged preview + Cancel, no WordPress saves or iframe reload. One post-deploy run only.

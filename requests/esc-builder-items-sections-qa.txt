@@ -1,1 +1,1 @@
-QA final phase for schema-driven ESC Table create/clone and section wrapped HTML reorder. PHP master ce6a99694e887b39ac1df744006db4423aa0c1ce; Astro github ce43b4a8953429a2d831d8e04d798e1574e1c427. Check original Page wrapper preservation, groups, source row mapping, media and full Astro build. No FTP and no customer writes.
+Validate updated item-section-ui after readonly field protection, drag and drop and preview confirmation: run PHP tests and syntax, JS syntax, Astro unit tests, full build; no WordPress write or FTP.

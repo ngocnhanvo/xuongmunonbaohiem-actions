@@ -1,1 +1,1 @@
-Chrome read-only diagnosis of section preview mismatch after run 38081644456. Print DOM parent relationships and editor feedback; no save or customer writes.
+Read-only Chrome diagnose why production iframe section order preview did not reorder page 248, inspect DOM parents and section-order acknowledgement. No WordPress writes.

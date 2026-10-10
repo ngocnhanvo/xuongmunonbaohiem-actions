@@ -1,1 +1,1 @@
-Regression for visual section root reorder: move full decorated DOM blocks, preserve nested-group constraints, keep popup schema and readonly data safeguards. Current Astro github and PHP master, PHP+JS syntax, unit tests, full build. QA only, no FTP.
+QA for corrected preview complete decorated <div> root vs inner <span>, nested group safety, schema item popup, PHP/JS lint and full Astro build. No WordPress writes or FTP.

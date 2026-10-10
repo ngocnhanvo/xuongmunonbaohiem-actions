@@ -1,4 +1,2 @@
-Deploy ESC Visual Builder admin route hotfix only.
-PHP master: aa4a09856f461abcad081af6690bf2a0e545a655
-Restore Pages -> Visual Builder menu while keeping content_list optimized.
-Upload only disable-plugins-for-api.php and esc-admin-menu-bridge.php; regression checks first.
+Deploy ESC Visual Builder Pages menu hotfix. PHP master 02851721b25760185f85c188d6a490958442f033.
+Previous predeploy regression fixture corrected (active plugin list supplied). Validate and upload only two MU plugins if PASS.

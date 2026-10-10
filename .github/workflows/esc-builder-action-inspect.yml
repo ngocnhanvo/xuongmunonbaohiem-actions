@@ -1,0 +1,63 @@
+name: Inspect WordPress Products Page Action
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/esc-builder-action-inspect.txt
+permissions:
+  contents: read
+jobs:
+  inspect-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Inspect ACF Action field for Page 53504 without writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,re,requests,json
+          from bs4 import BeautifulSoup
+          required=['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD']
+          for name in required:
+              if not os.getenv(name): raise SystemExit('Missing '+name)
+          base='https://'+__import__('urllib.parse',fromlist=['urlparse']).urlparse(
+              os.environ['WP_ADMIN_URL'] if '://' in os.environ['WP_ADMIN_URL']
+              else 'https://'+os.environ['WP_ADMIN_URL']).hostname
+          s=requests.Session()
+          s.get(base+'/wp-login.php',timeout=25)
+          s.post(base+'/wp-login.php',data={
+              'log':os.environ['WP_ADMIN_USERNAME'],
+              'pwd':os.environ['WP_ADMIN_PASSWORD'],
+              'wp-submit':'Log In',
+              'redirect_to':base+'/wp-admin/post.php?post=53504&action=edit',
+              'testcookie':'1'
+          },timeout=45)
+          x=s.get(base+'/wp-admin/post.php?post=53504&action=edit',timeout=45)
+          print('ADMIN_HTTP='+str(x.status_code)+' URL='+x.url.split('?')[0])
+          if x.status_code!=200 or 'wp-login.php' in x.url:
+              raise SystemExit('Cannot authorize WordPress Page edit, refuse change')
+          soup=BeautifulSoup(x.text,'html.parser')
+          inputs=[]
+          for el in soup.select('input[name], select[name], textarea[name]'):
+              name=el.get('name','')
+              if not name.startswith('acf['): continue
+              val=el.get('value','')
+              if el.name=='select':
+                  val=next((o.get('value','') for o in el.select('option[selected]')),'')
+              if el.name=='textarea':val=el.text
+              wrapper=el.find_parent(attrs={'data-name':True})
+              label=wrapper.get('data-name') if wrapper else ''
+              if val in ('ProductsPage','ProductsSSRPage','ssr-products') or label in ('action','key'):
+                  inputs.append({'name':name,'value':val,'type':el.name,'label':label,
+                    'choices':[o.get('value') for o in el.select('option')][:35] if el.name=='select' else []})
+          print('TARGET_ACF_FIELDS='+json.dumps(inputs,ensure_ascii=False))
+          nonce_match=bool(re.search(r'(?:wpApiSettings|wp-api-nonce|apiFetch\.createNonceMiddleware)',x.text))
+          print('WP_REST_NONCE_SUPPORT='+str(nonce_match))
+          if not any(z['value']=='ProductsPage' and (z['label']=='action' or 'action' in z['name']) for z in inputs):
+              print('WARNING: Action field may be handled by custom ACF UI; inspect WordPress editor further before writing.')
+          PY

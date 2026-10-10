@@ -1,0 +1,83 @@
+name: ESC Builder Page Editor Text Contract
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/esc-builder-page-text-contract.txt'
+permissions:
+  contents: read
+jobs:
+  read-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check authenticated page text without customer writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,re,requests
+          from urllib.parse import urlparse,parse_qs
+          from bs4 import BeautifulSoup
+          root = os.environ['WP_ADMIN_URL'].split('/wp-admin')[0].rstrip('/')
+          session=requests.Session()
+          session.get(root+'/wp-login.php',timeout=30)
+          session.post(root+'/wp-login.php',data={
+            'log':os.environ['WP_ADMIN_USERNAME'],'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In','redirect_to':root+'/wp-admin/admin.php?page=esc-visual-builder',
+            'testcookie':'1'
+          },timeout=40,allow_redirects=True)
+          resp=session.get(root+'/wp-admin/admin.php?page=esc-visual-builder',timeout=45)
+          if resp.status_code!=200 or 'wp-login.php' in resp.url:
+            raise SystemExit('Builder login denied HTTP '+str(resp.status_code))
+          soup=BeautifulSoup(resp.text,'html.parser')
+          iframe=soup.select_one('#esc-vb-frame')
+          if not iframe: raise SystemExit('Builder iframe missing')
+          src=iframe.get('src','')
+          parsed=urlparse(src)
+          ticket=parse_qs(parsed.query).get('ticket',[''])[0]
+          page_id=int(parsed.path.rstrip('/').split('/')[-1])
+          match=re.search(r'const restNonce\\s*=\\s*["\\x27]([a-zA-Z0-9]+)["\\x27]',resp.text)
+          if len(ticket)!=64 or not match: raise SystemExit('Builder credential metadata missing')
+          headers={'X-WP-Nonce':match.group(1)}
+          endpoint=root+'/wp-json/esc-builder/v1/'
+          base={'ticket':ticket,'page_id':page_id}
+          read=session.post(endpoint+'editable-page-text',json=base,headers=headers,timeout=45)
+          if read.status_code!=200:
+            raise SystemExit('Page text read HTTP '+str(read.status_code)+' code '+str(read.json().get('code',''))[:60])
+          data=read.json()
+          fields=data.get('rows',[])
+          version=data.get('version','')
+          if data.get('source')!='page_html' or len(version)!=64 or not isinstance(fields,list):
+            raise SystemExit('Page HTML read schema invalid')
+          if len(fields)>600 or any(not r.get('id') or not r.get('editable') or len(r.get('hash',''))!=64 for r in fields):
+            raise SystemExit('Page text token inventory invalid')
+          invalid=session.post(endpoint+'editable-page-text',json={'ticket':'invalid','page_id':page_id},headers=headers,timeout=30)
+          if invalid.status_code!=403: raise SystemExit('Invalid ticket must return HTTP403')
+          if fields:
+            first=next((r for r in fields if '\\n' not in r['title'] and len(r['title'])<120),None)
+            if first:
+              entry={**base,'part':first['part'],'offset':first['offset'],
+                'original_hash':first['hash'],'title':first['title'],
+                'expected_version':'0'*64}
+              stale=session.post(endpoint+'save-page-text',json=entry,headers=headers,timeout=45)
+              if stale.status_code!=409:
+                raise SystemExit('Stale Page text version expected HTTP409, got '+str(stale.status_code))
+              entry['expected_version']=version
+              unchanged=session.post(endpoint+'save-page-text',json=entry,headers=headers,timeout=45)
+              if unchanged.status_code!=200 or not unchanged.json().get('unchanged') or unchanged.json().get('saved'):
+                raise SystemExit('No-op Page save unexpectedly modified content')
+          verify=session.post(endpoint+'editable-page-text',json=base,headers=headers,timeout=45)
+          if verify.status_code!=200 or verify.json().get('version')!=version:
+            raise SystemExit('Page content changed during read-only QA')
+          print('BUILDER_PAGE_EDITOR_CONTRACT_PASS='+str({
+            'readHTTP':200,'fields':len(fields),
+            'invalidTicketHTTP':403,'versionUnchanged':True,'contentWrites':False
+          }))
+          PY

@@ -126,7 +126,8 @@ jobs:
               input.value=(initial||'')+' [QA preview only]';
               input.dispatchEvent(new Event('input',{bubbles:true}));
             },before);
-            await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-cancel')?.disabled,{timeout:14000});
+            await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled &&
+              !document.querySelector('#esc-vb-image-cancel')?.disabled,{timeout:14000});
             stats.altDraft=true;
             await page.click('#esc-vb-image-cancel');
             await page.waitForFunction(initial=>

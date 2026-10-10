@@ -1,2 +1,4 @@
 2026-10-10: Verify home_01 six editable image cells and secure WordPress Media REST source after PHP FTP SUCCESS run 38045978997. Read only, check bad token, invalid media ID, unchanged version; no customer writes.
 2026-10-10: Diagnose home_01 gallery raw image value type/markers after production REST read returned 0 recognized rows (run 38046080704). No URLs or customer text in logs; read-only table-batch source.
+
+2026-10-10: Determine image IMG src scheme only; raw ESC Table image cells are img HTML length 165-179 with <img> and src attribute but initial API rejected all six. No content printed, no writes.

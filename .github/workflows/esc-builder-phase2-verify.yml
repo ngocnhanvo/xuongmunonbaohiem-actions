@@ -96,8 +96,21 @@ jobs:
           const imageEnd=imageUI.indexOf('</script>',imageStart);
           if(imageStart<8||imageEnd<=imageStart) throw Error('Gallery image UI script missing');
           let imageScript=imageUI.slice(imageStart,imageEnd);
-          for(const variable of ['read','save','nonce','origin','page_id'])
-            imageScript=imageScript.replaceAll('<?php echo 
+          for(const variable of ['read','save','nonce','origin','page_id']) {
+            const marker='<?php echo '+String.fromCharCode(36)+variable+'; ?>';
+            imageScript=imageScript.replaceAll(marker,'"test-value"');
+          }
+          if(imageScript.includes('<?php')) throw Error('Unsubstituted gallery PHP token');
+          new Function(imageScript);
+          const home01=readFileSync('source/src/astro/tablepress/Home_01.astro','utf8');
+          if(!home01.includes('data-esc-builder-image-row={item.row}') ||
+             !home01.includes('data-esc-builder-gallery-background="home_01"'))
+            throw Error('Gallery image row or background is not marked for Builder');
+          if(!astro.includes('patchGalleryImage(') ||
+             !astro.includes('esc-vb-image-selected') ||
+             !astro.includes('esc-vb-image-preview-ack'))
+            throw Error('Gallery preview and selection handshake missing');
+          console.log('home_01 image editor source contract PASS');
           const extract=readFileSync('source/src/astroutils/ExtractHTML.astro','utf8');
           if(!extract.includes('data-esc-builder-html-part')) throw Error('Editor HTML part annotations missing');
           if(!astro.includes('patchPageEditorText(')) throw Error('Page HTML preview patching missing');
@@ -208,110 +221,6 @@ jobs:
             exit("Non-HTTPS replacement accepted\n");
           if(esc_vb_image_column(['id','title','image'])!==2)exit("Column lookup failed\n");
           echo "home_01 canonical cell replacement and srcset cleanup PASS\n";
-          PHP
-      - name: Verify preview isolation
-        working-directory: source
-        run: |
-          set -euo pipefail
-          grep -Fq 'readLiveWordPressPreview' 'src/pages/preview/[...slug].astro'
-          grep -Fq 'rewriteBuilderImages' 'src/pages/esc-builder/preview/[pageId].astro'
-          ! grep -Fq 'getSharedWordPressData(' 'src/pages/esc-builder/preview/[pageId].astro'
-          grep -Fq 'wp-content/uploads/' src/lib/wordpress/imageProcessor.ts
-+variable+'; ?>','"test-value"');
-          if(imageScript.includes('<?php')) throw Error('Unsubstituted gallery PHP token');
-          new Function(imageScript);
-          const home01=readFileSync('source/src/astro/tablepress/Home_01.astro','utf8');
-          if(!home01.includes('data-esc-builder-image-row={item.row}') ||
-             !home01.includes('data-esc-builder-gallery-background="home_01"'))
-            throw Error('Gallery image row or background is not marked for Builder');
-          if(!astro.includes('patchGalleryImage(') ||
-             !astro.includes('esc-vb-image-selected') || 
-             !astro.includes('esc-vb-image-preview-ack'))
-            throw Error('Gallery preview and selection handshake missing');
-          console.log('home_01 image editor source contract PASS');
-          const extract=readFileSync('source/src/astroutils/ExtractHTML.astro','utf8');
-          if(!extract.includes('data-esc-builder-html-part')) throw Error('Editor HTML part annotations missing');
-          if(!astro.includes('patchPageEditorText(')) throw Error('Page HTML preview patching missing');
-          if(!editor.includes('pageSaveUrl')) throw Error('Editor Page text save endpoint missing');
-          const home02=readFileSync('source/src/astro/tablepress/Home_02.astro','utf8');
-          const homeFields=['eyebrow','title','video_title','description','button_text'];
-          for(const field of homeFields) {
-            if(!home02.includes('data-esc-builder-field="'+field+'"'))
-              throw Error('home_02 missing exact text source marker '+field);
-          }
-          if(!astro.includes('target.closest("[data-esc-builder-field]")') ||
-             !astro.includes('fieldNode?.getAttribute("data-esc-builder-field")') ||
-             !editor.includes("const fieldMatch = selected === 'home_02'") ||
-             !editor.includes('section.field || null'))
-            throw Error('Builder home_02 field hint not routed from click/drag into editor');
-          console.log('home_02 explicit source-field selection contract PASS');
-          if(!astro.includes('selectedPageRange(') || !astro.includes('pageEditorPosition('))
-            throw Error('Precise Editor Range selection hooks missing');
-          if(!editor.includes('textarea.value = row?.title ||')) throw Error('Page Editor textarea must show full row');
-          if(!editor.includes('textarea.setSelectionRange(from,to)')) throw Error('Selected substring caret highlighting missing');
-          if(!editor.includes('title:partial ? partial.replacement : text')) throw Error('Page Editor partial save payload missing');
-          const start=editor.indexOf('      function pageTextPadding(');
-          const end=editor.indexOf('      const eligible',start);
-          if(start<0 || end<start) throw Error('Page text helpers missing');
-          const helper=editor.slice(start,end);
-          const row={id:'0:930',title:'theo yêu cầu.',full_text:'  theo yêu cầu.  '};
-          const selection={id:'0:930',prefix:'  theo ',selected:'yêu',suffix:' cầu.  '};
-          const result=new Function('row','selection','text',
-            'let pageTextSelection=selection;'+helper+';return {'+
-            'padding:pageTextPadding(row),preview:pageTextValue(row,text),'+
-            'partial:pagePartialSave(row,text)};'
-          )(row,selection,'theo mong cầu.');
-          if(result.padding.front!=='  ' || result.padding.back!=='  ' ||
-              result.preview!=='  theo mong cầu.  ' || result.partial?.replacement!=='mong')
-            throw Error('Full-context textarea did not preserve source outside edited selection');
-          const wholeChange=new Function('row','selection','text',
-            'let pageTextSelection=selection;'+helper+';return pagePartialSave(row,text);'
-          )(row,selection,'hoàn toàn khác.');
-          if(wholeChange!==null) throw Error('Changed surrounding text must use whole-row fallback');
-          console.log('Builder full-text textarea with highlighted substring fixture PASS');
-          console.log('Builder Astro + WordPress editor inline JS syntax PASS');
-          NODE
-      - name: Verify Page text-token inventory is bounded and markup safe
-        shell: bash
-        run: |
-          php <<'PHP'
-          <?php
-          define('ABSPATH', '/');
-          function add_action($hook, $callback) {}
-          function esc_html($text) {return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');}
-          require 'backend/wp-content/plugins/esc-visual-builder/includes/page-text.php';
-          $fixture = '<!-- wp:html --><section><h2>Tiêu đề &amp; mô tả</h2><p>Đoạn chữ <strong>in đậm</strong>.</p><script>var secret="skip";</script><style>.a{color:red}</style></section><!-- /wp:html -->[table id=home_02 /]<section><h3>Đoạn tiếp theo</h3></section>';
-          $parts=esc_vb_page_text_parts($fixture);
-          $items=esc_vb_page_text_candidates($fixture);
-          if(count($parts)!==3 || count($items)!==5) {
-            fwrite(STDERR,"Unexpected Page text inventory part/token counts: ".count($parts)."/".count($items)."\n");exit(1);
-          }
-          $labels=array_column($items,'title');
-          if($labels[0]!=='Tiêu đề & mô tả' ||
-            in_array('var secret="skip";',$labels,true) ||
-            !in_array('in đậm',$labels,true) ||
-            $items[count($items)-1]['part']!==2) {
-            fwrite(STDERR,"Page text inventory leaked scripts, shortcode, or lost entity decoding\n");exit(1);
-          }
-          $raw='BLUE SEA là đơn vị chuyên sản xuất mũ bảo hiểm &amp; quảng cáo';
-          $prefix='BLUE SEA là đơn vị chuyên ';
-          $selected='sản xuất mũ bảo hiểm';
-          $suffix=' & quảng cáo';
-          $result=esc_vb_page_replace_substring($raw,$prefix,$selected,$suffix,'sản xuất mũ bảo hộ');
-          if($result!=='BLUE SEA là đơn vị chuyên sản xuất mũ bảo hộ &amp; quảng cáo') {
-            fwrite(STDERR,"Range replacement corrupted surrounding HTML text\n");exit(1);
-          }
-          if(esc_vb_page_replace_substring($raw,'BLUE SEA','sản xuất mũ bảo hiểm',$suffix,'thay')!==false) {
-            fwrite(STDERR,"Range accepted wrong original prefix\n");exit(1);
-          }
-          if(esc_vb_page_replace_substring('Chữ &amp; màu','Chữ &','amp;',' màu','mới')!==false) {
-            fwrite(STDERR,"Range split HTML entity\n");exit(1);
-          }
-          if($items[0]['node_index']!==0 || $items[count($items)-1]['node_index']!==0) {
-            fwrite(STDERR,"Page token indexes did not reset after shortcode\n");exit(1);
-          }
-          echo "WordPress selected-only text fixture PASS\n";
-          echo "WordPress Page text-token inventory fixture PASS\n";
           PHP
       - name: Verify preview isolation
         working-directory: source

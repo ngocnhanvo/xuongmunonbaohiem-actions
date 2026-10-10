@@ -1,0 +1,1 @@
+Deploy Blue Sea safe Builder header navigation parent bridge only; PHP master 3fc62f916418d41b262becf89d7b02543a5860f7, Astro github f17c51bf2b5a23af49e5b79dc088c3d48f708002 verified by 38077336214. Upload only wp-content/plugins/esc-visual-builder/esc-visual-builder.php and byte-verify, no other plugins or writes.

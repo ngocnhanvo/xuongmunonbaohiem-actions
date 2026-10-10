@@ -108,6 +108,16 @@ jobs:
              'https://admin.example.test/wp-content/uploads/2026/10/kit.webp')
             throw Error('Media URL normalization fixture failed');
           new Function(imageScript);
+          const shell=readFileSync('backend/wp-content/plugins/esc-visual-builder/esc-visual-builder.php','utf8');
+          for(const id of ['esc-vb-image-seo','esc-vb-seo-html-alt','esc-vb-seo-media-alt',
+                           'esc-vb-seo-title','esc-vb-seo-caption','esc-vb-seo-description']) {
+            if(!shell.includes('id="'+id+'"')) throw Error('Missing image SEO field: '+id);
+          }
+          if(!imageScript.includes("invoke(readUrl,{row})") ||
+             !imageScript.includes("updateSEO()") ||
+             !imageScript.includes("html_alt:current.seo?.html_alt"))
+            throw Error('Image SEO must come from selected WordPress row and Media preview');
+          console.log('Image SEO sidebar source and preview state PASS');
           const home01=readFileSync('source/src/astro/tablepress/Home_01.astro','utf8');
           if(!home01.includes('data-esc-builder-image-row={item.row}') ||
              !home01.includes('data-esc-builder-gallery-background="home_01"'))
@@ -212,6 +222,17 @@ jobs:
           function wp_parse_url($url,$part=-1){return parse_url($url,$part);}
           function site_url(){return 'https://admin.example.test';}
           function esc_attr($v){return htmlspecialchars($v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');}
+          function sanitize_text_field($v){return trim(strip_tags($v));}
+          function wp_strip_all_tags($v){return strip_tags($v);}
+          function attachment_url_to_postid($url){return strpos($url,'old.jpg')!==false ? 31 : 0;}
+          function get_post_type($id){return $id===31 ? 'attachment' : 'post';}
+          function wp_attachment_is_image($id){return $id===31;}
+          function get_post($id){return (object)[
+            'post_title'=>'Nhà xưởng Blue Sea',
+            'post_excerpt'=>'Chú thích sản xuất',
+            'post_content'=>'Mô tả ảnh nhà xưởng'
+          ];}
+          function get_post_meta($id,$key,$single){return 'Khu vực sản xuất mũ bảo hiểm';}
           require 'backend/wp-content/plugins/esc-visual-builder/includes/image-editor.php';
           $raw='<figure class="gallery"><img class="factory" src="https://old.test/a.jpg" srcset="https://old.test/a-400.jpg 400w" sizes="100vw" alt="Xưởng sản xuất"></figure>';
           if(esc_vb_image_cell_url($raw)!=='https://old.test/a.jpg')exit("Image URL parse failed\n");
@@ -235,6 +256,16 @@ jobs:
           if(esc_vb_image_replace_cell($raw,'javascript:alert(1)')!==false)
             exit("Non-HTTPS replacement accepted\n");
           if(esc_vb_image_column(['id','title','image'])!==2)exit("Column lookup failed\n");
+          $seo=esc_vb_image_seo_metadata('<img src="/uploads/old.jpg" alt="Sản xuất &amp; in logo">','https://admin.example.test/uploads/old.jpg');
+          if($seo['html_alt']!=='Sản xuất & in logo' ||
+             !$seo['attachment_found'] || $seo['media_alt']!=='Khu vực sản xuất mũ bảo hiểm' ||
+             $seo['title']!=='Nhà xưởng Blue Sea' || $seo['caption']!=='Chú thích sản xuất' ||
+             $seo['description']!=='Mô tả ảnh nhà xưởng')
+            exit("Image SEO metadata fixture failed\n");
+          $missing=esc_vb_image_seo_metadata('<img src="/uploads/unmatched.jpg" alt="ALT gốc">','https://admin.example.test/uploads/unmatched.jpg');
+          if($missing['attachment_found'] || $missing['html_alt']!=='ALT gốc' || $missing['title']!=='')
+            exit("Missing image Media SEO fallback failed\n");
+          echo "home_01 image SEO metadata + Media fallback PASS\n";
           echo "home_01 canonical cell replacement and srcset cleanup PASS\n";
           PHP
       - name: Verify preview isolation

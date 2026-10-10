@@ -1,8 +1,1 @@
-2026-10-10: Browser QA WordPress Visual Builder Page ID 51979: click literal Editor text, draft updates iframe, Cancel restores; no save POST or customer writes. After PHP FTP PASS 38037993029 and Astro FTP PASS 38037910794 and production smoke PASS 38037995976.
-2026-10-10: Diagnose Page 51979 Editor HTML DOM/selection routing. Previous Chrome QA 38038102207 found no selectable candidate; output only tag counts, no user content. Do not perform Save.
-
-2026-10-10: Retry Browser QA after correcting selector enumeration (prior run 38038218245 stopped before first candidate; Page DOM shows 1 editor part with 4 text nodes). No writes.
-
-2026-10-10: Fix workflow YAML truncated selector before runtime (runs 38038307570, 38038319671 had no jobs). DOM-index click test now valid; no writes.
-
-2026-10-10: Retry Chrome QA after removing duplicate malformed YAML tail; previous workflow compile failed before any job. Valid run script terminates at first JS here-doc. No customer data writes.
+Run Browser QA once for the post-deploy WordPress Editor page. The test must wait for API data before reading the editor input. Read and cancel only; never save content.

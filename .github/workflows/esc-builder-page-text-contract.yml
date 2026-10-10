@@ -76,6 +76,36 @@ jobs:
           verify=session.post(endpoint+'editable-page-text',json=base,headers=headers,timeout=45)
           if verify.status_code!=200 or verify.json().get('version')!=version:
             raise SystemExit('Page content changed during read-only QA')
+          # The homepage can legitimately consist of ESC Tables only. Find
+          # one other Page with literal Editor HTML, without copying its text.
+          choices=[int(option.get('value')) for option in soup.select('#esc-vb-page option')
+                   if (option.get('value') or '').isdigit() and int(option['value'])!=page_id]
+          examined=0
+          discovered=0
+          for other_id in choices[:4] + choices[len(choices)//2:len(choices)//2+3] + choices[-3:]:
+            if examined>=8 or discovered: break
+            examined+=1
+            other=session.get(root+'/wp-admin/admin.php?page=esc-visual-builder&esc_vb_page='+str(other_id),timeout=45)
+            if other.status_code!=200 or 'wp-login.php' in other.url: continue
+            frame=BeautifulSoup(other.text,'html.parser').select_one('#esc-vb-frame')
+            if not frame: continue
+            info=urlparse(frame.get('src',''))
+            other_ticket=parse_qs(info.query).get('ticket',[''])[0]
+            nonce_match=re.search('const restNonce[ ]*=[ ]*["]([a-zA-Z0-9]+)["]',other.text)
+            if len(other_ticket)!=64 or not nonce_match: continue
+            q=session.post(endpoint+'editable-page-text',json={
+              'ticket':other_ticket,'page_id':other_id
+            },headers={'X-WP-Nonce':nonce_match.group(1)},timeout=45)
+            if q.status_code!=200: continue
+            tokens=q.json().get('rows',[])
+            if tokens:
+              discovered=len(tokens)
+              print('BUILDER_PAGE_EDITOR_NONHOME='+str({
+                'page_id':other_id,'candidateCount':discovered,'readHTTP':200
+              }))
+          print('BUILDER_PAGE_EDITOR_PAGE_SCAN='+str({
+            'examined':examined,'foundEditablePage':discovered>0
+          }))
           print('BUILDER_PAGE_EDITOR_CONTRACT_PASS='+str({
             'readHTTP':200,'fields':len(fields),
             'invalidTicketHTTP':403,'versionUnchanged':True,'contentWrites':False

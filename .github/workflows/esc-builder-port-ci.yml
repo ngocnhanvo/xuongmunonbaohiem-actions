@@ -1,0 +1,95 @@
+name: ESC Visual Builder Portable QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'requests/esc-builder-port-ci.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: xuongmunonbaohiem-actions-builder-port-qa
+  cancel-in-progress: true
+
+jobs:
+  php-adapters:
+    name: Lint and test PHP project adapters
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Confirm shared source token
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+        run: test -n "$SOURCE_REPO_PAT"
+
+      - name: Checkout Blue Sea backend
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: blue-sea
+
+      - name: Checkout ESC backend
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/escvn-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: esc
+
+      - name: Lint only new Builder PHP modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          for source in blue-sea esc; do
+            echo "Testing $source at $(git -C "$source" rev-parse HEAD)"
+            find "$source/wp-content/plugins/esc-visual-builder" -name '*.php' -type f -print0 | xargs -0 -n1 php -l
+          done
+
+      - name: Run portable adapter security and compatibility regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          php blue-sea/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
+          php esc/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
+
+  astro-adapter:
+    name: Test ESC Astro private preview adapter
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout ESC Astro development branch
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/escvn-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: astro
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: astro/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: astro
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run focused visual-builder regressions
+        working-directory: astro
+        run: pnpm exec vitest run src/lib/wordpress/builderSiteConfig.test.ts

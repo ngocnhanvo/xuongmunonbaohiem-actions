@@ -4,3 +4,5 @@
 2026-10-10: Determine image IMG src scheme only; raw ESC Table image cells are img HTML length 165-179 with <img> and src attribute but initial API rejected all six. No content printed, no writes.
 
 2026-10-10: Retest six home_01 image fields after PHP f30739ff FTP PASS 38046468762; relative IMG source parser now supported. No live gallery changes.
+
+2026-10-10: Read-only production contract after PHP SEO deploy success 38052577614, source QA PASS 38052471902. Selected home_01 image row 0 must expose html_alt, Media alt/title/caption/description with types, and preserve table version; no content writes.

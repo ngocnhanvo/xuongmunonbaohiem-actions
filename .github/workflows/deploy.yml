@@ -84,6 +84,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-xuongmunonbaohiem-dot-cache-
 
+      - name: Force Page cache refresh for Action migrations
+        if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[force-page-cache]') }}
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .cache/data.json .cache/pages.json
+          echo "Explicitly refreshed cached WordPress Pages for Action migration."
+
       - name: Build Project
         working-directory: source
         run: pnpm run build-git

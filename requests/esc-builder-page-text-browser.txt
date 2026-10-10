@@ -6,3 +6,5 @@ Final browser QA after Astro production PR60 deploy 38038831704 and PHP Page tex
 2026-10-10: Diagnose why synthetic Range selection on Page 51979 does not choose selected substring after whole-line Chrome regression PASS. Emit only field lengths/mapping and feedback, no text or writes; preceding run 38040745033 failed partial only.
 
 2026-10-10: Inspect page token mapping for Range selection failure 38040898865. Only lengths and equality of full decoded text; no customer text, no writes.
+
+2026-10-10: Test only a verified token matching WordPress Page row full_text and node_index. Previously Chrome selected an unrelated rendered 38-character node while source rows were lengths 1,14,23,14. No data writes.

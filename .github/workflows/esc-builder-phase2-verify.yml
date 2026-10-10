@@ -203,10 +203,19 @@ jobs:
           define('ABSPATH','/');
           function add_action($name,$fn){}
           function esc_url_raw($v){return $v;}
+          function wp_parse_url($url,$part=-1){return parse_url($url,$part);}
+          function site_url(){return 'https://admin.example.test';}
           function esc_attr($v){return htmlspecialchars($v,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');}
           require 'backend/wp-content/plugins/esc-visual-builder/includes/image-editor.php';
           $raw='<figure class="gallery"><img class="factory" src="https://old.test/a.jpg" srcset="https://old.test/a-400.jpg 400w" sizes="100vw" alt="Xưởng sản xuất"></figure>';
           if(esc_vb_image_cell_url($raw)!=='https://old.test/a.jpg')exit("Image URL parse failed\n");
+          $relative='<img src="/wp-content/uploads/2026/10/old.jpg" alt="Factory">';
+          if(esc_vb_image_cell_url($relative)!=='/wp-content/uploads/2026/10/old.jpg' ||
+             esc_vb_image_public_url(esc_vb_image_cell_url($relative))!=='https://admin.example.test/wp-content/uploads/2026/10/old.jpg')
+            exit("Relative WordPress gallery URL not recognized\n");
+          $relative_new=esc_vb_image_replace_cell($relative,'https://admin.example.test/wp-content/uploads/2026/10/new.jpg');
+          if(strpos($relative_new,'src="/wp-content/uploads/2026/10/new.jpg"')===false)
+            exit("Relative Gallery IMG src not preserved\n");
           $next=esc_vb_image_replace_cell($raw,'https://new.test/image.jpg');
           if(!is_string($next)||strpos($next,'src="https://new.test/image.jpg"')===false||
              strpos($next,'class="factory"')===false||strpos($next,'alt="Xưởng sản xuất"')===false||

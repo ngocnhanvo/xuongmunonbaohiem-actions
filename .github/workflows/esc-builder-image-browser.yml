@@ -75,7 +75,8 @@ jobs:
             const frameUrl=frame.url();
             const imgSelector='[data-tablepress-preview="home_01"] [data-esc-builder-image-row="0"] img';
             const original=await frame.$eval(imgSelector,img=>({
-              src:img.getAttribute('src'),srcset:img.getAttribute('srcset')
+              src:img.getAttribute('src'),srcset:img.getAttribute('srcset'),
+              alt:img.getAttribute('alt')
             }));
             const oldBackground=await frame.$eval('[data-esc-builder-gallery-background="home_01"]',el=>el.getAttribute('srcset'));
             const first=await frame.$('[data-esc-builder-image-row="0"] img');
@@ -95,10 +96,32 @@ jobs:
                   !!document.getElementById('esc-vb-seo-'+key)?.textContent?.trim());
             },{timeout:15000});
             const originalSeo=await page.evaluate(()=>({
-              alt:document.getElementById('esc-vb-seo-html-alt').textContent,
+              alt:document.getElementById('esc-vb-seo-html-alt').value,
               mediaAlt:document.getElementById('esc-vb-seo-media-alt').textContent,
               status:document.getElementById('esc-vb-seo-status').textContent
             }));
+            // ALT-only: textarea shows the actual ESC Table ALT. Preview
+            // updates the image attribute and enables Save with no Media change.
+            if(originalSeo.alt!==original.alt)
+              throw Error('ALT textarea does not match the actual gallery IMG ALT');
+            const altOnlyDraft='__ESC_BUILDER_ALT_QA_ONLY__';
+            await page.$eval('#esc-vb-seo-html-alt',(el,value)=>{
+              el.value=value;
+              el.dispatchEvent(new Event('input',{bubbles:true}));
+            },altOnlyDraft);
+            await frame.waitForFunction(({selector,value})=>
+              document.querySelector(selector)?.getAttribute('alt')===value,
+              {timeout:12000},{selector:imgSelector,value:altOnlyDraft});
+            await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled,
+              {timeout:12000});
+            if(await frame.$eval(imgSelector,el=>el.getAttribute('src'))!==original.src)
+              throw Error('ALT-only draft unexpectedly changed gallery image');
+            await page.click('#esc-vb-image-cancel');
+            await frame.waitForFunction(({selector,alt})=>
+              document.querySelector(selector)?.getAttribute('alt')===alt,
+              {timeout:12000},{selector:imgSelector,alt:original.alt});
+            if(await page.$eval('#esc-vb-seo-html-alt',el=>el.value)!==originalSeo.alt)
+              throw Error('ALT-only Cancel failed to restore textarea');
             await page.click('#esc-vb-image-choose');
             await page.waitForSelector('.media-modal',{visible:true,timeout:20000});
             await page.waitForFunction(()=>document.querySelectorAll('.media-modal .attachments .attachment').length>1,
@@ -152,15 +175,30 @@ jobs:
             }));
             if(!draft.src || draft.src===original.src || draft.srcset)
               throw Error('Gallery image draft did not replace old src/srcset');
+            // Combined image + ALT draft must preserve the previewed image
+            // and unlock the same Save WordPress button.
+            const combinedAlt='__ESC_BUILDER_COMBINED_QA_ONLY__';
+            await page.$eval('#esc-vb-seo-html-alt',(el,value)=>{
+              el.value=value;
+              el.dispatchEvent(new Event('input',{bubbles:true}));
+            },combinedAlt);
+            await frame.waitForFunction(({selector,value})=>
+              document.querySelector(selector)?.getAttribute('alt')===value,
+              {timeout:12000},{selector:imgSelector,value:combinedAlt});
+            await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled,
+              {timeout:12000});
+            if(await frame.$eval(imgSelector,el=>el.getAttribute('src'))!==draft.src)
+              throw Error('ALT draft discarded selected new Media image');
             const newBackground=await frame.$eval('[data-esc-builder-gallery-background="home_01"]',el=>el.getAttribute('srcset'));
             if(newBackground!==draft.src)throw Error('First-image background was not updated');
             await page.click('#esc-vb-image-cancel');
             await frame.waitForFunction(({selector,src,srcset})=>{
               const img=document.querySelector(selector);
-              return img?.getAttribute('src')===src && img.getAttribute('srcset')===srcset;
+              return img?.getAttribute('src')===src && img.getAttribute('srcset')===srcset &&
+                img.getAttribute('alt')===alt;
             },{timeout:12000},{selector:imgSelector,...original});
             const restoredSeo=await page.evaluate(()=>({
-              alt:document.getElementById('esc-vb-seo-html-alt').textContent,
+              alt:document.getElementById('esc-vb-seo-html-alt').value,
               mediaAlt:document.getElementById('esc-vb-seo-media-alt').textContent,
               status:document.getElementById('esc-vb-seo-status').textContent
             }));
@@ -178,6 +216,7 @@ jobs:
               previewImmediate:true,srcsetCleared:true,
               backgroundSynced:true,cancelRestored:true,
               seoFieldsVisible:true,seoPreviewSynced:true,seoCancelRestored:true,
+              altOnlyPreview:true,altOnlySaveEnabled:true,combinedImageAltPreview:true,
               iframeReloaded:false,customerWrites:0
             }));
           }finally{await browser.close();}

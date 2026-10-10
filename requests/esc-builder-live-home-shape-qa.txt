@@ -1,0 +1,1 @@
+Read-only live Page 248 HTML block validation with PHP esc_vb_section_analysis including images and safe grouping. No WordPress writes.

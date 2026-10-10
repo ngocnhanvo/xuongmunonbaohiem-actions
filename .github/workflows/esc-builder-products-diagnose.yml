@@ -63,7 +63,8 @@ jobs:
                 bodyMark:document.body.innerText.slice(0,200),htmlPartCount:document.querySelectorAll('[data-esc-builder-html-part]').length
               };
             });
-            console.log('REAL_PREVIEW='+JSON.stringify({status:external?.status(),url:publicPage.url(),data:await inspect(publicPage)}));
+            const actual=await inspect(publicPage);
+            console.log('REAL_PREVIEW='+JSON.stringify({status:external?.status(),url:publicPage.url(),data:actual}));
             for(const item of selected.slice(0,3)){
               await page.goto(base+'&esc_vb_page='+item.id,{waitUntil:'domcontentloaded',timeout:60000});
               const el=await page.waitForSelector('#esc-vb-frame',{timeout:30000});
@@ -72,6 +73,14 @@ jobs:
               await frame.waitForSelector('main',{timeout:75000});
               const frameResult=await inspect(frame);
               console.log('BUILDER_PAGE='+JSON.stringify({id:item.id,title:item.name,url:frame.url().split('?')[0],data:frameResult}));
+              if(!frameResult.texts.some(text=>text.toLocaleLowerCase('vi')===actual.texts[0]?.toLocaleLowerCase('vi')))
+                throw Error('Builder missing live category heading '+actual.texts[0]);
+              if(!frameResult.htmlPartCount || frameResult.images[0]?.alt!==actual.images[0]?.alt)
+                throw Error('Builder missing WordPress Page HTML banner');
+              if(frameResult.texts[1]!==actual.texts[1])
+                console.log('NOTICE_PRODUCTS_SOURCE_DIFF='+JSON.stringify({
+                  builder:frameResult.texts[1],live:actual.texts[1]}));
+              console.log('BUILDER_PRODUCT_LAYOUT_PASS='+item.id);
               const api=await page.evaluate(async id=>{
                 const r=await fetch('/wp-json/wp/v2/pages/'+id+'?context=edit',{credentials:'same-origin',headers:{
                   'X-WP-Nonce':window.wpApiSettings?.nonce||''

@@ -1,1 +1,1 @@
-Read-only critical diagnosis: WordPress Action ProductsSSRPage already verified, but public product preview returns 404. Inspect deployed page-san-pham.json and CMS cache for stale ProductsPage Action after incremental build. Do not modify production.
+Post-recovery check: validate /data/page-san-pham.json and cms-common.json Action ProductsSSRPage and /san-pham + /preview/san-pham both HTTP 200 after one-off Page cache refresh deploy 38075519772 SUCCESS. Read only.

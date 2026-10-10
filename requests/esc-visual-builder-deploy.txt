@@ -27,3 +27,5 @@ Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 
 2026-10-10: Fix homepage home_02 selecting video heading opens wrong eyebrow row. Deploy PHP master b403f2b36d49fe27684f3cfd6d627302e54b1c07 via FTP (exact selected field hint). Source QA 38043212953 PASS. Do not deploy Astro before PHP. No WP customer content changes.
 
 2026-10-10: Deploy backend image-editor.php + image-editor-ui.php for home_01 only, PHP master f8e6c9b6. Source verification PASS 38045897113. Upload/byte verify both files before entrypoint, no WordPress content writes or Astro deployment yet.
+
+2026-10-10: Deploy PHP master f30739ff, corrected home_01 image-editor.php root-relative IMG src support. The six existing gallery cells use img HTML with /wp-content/uploads/... paths; preserve their relative paths on media replacement. Source QA PASS 38046405281. WordPress FTP only; no content changes.

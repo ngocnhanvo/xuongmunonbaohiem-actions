@@ -59,6 +59,7 @@ jobs:
           set -euo pipefail
           php blue-sea/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
           php esc/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
+          php esc/wp-content/plugins/esc-visual-builder/tests/auto-discovery.test.php
 
   astro-adapter:
     name: Test ESC Astro private preview adapter
@@ -92,4 +93,4 @@ jobs:
 
       - name: Run focused visual-builder regressions
         working-directory: astro
-        run: pnpm exec vitest run src/lib/wordpress/builderSiteConfig.test.ts
+        run: pnpm exec vitest run src/lib/wordpress/builderSiteConfig.test.ts src/lib/wordpress/builderAutoDiscovery.test.ts

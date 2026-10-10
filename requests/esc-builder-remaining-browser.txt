@@ -1,1 +1,2 @@
 2026-10-10: Post-deploy live browser QA on home_03..home_13 for Astro master be50e7bd and PHP master 580b015b. Test local draft/cancel only on home_03,home_04,home_09,home_10,home_11,home_12; no WordPress writes. Both FTP deploys PASS (PHP 38032726547, Astro 38032847641).
+2026-10-10: Diagnose only unverified home_09 description, home_10 section description, home_11 title, home_12 heading. Already PASS home_03/04 headings and home_09 heading/title; do not rerun those. Only draft + cancel.

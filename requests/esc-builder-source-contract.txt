@@ -10,3 +10,5 @@ One final authenticated integration test after Astro master deploy 215fb4e661b93
 2026-10-10: Production QA for home_02 text editor after WP FTP PASS 38030303115 and Astro FTP PASS 38030389615; verify five editable fields incl HTML description, reject stale 409, no customer data writes. Astro master 6dd7c5c7 and PHP master 228d63e9.
 
 2026-10-10: Schema-only audit of home_03..13 to safely open text editor. Log metadata names and column keys but no customer text and no writes.
+
+2026-10-10: After PHP FTP PASS 38032726547, validate scoped editable-text for all home_03..home_13 and stale 409; do not modify customer data. Astro master be50e7bd, deployment pending.

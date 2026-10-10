@@ -92,8 +92,10 @@ jobs:
             await page.waitForFunction(()=>{
               const panel=document.getElementById('esc-vb-image-seo');
               return panel?.style.display==='block' &&
-                ['html-alt','media-alt','title','caption','description'].every(key=>
-                  !!document.getElementById('esc-vb-seo-'+key)?.textContent?.trim());
+                ['html-alt','media-alt','title','caption','description'].every(key=>{
+                  const el=document.getElementById('esc-vb-seo-'+key);
+                  return !!(key==='html-alt' ? el?.value?.trim() : el?.textContent?.trim());
+                });
             },{timeout:15000});
             const originalSeo=await page.evaluate(()=>({
               alt:document.getElementById('esc-vb-seo-html-alt').value,

@@ -1,1 +1,1 @@
-Deploy Blue Sea Astro Builder Products Page parity fix; Astro master 7c0bdf1e1875505201bf498cd6b44c37f19e83ae, full-build and regression QA PASS 38072117440. Preserve other Pages and ESC Table handlers. Post-deploy smoke runs automatically.
+Final Products Page WYSIWYG parity update: Astro master 64e9af5ea5fed68b1a6275a046c1777500d07b4f, focused Vitest+full build PASS run 38072761721. Isolated live product feed cache/fallback. Standard FTP deploy and automatic smoke, then compare Builder vs /preview/san-pham (banner, title, products). No backend modifications.

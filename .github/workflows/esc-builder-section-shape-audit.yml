@@ -36,7 +36,15 @@ jobs:
           if not re.fullmatch(r'[a-zA-Z0-9]{8,20}',nonce):
             raise SystemExit('REST nonce unavailable')
           headers={'X-WP-Nonce':nonce}
-          for page_id in (53463,53504):
+          page_ids=[]
+          for slug in ('trang-chu','home','homepage','gioi-thieu','san-pham'):
+              resp=s.get(base+'/wp-json/wp/v2/pages',params={
+                'context':'edit','slug':slug,'per_page':50,'_fields':'id,slug,content'},headers=headers,timeout=45)
+              if resp.ok:
+                page_ids += [p['id'] for p in resp.json()]
+          page_ids=list(dict.fromkeys(page_ids))
+          print('AUDIT_TARGET_IDS',page_ids)
+          for page_id in page_ids:
               r=s.get(base+'/wp-json/wp/v2/pages/'+str(page_id),
                 params={'context':'edit','_fields':'id,slug,content'},
                 headers=headers,timeout=45)

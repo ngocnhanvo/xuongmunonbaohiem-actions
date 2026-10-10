@@ -1,0 +1,1 @@
+Validate newly added PHP-embedded image UI JavaScript (Page HTML image/Alt). No deployment and no repeat of previously PASS Chrome suite.

@@ -1,1 +1,1 @@
-Regression: Builder Products Page ID 53504 has Action ProductsPage but /preview/san-pham uses ProductsSSRPage. Check SSR banner/title render and full build from Astro github 7c0bdf1e1875505201bf498cd6b44c37f19e83ae. No FTP/deploy until pass.
+Focused change: Products Page Builder loads products from same WordPress getProducts preview pipeline as /preview/san-pham; caches one minute, fallback on overload. Verify unit regression and full build of Astro github 64e9af5ea5fed68b1a6275a046c1777500d07b4f. No FTP.

@@ -1,0 +1,144 @@
+name: ESC Builder home_02 Chrome QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/esc-builder-home02-browser.yml'
+      - 'requests/esc-builder-home02-browser.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  home02:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: stable
+      - name: Install browser runner
+        run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify five home_02 fields and unsaved preview in production
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+
+          const root = new URL(process.env.WP_ADMIN_URL).origin;
+          const browser = await puppeteer.launch({
+            executablePath: process.env.CHROME_PATH, headless: true,
+            args: ['--no-sandbox','--disable-dev-shm-usage']
+          });
+          try {
+            const page = await browser.newPage();
+            await page.setViewport({width:1440,height:900,deviceScaleFactor:1});
+            const errors = [];
+            const saves = [];
+            page.on('pageerror', error => errors.push(String(error.message).slice(0,220)));
+            page.on('request', req => {
+              if (new URL(req.url()).pathname.endsWith('/wp-json/esc-builder/v1/save-text'))
+                saves.push(req.method());
+            });
+            async function navigate(url, label) {
+              let lastError;
+              for (let attempt=1;attempt<=2;attempt++) {
+                try {
+                  const resp = await page.goto(url,{waitUntil:'domcontentloaded',timeout:attempt===1?45000:65000});
+                  if (resp?.status()===200) return;
+                  lastError = Error(label+' returned HTTP '+resp?.status());
+                } catch (e) { lastError=e; }
+                if(attempt===1) await new Promise(r=>setTimeout(r,2000));
+              }
+              throw lastError;
+            }
+            await navigate(root+'/wp-login.php','WordPress login');
+            await page.waitForSelector('#user_login',{timeout:20000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if (page.url().includes('wp-login.php')) throw Error('WordPress authentication failed');
+            await navigate(root+'/wp-admin/admin.php?page=esc-visual-builder','Visual Builder admin');
+            await page.waitForSelector('#esc-vb-frame',{timeout:25000});
+            const frameHandle=await page.$('#esc-vb-frame');
+            const frame=await frameHandle.contentFrame();
+            if (!frame) throw Error('Astro Builder iframe not accessible');
+            await frame.waitForSelector('[data-tablepress-preview="home_02"]',{timeout:90000});
+            const initialFrameURL = frame.url();
+            const wrapper = await frame.$('[data-tablepress-preview="home_02"]');
+            await wrapper.evaluate(el=>el.scrollIntoView({block:'center'}));
+            await wrapper.click({delay:40});
+            await page.waitForFunction(() => {
+              const inspector=document.querySelector('#esc-vb-inspector')?.textContent || '';
+              return inspector.includes('"tableId": "home_02"');
+            },{timeout:25000});
+            await page.waitForFunction(() => {
+              const editor=document.querySelector('#esc-vb-text-editor');
+              const select=document.querySelector('#esc-vb-edit-row');
+              const input=document.querySelector('#esc-vb-edit-title');
+              return editor?.style.display==='block' &&
+                select?.querySelectorAll('option').length>=5 && input && !input.disabled;
+            },{timeout:45000});
+            const fields=['eyebrow','title','video_title','description','button_text'];
+            const options = await page.$$eval('#esc-vb-edit-row option',nodes=>nodes.map(n=>n.value));
+            if (fields.some(f=>!options.includes(f))) throw Error('Missing home_02 editor fields: '+fields.filter(f=>!options.includes(f)).join(','));
+            const selectors={
+              eyebrow:'[data-tablepress-preview="home_02"] > div:nth-child(2) > div:first-child p',
+              title:'[data-tablepress-preview="home_02"] h2',
+              video_title:'[data-tablepress-preview="home_02"] [data-home02-video-title]',
+              description:'[data-tablepress-preview="home_02"] .home02-description',
+              button_text:'[data-tablepress-preview="home_02"] [data-quote-anchor] > span:first-child'
+            };
+            const audit=[];
+            for (const field of fields) {
+              await page.select('#esc-vb-edit-row',field);
+              const original = await page.$eval('#esc-vb-edit-title',el=>el.value);
+              const present=await frame.$(selectors[field]);
+              if (!present) throw Error('Missing rendered target for '+field);
+              const marker='__ESC_QA_UNSAVED_'+field+'__';
+              const draft=original+' '+marker;
+              await page.$eval('#esc-vb-edit-title',(el,value)=>{
+                el.value=value;
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+              },draft);
+              await frame.waitForFunction(({selector,marker})=>
+                document.querySelector(selector)?.textContent?.includes(marker)===true,
+                {timeout:12000},{selector:selectors[field],marker});
+              if (!(await page.$eval('#esc-vb-edit-save',el=>!el.disabled)))
+                throw Error('Save was not enabled for draft of '+field);
+              await page.click('#esc-vb-edit-cancel');
+              await frame.waitForFunction(({selector,marker})=>
+                !document.querySelector(selector)?.textContent?.includes(marker),
+                {timeout:12000},{selector:selectors[field],marker});
+              const restored=await page.$eval('#esc-vb-edit-title',el=>el.value);
+              if (restored!==original || (await page.$eval('#esc-vb-edit-save',el=>!el.disabled)))
+                throw Error('Cancel did not restore original for '+field);
+              if (frame.url()!==initialFrameURL)
+                throw Error('Preview action unexpectedly reloaded iframe for '+field);
+              audit.push({field,draftVisible:true,cancelRestored:true,iframeUnchanged:true});
+            }
+            if(saves.length) throw Error('Browser QA must not write any WordPress content');
+            console.log('BUILDER_HOME02_CHROME_QA='+JSON.stringify({
+              allFiveFieldsEditable:true,fields:audit,wordPressSaves:0,
+              iframeReloaded:false,pageErrors:errors.slice(0,5)
+            }));
+          } finally {
+            await browser.close();
+          }
+          JS

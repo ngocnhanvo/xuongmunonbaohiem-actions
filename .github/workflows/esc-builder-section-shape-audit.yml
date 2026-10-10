@@ -68,6 +68,7 @@ jobs:
                 for i,gap in enumerate(gaps):
                   tags=[('<' + ('/' if t.startswith('</') else '') + re.match(r'</?([a-zA-Z][\\w:-]*)',t).group(1).lower() + '>') for t in re.findall(r'</?[a-zA-Z][^>]*>',gap)]
                   print('GAP_TAGS',i,repr(tags),'has_text',bool(re.sub(r'<[^>]*>','',gap).strip()),'bytes',len(gap))
+                  print('GAP_TAG_NAMES',i,re.findall(r'</?[A-Za-z][A-Za-z0-9:-]*',gap))
               print('PAGE_SECTION_AUDIT',page_id,'slug',obj.get('slug'),
                 'table_count',len(matches),'ids',[m.group(1) for m in matches],
                 'non_whitespace_between',sum(bool(g.strip()) for g in gaps),

@@ -1,0 +1,1 @@
+Validate new readonly cell preservation, drag/drop section order, iframe preview acknowledgement, PHP/JS syntax, full Astro github build. No FTP or customer writes.

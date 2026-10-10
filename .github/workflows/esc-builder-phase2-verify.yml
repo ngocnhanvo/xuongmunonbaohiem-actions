@@ -95,7 +95,28 @@ jobs:
           if(!editor.includes('pageSaveUrl')) throw Error('Editor Page text save endpoint missing');
           if(!astro.includes('selectedPageRange(') || !astro.includes('pageEditorPosition('))
             throw Error('Precise Editor Range selection hooks missing');
-          if(!editor.includes('selection_prefix:partial.prefix')) throw Error('Selected-only API payload missing');
+          if(!editor.includes('textarea.value = row?.title ||')) throw Error('Page Editor textarea must show full row');
+          if(!editor.includes('textarea.setSelectionRange(from,to)')) throw Error('Selected substring caret highlighting missing');
+          if(!editor.includes('title:partial ? partial.replacement : text')) throw Error('Page Editor partial save payload missing');
+          const start=editor.indexOf('      function pageTextPadding(');
+          const end=editor.indexOf('      const eligible',start);
+          if(start<0 || end<start) throw Error('Page text helpers missing');
+          const helper=editor.slice(start,end);
+          const row={id:'0:930',title:'theo yêu cầu.',full_text:'  theo yêu cầu.  '};
+          const selection={id:'0:930',prefix:'  theo ',selected:'yêu',suffix:' cầu.  '};
+          const result=new Function('row','selection','text',
+            'let pageTextSelection=selection;\\n'+helper+'\\nreturn {'+
+            'padding:pageTextPadding(row),preview:pageTextValue(row,text),'+
+            'partial:pagePartialSave(row,text)};'
+          )(row,selection,'theo mong cầu.');
+          if(result.padding.front!=='  ' || result.padding.back!=='  ' ||
+              result.preview!=='  theo mong cầu.  ' || result.partial?.replacement!=='mong')
+            throw Error('Full-context textarea did not preserve source outside edited selection');
+          const wholeChange=new Function('row','selection','text',
+            'let pageTextSelection=selection;\\n'+helper+'\\nreturn pagePartialSave(row,text);'
+          )(row,selection,'hoàn toàn khác.');
+          if(wholeChange!==null) throw Error('Changed surrounding text must use whole-row fallback');
+          console.log('Builder full-text textarea with highlighted substring fixture PASS');
           console.log('Builder Astro + WordPress editor inline JS syntax PASS');
           NODE
       - name: Verify Page text-token inventory is bounded and markup safe

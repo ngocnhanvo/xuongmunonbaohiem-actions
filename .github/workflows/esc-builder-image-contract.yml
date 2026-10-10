@@ -56,6 +56,28 @@ jobs:
           if data.get('table_id')!='home_01' or len(data.get('version',''))!=64:
             raise SystemExit('Incorrect image editing source')
           if len(images)!=6 or sorted(x.get('row') for x in images)!=list(range(6)):
+            batch=session.post(endpoint+'table-batch',json={**payload,'table_ids':['home_01']},timeout=45)
+            raw=batch.json().get('sources',{}).get('home_01',{}).get('table',{}) if batch.status_code==200 else {}
+            entries=(raw.get('items') or [])[:6]
+            def describe(value):
+              data=str(value or '')
+              return {
+                'type':type(value).__name__,'length':len(data),
+                'starts_https':data.strip().startswith('https://'),
+                'starts_http':data.strip().startswith('http://'),
+                'starts_slash':data.strip().startswith('/'),
+                'contains_img_html':'<img' in data.lower(),
+                'contains_encoded_img':'&lt;img' in data.lower(),
+                'has_shortcode':'[img' in data.lower() or '[image' in data.lower(),
+                'has_src':'src=' in data.lower(),
+                'has_data_src':'data-src=' in data.lower(),
+                'contains_url_key':'url' in data.lower()
+              }
+            print('HOME01_SOURCE_SHAPE='+str({
+              'fields':list(entries[0].keys()) if entries else [],
+              'cells':[{'index':i,'image':describe(row.get('image')),
+                'img':describe(row.get('img'))} for i,row in enumerate(entries)]
+            }))
             raise SystemExit('Expected six supported factory gallery image cells, got '+str({
               'count':len(images),'rows':[x.get('row') for x in images]
             }))

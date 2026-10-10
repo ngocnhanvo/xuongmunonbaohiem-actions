@@ -1,0 +1,88 @@
+name: Deploy Blue Sea Builder Item UI Delta
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-item-ui-delta-deploy.txt']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-item-ui-delta
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: source
+      - name: Validate delta syntax and browser script
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l source/wp-content/plugins/esc-visual-builder/includes/item-section-ui.php
+          php source/wp-content/plugins/esc-visual-builder/tests/item-ui-script.test.php >/tmp/esc-builder-ui-delta.js
+          node --check /tmp/esc-builder-ui-delta.js
+          grep -Fq "li.draggable=true" /tmp/esc-builder-ui-delta.js
+          grep -Fq "previewReady" /tmp/esc-builder-ui-delta.js
+      - name: Upload one PHP UI file over FTP and verify bytes
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do test -n "${!key:-}"; done
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y lftp
+          export REMOTE_DIR="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          url=os.environ['WP_ADMIN_URL']
+          domain=urlparse(url if '://' in url else 'https://'+url).hostname
+          if not domain:raise SystemExit('Missing WP hostname')
+          print('/domains/'+domain+'/public_html/wp-content/plugins/esc-visual-builder/includes')
+          PY
+          )"
+          url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          scheme=os.environ.get('FTP_PROTOCOL') or 'ftp'
+          if scheme not in ('ftp','ftps','sftp'):raise SystemExit('Unsupported FTP_PROTOCOL')
+          print(scheme+'://'+quote(os.environ['FTP_USERNAME'],safe='')+':'+quote(os.environ['FTP_PASSWORD'],safe='')+'@'+os.environ['FTP_SERVER'])
+          PY
+          )"
+          lftp "$url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set ssl:verify-certificate no
+          cd "$REMOTE_DIR"
+          put source/wp-content/plugins/esc-visual-builder/includes/item-section-ui.php -o item-section-ui.php
+          get item-section-ui.php -o /tmp/esc-builder-item-ui-remote.php
+          bye
+          LFTP
+          cmp source/wp-content/plugins/esc-visual-builder/includes/item-section-ui.php /tmp/esc-builder-item-ui-remote.php
+          php -l /tmp/esc-builder-item-ui-remote.php
+          echo "Verified item-section-ui.php only; other plugins untouched."
+      - name: Verify WordPress alive
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          python3 - <<'PY'
+          import os,requests
+          from urllib.parse import urlparse
+          url=os.environ['WP_ADMIN_URL']
+          host=urlparse(url if '://' in url else 'https://'+url).hostname
+          r=requests.get('https://'+host+'/wp-json/',timeout=30)
+          assert r.status_code==200,('WP REST',r.status_code)
+          print('WordPress REST smoke: PASS')
+          PY

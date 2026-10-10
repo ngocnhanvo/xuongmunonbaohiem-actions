@@ -128,12 +128,25 @@ jobs:
           },headers=headers,timeout=30)
           if invalid.status_code!=400:
             raise SystemExit('Invalid attachment must be rejected; got '+str(invalid.status_code))
+          bad_alt=session.post(endpoint+'save-image',json={
+            **payload,'row':0,'alt':'<script>',
+            'expected_version':data['version'],'original_hash':images[0]['hash']
+          },headers=headers,timeout=30)
+          if bad_alt.status_code!=400:
+            raise SystemExit('Unsafe ALT expected HTTP400, got '+str(bad_alt.status_code))
+          stale=session.post(endpoint+'save-image',json={
+            **payload,'row':0,'alt':'QA ONLY - must not persist',
+            'expected_version':'0'*64,'original_hash':images[0]['hash']
+          },headers=headers,timeout=30)
+          if stale.status_code!=409:
+            raise SystemExit('ALT-only stale version expected HTTP409, got '+str(stale.status_code))
           verify=session.post(endpoint+'editable-images',json=payload,headers=headers,timeout=45)
           if verify.status_code!=200 or verify.json().get('version')!=data['version']:
             raise SystemExit('Gallery source changed during read-only QA')
           print('HOME01_IMAGE_CONTRACT_PASS='+str({
             'table_id':'home_01','image_rows':len(images),
             'read_http':200,'bad_ticket_http':403,
-            'bad_media_http':400,'source_unchanged':True,'writes':0
+            'bad_media_http':400,'invalid_alt_http':400,
+            'stale_alt_http':409,'source_unchanged':True,'writes':0
           }))
           PY

@@ -34,3 +34,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Verify full WordPress Editor token displayed in textarea with highlighted selection, preserving surrounding text; PHP master 90964171, Astro github unchanged. Include focused JS helper test, PHP lint and existing regression, no customer writes.
 
 2026-10-10: Retry exact Editor whitespace and partial replacement fixtures after correcting double-backslash regexp in PHP master 806a7e8a. Source test 38041829641 caught front/back indentation bug; rerun before FTP.
+
+2026-10-10: Verify homepage home_02 video-title field hint: Astro github 470b87d5, WordPress PHP master b403f2b3. Exact field marker and click/drag routing tests. Preserve existing ESC Table/Page Editor behavior and do not write customer content.

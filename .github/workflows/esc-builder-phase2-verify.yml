@@ -105,7 +105,7 @@ jobs:
           const row={id:'0:930',title:'theo yêu cầu.',full_text:'  theo yêu cầu.  '};
           const selection={id:'0:930',prefix:'  theo ',selected:'yêu',suffix:' cầu.  '};
           const result=new Function('row','selection','text',
-            'let pageTextSelection=selection;\\n'+helper+'\\nreturn {'+
+            'let pageTextSelection=selection;'+helper+';return {'+
             'padding:pageTextPadding(row),preview:pageTextValue(row,text),'+
             'partial:pagePartialSave(row,text)};'
           )(row,selection,'theo mong cầu.');
@@ -113,7 +113,7 @@ jobs:
               result.preview!=='  theo mong cầu.  ' || result.partial?.replacement!=='mong')
             throw Error('Full-context textarea did not preserve source outside edited selection');
           const wholeChange=new Function('row','selection','text',
-            'let pageTextSelection=selection;\\n'+helper+'\\nreturn pagePartialSave(row,text);'
+            'let pageTextSelection=selection;'+helper+';return pagePartialSave(row,text);'
           )(row,selection,'hoàn toàn khác.');
           if(wholeChange!==null) throw Error('Changed surrounding text must use whole-row fallback');
           console.log('Builder full-text textarea with highlighted substring fixture PASS');

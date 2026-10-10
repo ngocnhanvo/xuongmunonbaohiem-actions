@@ -5,3 +5,4 @@ One final authenticated integration test after Astro master deploy 215fb4e661b93
 2026-10-10: Inspect only public TablePress source dependency metadata for home_04..08 to implement live Product/Page source without full WordPress product scan, then keep old contract checks. Avoid dumping private content.
 2026-10-10: ESC Visual Builder phase2 read-only discovery: inspect only column names/types and row counts for home_00, home_01 before implementing typed field edits. Do not write WordPress data.
 2026-10-10: Production source contract phase2 after PHP deploy run 38012449355: assert home_00/01 editor read with WP REST nonce, 403 invalid ticket, stale version 409 and identical-title no-op (no WordPress data writes). Existing live Page and one-section SSR QA retained.
+2026-10-10: Retry phase2 REST editor contract after fixing nonce regex in QA; PHP deploy succeeded; perform only read, stale 409, same-value no-op save.

@@ -18,3 +18,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Verify Visual Builder WordPress Page Editor post_content literal text feature. PHP master a97017a9; Astro github eea2240d. Test bounded HTML token inventory, syntax, UI, Astro preview, existing ESC Table regressions; no customer data writes.
 
 2026-10-10: Retry only after fixing Page editor inline JavaScript URL literal substitution on PHP master 53286f74. Previous run 38037535187 failed parse; PHP syntax and existing image unit tests had passed. Validate Page token fixture and editor syntax; no content writes.
+
+2026-10-10: Verify Page Editor manifest caching on PHP master c96ea7d0, no repeated GET per click; existing Astro preview untouched. Run PHP lint and inline JS parser regression.

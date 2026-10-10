@@ -1,0 +1,1 @@
+2026-10-10: Inspect only homepage ESC Table home_00..13 image field names and storage shapes. No user data, URLs or secrets printed. Use inventory to safely widen image editing beyond home_01, excluding API-derived images.

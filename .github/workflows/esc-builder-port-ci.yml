@@ -58,6 +58,7 @@ jobs:
         run: |
           set -euo pipefail
           php blue-sea/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
+          php blue-sea/wp-content/plugins/esc-visual-builder/tests/auto-discovery.test.php
           php esc/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
           php esc/wp-content/plugins/esc-visual-builder/tests/auto-discovery.test.php
 
@@ -94,3 +95,37 @@ jobs:
       - name: Run focused visual-builder regressions
         working-directory: astro
         run: pnpm exec vitest run src/lib/wordpress/builderSiteConfig.test.ts src/lib/wordpress/builderAutoDiscovery.test.ts
+
+  blue-sea-astro:
+    name: Test Blue Sea legacy + Auto Discovery preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Blue Sea Astro github
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: blue-astro
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: blue-astro/pnpm-lock.yaml
+
+      - name: Install dependencies
+        working-directory: blue-astro
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run source and slider regressions
+        working-directory: blue-astro
+        run: pnpm exec vitest run src/lib/wordpress/builderAutoDiscovery.test.mjs src/lib/wordpress/builderCustomerSlider.test.mjs

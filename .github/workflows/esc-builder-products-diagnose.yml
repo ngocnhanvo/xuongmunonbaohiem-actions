@@ -1,0 +1,88 @@
+name: Diagnose Builder Products Page Layout
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-products-diagnose.txt']
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Compare real preview and Builder for Products Page
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const required=['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'];
+          for(const env of required)if(!process.env[env])throw Error('Missing '+env);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,
+            args:['--no-sandbox','--disable-dev-shm-usage']});
+          try {
+            const page=await browser.newPage();
+            await page.setViewport({width:1600,height:950});
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:65000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('/wp-login.php'))throw Error('WordPress login failed');
+            const base=wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
+            await page.goto(base,{waitUntil:'domcontentloaded',timeout:60000});
+            const options=await page.$$eval('select#esc-vb-page option', nodes=>nodes.map(x=>({
+              id:x.value,name:x.textContent?.trim(),selected:x.selected
+            })));
+            const selected=options.filter(x=>/sản phẩm|san pham/i.test(x.name||''));
+            console.log('MATCHING_PAGES='+JSON.stringify(selected));
+            if(!selected.length)throw Error('WordPress Pages selector has no Products Page');
+            const publicPage=await browser.newPage();
+            await publicPage.setViewport({width:1200,height:850});
+            const dest='https://xuongmunonbaohiem.io.vn/preview/san-pham';
+            const external=await publicPage.goto(dest,{waitUntil:'domcontentloaded',timeout:65000});
+            const inspect=async target=>target.evaluate(()=>{
+              const root=document.querySelector('main');
+              const texts=[...document.querySelectorAll('h1,h2')].map(el=>el.textContent?.trim()).filter(Boolean);
+              const images=[...document.querySelectorAll('main img')].slice(0,6).map(img=>({alt:img.alt,src:img.getAttribute('src')?.slice(0,170)}));
+              return {title:document.title, mainId:root?.id, texts:texts.slice(0,8),
+                imageCount:document.querySelectorAll('main img').length,images,
+                tableIds:[...document.querySelectorAll('[data-tablepress-preview]')].map(el=>el.getAttribute('data-tablepress-preview')).slice(0,25),
+                headerName:document.querySelector('#header-brandbar p')?.textContent?.trim(),
+                bodyMark:document.body.innerText.slice(0,200),htmlPartCount:document.querySelectorAll('[data-esc-builder-html-part]').length
+              };
+            });
+            console.log('REAL_PREVIEW='+JSON.stringify({status:external?.status(),url:publicPage.url(),data:await inspect(publicPage)}));
+            for(const item of selected.slice(0,3)){
+              await page.goto(base+'&esc_vb_page='+item.id,{waitUntil:'domcontentloaded',timeout:60000});
+              const el=await page.waitForSelector('#esc-vb-frame',{timeout:30000});
+              const frame=await el.contentFrame();
+              if(!frame)throw Error('Missing Builder iframe');
+              await frame.waitForSelector('main',{timeout:75000});
+              const frameResult=await inspect(frame);
+              console.log('BUILDER_PAGE='+JSON.stringify({id:item.id,title:item.name,url:frame.url().split('?')[0],data:frameResult}));
+              const api=await page.evaluate(async id=>{
+                const r=await fetch('/wp-json/wp/v2/pages/'+id+'?context=edit',{credentials:'same-origin',headers:{
+                  'X-WP-Nonce':window.wpApiSettings?.nonce||''
+                }}).catch(()=>null);
+                if(!r||!r.ok)return {status:r?.status||0};
+                const x=await r.json();
+                return {id:x.id,slug:x.slug,status:x.status,action:x.acf?.action||x.action||null,
+                  title:x.title?.rendered,contentLength:x.content?.raw?.length,
+                  hasBanner:(x.content?.raw||x.content?.rendered||'').includes('<img')};
+              },item.id);
+              console.log('WP_PAGE='+JSON.stringify(api));
+            }
+          } finally {await browser.close();}
+          JS

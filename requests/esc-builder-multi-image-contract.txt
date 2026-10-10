@@ -1,0 +1,1 @@
+2026-10-10: Read-only production WordPress API image source QA after PHP FTP SUCCESS 38056848545. Check home_02 img, home_09 icon/background, home_11 img, home_13 img and preserve home_01; exact source field, version/hash, SEO alt, stale request HTTP409, forbidden API tables HTTP403. No successful saves or customer writes.

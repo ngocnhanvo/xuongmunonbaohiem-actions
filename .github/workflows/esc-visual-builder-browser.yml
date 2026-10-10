@@ -369,6 +369,10 @@ jobs:
             if (!(await page.$eval('#esc-vb-edit-save', el=>!el.disabled)))
               throw Error('Editing section heading did not enable Save');
             await page.click('#esc-vb-edit-cancel');
+            // postMessage is async across WordPress and the Astro iframe.
+            await frame.waitForFunction(value =>
+              document.querySelector('[data-tablepress-preview="home_01"] h2')?.textContent?.trim()===value,
+              {timeout:12000},h2Original);
             const headingAfterCancel = await frame.$eval('[data-tablepress-preview="home_01"] h2',el=>el.textContent.trim());
             if (headingAfterCancel!==h2Original) throw Error('Cancel did not restore section heading');
             const simulatedSave = h2Original + ' [QA saved heading]';

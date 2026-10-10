@@ -1,0 +1,1 @@
+Verify static ESC Table image/Alt selection on non-home WordPress Page in production. HTML Page edit Chrome QA 38070488604 already PASS; do not repeat it. Preview and Cancel only, no save.

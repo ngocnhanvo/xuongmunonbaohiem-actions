@@ -1,0 +1,205 @@
+name: Fix ESC Builder Page Navigation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/esc-builder-page-navigation-hotfix.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blue-sea-esc-builder-page-navigation-hotfix
+  cancel-in-progress: false
+
+jobs:
+  patch-builder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate connection secrets
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          for var in SOURCE_REPO_PAT FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do test -n "${!var:-}"; done
+
+      - name: Checkout canonical WordPress source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Validate canonical Page form
+        run: |
+          set -euo pipefail
+          php -l source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          python3 - <<'PY'
+          from pathlib import Path
+          src = Path('source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php').read_text()
+          form = [line for line in src.splitlines() if 'class="esc-vb-page-form"' in line and "echo '<form" in line]
+          assert len(form) == 1, 'Expected exactly one Builder Pages form'
+          assert 'name="post_type" value="page"' in form[0], 'post_type=page missing'
+          assert 'name="page" value="esc-visual-builder"' in form[0]
+          assert "admin_url('edit.php')" in form[0]
+          assert "name=\"esc_vb_page\"" in form[0]
+          print('PASS: Builder selector preserves native WordPress Pages routing')
+          PY
+
+      - name: Resolve FTP remote path
+        id: wp
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import os
+          from urllib.parse import urlparse
+          raw=os.environ['WP_ADMIN_URL'].strip()
+          p=urlparse(raw if '://' in raw else 'https://'+raw)
+          if not p.hostname: raise SystemExit('Missing WordPress admin hostname')
+          print('host='+p.hostname)
+          print('remote=/domains/'+p.hostname+'/public_html/wp-content/plugins/esc-visual-builder')
+          PY
+
+      - name: Download production Builder and patch only the form
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          REMOTE_DIR: ${{ steps.wp.outputs.remote }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lftp
+          ftp_url="$(python3 - <<'PY'
+          import os
+          from urllib.parse import quote
+          proto=os.getenv('FTP_PROTOCOL') or 'ftp'
+          if proto not in ('ftp','ftps','sftp'): raise SystemExit('Unsupported FTP protocol')
+          print(proto+'://'+quote(os.environ['FTP_USERNAME'],safe='')+':'+
+                quote(os.environ['FTP_PASSWORD'],safe='')+'@'+os.environ['FTP_SERVER'])
+          PY
+          )"
+          lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set ssl:verify-certificate no
+          cd "$REMOTE_DIR"
+          get esc-visual-builder.php -o /tmp/esc-builder-before.php
+          bye
+          LFTP
+          python3 - <<'PY'
+          from pathlib import Path
+          canonical=Path('source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php').read_text()
+          before=Path('/tmp/esc-builder-before.php').read_text()
+          form=lambda content: [line for line in content.splitlines(keepends=True)
+            if 'class="esc-vb-page-form"' in line and "echo '<form" in line]
+          wanted=form(canonical)
+          original=form(before)
+          if len(wanted)!=1 or len(original)!=1:
+              raise SystemExit('Unexpected Builder markup: stop without changing production')
+          old=original[0]
+          new=wanted[0]
+          if old==new:
+              print('Production Page form already current; skip duplicate upload.')
+              Path('/tmp/esc-builder-patched.php').write_text(before)
+          else:
+              if 'name="post_type"' in old or 'name="page" value="esc-visual-builder"' not in old:
+                  raise SystemExit('Unexpected production form revision; refusing unsafe overwrite')
+              patched=before.replace(old,new)
+              if patched.count(new)!=1: raise SystemExit('Patch failed to replace exactly one form')
+              Path('/tmp/esc-builder-patched.php').write_text(patched)
+              print('Applied only Page form change to existing production PHP bytes')
+          PY
+          php -l /tmp/esc-builder-patched.php
+          if cmp -s /tmp/esc-builder-before.php /tmp/esc-builder-patched.php; then
+            echo "Already deployed; no FTP write necessary."
+          else
+            lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set ssl:verify-certificate no
+          cd "$REMOTE_DIR"
+          put /tmp/esc-builder-patched.php -o esc-visual-builder.php
+          get esc-visual-builder.php -o /tmp/esc-builder-after.php
+          bye
+          LFTP
+            cmp /tmp/esc-builder-patched.php /tmp/esc-builder-after.php
+            php -l /tmp/esc-builder-after.php
+            echo "Visual Builder production page switch patch FTP byte-verified."
+          fi
+
+      - name: WordPress site smoke test
+        env:
+          WP_HOST: ${{ steps.wp.outputs.host }}
+        run: |
+          set -euo pipefail
+          curl -fsS --connect-timeout 10 --max-time 30 "https://$WP_HOST/wp-json/" >/tmp/wp-builder-smoke.json
+          test -s /tmp/wp-builder-smoke.json
+          echo "WordPress REST index responds successfully."
+
+      - name: Test an alternate Page as a logged-in administrator
+        env:
+          WP_HOST: ${{ steps.wp.outputs.host }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WP_ADMIN_USERNAME:-}" ] || [ -z "${WP_ADMIN_PASSWORD:-}" ]; then
+            echo "::warning::No WordPress admin login secrets. Authenticated cross-Page check skipped."
+            exit 0
+          fi
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,requests
+          from bs4 import BeautifulSoup
+          root='https://'+os.environ['WP_HOST']
+          sess=requests.Session()
+          sess.headers.update({'User-Agent':'ESC-Builder-Page-Nav-QA/1.0'})
+          sess.get(root+'/wp-login.php',timeout=30)
+          sess.post(root+'/wp-login.php',data={
+              'log':os.environ['WP_ADMIN_USERNAME'],
+              'pwd':os.environ['WP_ADMIN_PASSWORD'],
+              'wp-submit':'Log In',
+              'redirect_to':root+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder',
+              'testcookie':'1'
+          },timeout=40)
+          url=root+'/wp-admin/edit.php'
+          params={'post_type':'page','page':'esc-visual-builder'}
+          first=sess.get(url,params=params,timeout=40)
+          if 'wp-login.php' in first.url or first.status_code!=200:
+              raise SystemExit('Authenticated WordPress session could not be validated')
+          soup=BeautifulSoup(first.text,'html.parser')
+          picker=soup.select_one('select#esc-vb-page')
+          if not picker: raise SystemExit('Builder page selector not found after admin login')
+          options=picker.select('option[value]')
+          selected=next((o.get('value') for o in options if o.has_attr('selected')),None)
+          alternative=next((o.get('value') for o in options if o.get('value')!=selected),None)
+          if not alternative:
+              print('::warning::Only one eligible Page. Cross-Page switch not tested.')
+              raise SystemExit(0)
+          params['esc_vb_page']=alternative
+          page=sess.get(url,params=params,timeout=40)
+          check=BeautifulSoup(page.text,'html.parser')
+          if page.status_code!=200 or not check.select_one('#esc-vb-frame'):
+              raise SystemExit('Alternate Page route did not render Builder after switching')
+          iframe=check.select_one('#esc-vb-frame')
+          if '/esc-builder/preview/'+alternative not in iframe.get('src',''):
+              raise SystemExit('Builder iframe did not switch to selected Page')
+          if 'Sorry, you are not allowed to access this page.' in page.text:
+              raise SystemExit('WordPress permission page shown after switch')
+          print('PASS: authenticated Builder switched to a different editable Page')
+          PY

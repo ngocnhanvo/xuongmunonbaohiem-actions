@@ -1,2 +1,3 @@
-Cross-site Auto Discovery QA: ESC Astro github 710f984b0a10a263a5ac728433eebb9e475de860; Blue Sea Astro github 5f548e06a10347c3d197d964b3d93107c600eb59; ESC PHP master 86ee289a9eee61fcf6a2dd627da9294ffec90b5b; Blue Sea PHP master 5be0f6b27b4a98820dcdebfccdf6db1eea6576bf.
-Test only, do not FTP or deploy.
+Run scoped HTML Page image + ESC Table Auto Discovery regression for Blue Sea.
+PHP master ce82f85218a1439d88e06dd0803435b90a78d62a; Astro github 2a077692ad83c403146e2b8f682571248a958219.
+QA only; no FTP or production build. Preserve existing Chrome PASS.

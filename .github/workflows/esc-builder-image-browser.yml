@@ -97,8 +97,23 @@ jobs:
             await page.waitForFunction(()=>!document.querySelector('.media-modal .media-button-select')?.disabled,
               {timeout:12000});
             await page.click('.media-modal .media-button-select');
+            await new Promise(r=>setTimeout(r,2000));
+            const diagnostics=await page.evaluate(()=>{
+              const img=document.getElementById('esc-vb-image-preview');
+              const url=img?.getAttribute('src')||'';
+              const old=document.getElementById('esc-vb-image-feedback');
+              return {
+                panelVisible:document.getElementById('esc-vb-image-editor')?.style.display,
+                chooseDisabled:document.getElementById('esc-vb-image-choose')?.disabled,
+                saveDisabled:document.getElementById('esc-vb-image-save')?.disabled,
+                cancelDisabled:document.getElementById('esc-vb-image-cancel')?.disabled,
+                imgScheme:url.startsWith('https://')?'https':url.startsWith('http://')?'http':'other',
+                feedback:(old?.textContent||'').slice(0,230)
+              };
+            });
+            console.log('HOME01_IMAGE_MEDIA_DIAGNOSTIC='+JSON.stringify(diagnostics));
             await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled,
-              {timeout:20000});
+              {timeout:10000});
             const draft=await frame.$eval(imgSelector,img=>({
               src:img.getAttribute('src'),srcset:img.getAttribute('srcset')
             }));

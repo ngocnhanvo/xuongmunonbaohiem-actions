@@ -1,1 +1,1 @@
-Focused change: Products Page Builder loads products from same WordPress getProducts preview pipeline as /preview/san-pham; caches one minute, fallback on overload. Verify unit regression and full build of Astro github 64e9af5ea5fed68b1a6275a046c1777500d07b4f. No FTP.
+Final regression for Products Page canonical SSR banner and H1, with expensive live product scan removed. Astro github f319299a350ef3625fe34259900988a23020d4db. Source remains published snapshot until the normal build; verify full Astro build, no FTP in QA.

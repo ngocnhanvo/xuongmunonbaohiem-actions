@@ -59,6 +59,7 @@ jobs:
           set -euo pipefail
           php blue-sea/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
           php blue-sea/wp-content/plugins/esc-visual-builder/tests/auto-discovery.test.php
+          php blue-sea/wp-content/plugins/esc-visual-builder/tests/page-image.test.php
           php esc/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
           php esc/wp-content/plugins/esc-visual-builder/tests/auto-discovery.test.php
 
@@ -128,4 +129,4 @@ jobs:
 
       - name: Run source and slider regressions
         working-directory: blue-astro
-        run: pnpm exec vitest run src/lib/wordpress/builderAutoDiscovery.test.mjs src/lib/wordpress/builderCustomerSlider.test.mjs
+        run: pnpm exec vitest run src/lib/wordpress/builderAutoDiscovery.test.mjs src/lib/wordpress/builderPageImages.test.mjs src/lib/wordpress/builderCustomerSlider.test.mjs

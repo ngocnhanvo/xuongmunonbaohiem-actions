@@ -175,8 +175,27 @@ jobs:
               return null;
             });
             if(!partial)throw Error('No single-node selectable substring on this Page');
+            await new Promise(r=>setTimeout(r,1250));
+            const partialState=await page.evaluate(()=>{
+              const field=document.querySelector('#esc-vb-edit-title');
+              const select=document.querySelector('#esc-vb-edit-row');
+              return {
+                textLength:field?.value?.length??null,
+                fieldSelected:select?.value??null,
+                matchesAny:!!select?.value,
+                feedback:(document.querySelector('#esc-vb-edit-feedback')?.textContent||'').slice(0,150),
+                inspector:(document.querySelector('#esc-vb-inspector')?.textContent||'').slice(0,650),
+              };
+            });
+            console.log('ESC_PAGE_PARTIAL_DIAGNOSTIC='+JSON.stringify({
+              selectedLen:partial.selected.length,sourceLen:partial.full.length,
+              match:partialState.textLength===partial.selected.length,
+              fieldSelected:partialState.fieldSelected,
+              feedback:partialState.feedback,
+              inspectorHasSelection:partialState.inspector.includes('"selection"'),
+            }));
             await page.waitForFunction(value=>document.querySelector('#esc-vb-edit-title')?.value===value,
-              {timeout:16000},partial.selected);
+              {timeout:6000},partial.selected);
             const chosen=await page.$eval('#esc-vb-edit-title',el=>el.value);
             if(chosen===partial.full)throw Error('Editor selected entire text instead of the substring');
             const partialMarker='__VB_PARTIAL_DRAFT_ONLY__';

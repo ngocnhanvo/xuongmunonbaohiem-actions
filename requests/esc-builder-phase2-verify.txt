@@ -48,3 +48,5 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Verify read-only image SEO UI for home_01. PHP master d1196041: selected image row exposes ESC Table HTML alt plus WordPress Media alt/title/caption/description, and sidebar displays current vs pending Media metadata without writes. Include PHP fixture, inline JS parser, existing text/gallery regressions. No FTP until PASS.
 
 2026-10-10: Verify ALT-only and image+ALT ESC Table home_01 changes, including blank alt, rejecting HTML, preserve img src and attrs, no Media metadata modifications, iframe ALT draft and cancel hooks. PHP master 5b3e84b0 and Astro github 5bf10cb8. Source-only QA; do not deploy or write customer data before PASS.
+
+2026-10-10: Verify generalized static ESC Table images home_02/img, home_09/icon and background, home_11/img, home_13/img with exact row+field+table routing; API home_03..08,10,12 and banner home_00 excluded. PHP master bb312d3f; Astro github 5107166b. Ensure existing home_01 and text regression PASS before FTP.

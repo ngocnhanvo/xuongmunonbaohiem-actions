@@ -1,2 +1,4 @@
 2026-10-10: Verify after PHP FTP PASS 38056848545, Astro FTP PASS 38057220816 and WordPress multi image contract PASS 38056973456. Chrome test home_02/img, home_09/icon+background including background button, home_11/img and home_13/img. Draft ALT/Save enabled/Cancel restores img src/srcset/alt, no iframe reload. Read only; DO NOT save to customer WordPress.
 2026-10-10: Retry Chrome after adding non-sensitive per-table ALT preview diagnostics; initial run 38057356049 reached sidebar selection but ALT patch timeout. No WordPress writes; do not repeat already-successful FTP or source QA.
+
+2026-10-10: Re-run Chrome after backend typed ALT draft tableId+field PHP FTP hotfix PASS 38057845327 (master 71199842). Previous run 38057558797 confirmed home_02 selector but missing new ALT event source fields. Astro unchanged. No save-image POST, no data writes.

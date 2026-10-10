@@ -1,0 +1,94 @@
+name: Migrate Product Page ACF Action
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/esc-builder-product-action-migration.txt
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-product-page-action-migration
+  cancel-in-progress: false
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Change only Products Page Action via authenticated WordPress REST
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,re,json,requests
+          from urllib.parse import urlparse
+          from bs4 import BeautifulSoup
+          for name in ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD']:
+              if not os.getenv(name):raise SystemExit('Missing '+name)
+          host=urlparse(os.environ['WP_ADMIN_URL'] if '://' in os.environ['WP_ADMIN_URL']
+              else 'https://'+os.environ['WP_ADMIN_URL']).hostname
+          if not host:raise SystemExit('Invalid WordPress admin host')
+          base='https://'+host
+          sess=requests.Session()
+          sess.headers.update({'User-Agent':'ESC-Builder-Action-Migration/1.0'})
+          sess.get(base+'/wp-login.php',timeout=25)
+          sess.post(base+'/wp-login.php',data={
+              'log':os.environ['WP_ADMIN_USERNAME'],
+              'pwd':os.environ['WP_ADMIN_PASSWORD'],
+              'wp-submit':'Log In','testcookie':'1',
+              'redirect_to':base+'/wp-admin/post.php?post=53504&action=edit',
+          },timeout=45)
+          editor=sess.get(base+'/wp-admin/post.php?post=53504&action=edit',timeout=45)
+          if editor.status_code!=200 or 'wp-login.php' in editor.url:
+              raise SystemExit('Editor authentication failed')
+          soup=BeautifulSoup(editor.text,'html.parser')
+          field=soup.select_one('input[name="acf[field_6a2a8b22a56db]"]')
+          page_key=soup.select_one('input[name="acf[field_6a2a6ba7420cb]"]')
+          if not field or not page_key or field.get('value') not in ('ProductsPage','ProductsSSRPage') or page_key.get('value')!='ssr-products':
+              raise SystemExit('ACF source action/key mismatch; no update attempted')
+          nonce=sess.get(base+'/wp-admin/admin-ajax.php?action=rest-nonce',timeout=25).text.strip()
+          if not re.fullmatch(r'[a-zA-Z0-9]{8,20}',nonce):
+              for script in soup.select('script'):
+                  code=script.string or script.text or ''
+                  m=re.search(r'wpApiSettings\s*=\s*\{[^;]{0,1000}?"nonce"\s*:\s*"([a-zA-Z0-9]{8,20})"',code)
+                  if m:nonce=m.group(1);break
+          if not re.fullmatch(r'[a-zA-Z0-9]{8,20}',nonce):
+              raise SystemExit('Could not obtain WordPress REST nonce; refusing write')
+          api=base+'/wp-json/wp/v2/pages/53504'
+          headers={'X-WP-Nonce':nonce,'Accept':'application/json'}
+          response=sess.get(api,params={'context':'edit'},headers=headers,timeout=35)
+          if response.status_code!=200:raise SystemExit('REST read denied '+str(response.status_code))
+          before=response.json()
+          acf=before.get('acf')
+          if not isinstance(acf,dict) or acf.get('action') not in ('ProductsPage','ProductsSSRPage') or acf.get('key')!='ssr-products':
+              raise SystemExit('REST ACF Action/Key does not match editor; no write')
+          if before.get('id')!=53504 or before.get('slug')!='san-pham' or before.get('type')!='page':
+              raise SystemExit('Unexpected WordPress Page identity; no write')
+          previous_action=acf['action']
+          if previous_action=='ProductsSSRPage':
+              print('ACF Action already migrated; no write')
+          else:
+              post=sess.post(api,json={'acf':{'action':'ProductsSSRPage'}},
+                headers={**headers,'Content-Type':'application/json'},timeout=45)
+              if post.status_code not in (200,201):
+                  raise SystemExit('WordPress REST rejected Action update: HTTP '+str(post.status_code))
+          latest=sess.get(api,params={'context':'edit'},headers=headers,timeout=35)
+          if latest.status_code!=200:raise SystemExit('Cannot verify changed Page')
+          after=latest.json()
+          if after.get('acf',{}).get('action')!='ProductsSSRPage':
+              raise SystemExit('WordPress Action did not persist; migration not verified')
+          invariants=[
+              ('slug',before.get('slug'),after.get('slug')),
+              ('status',before.get('status'),after.get('status')),
+              ('page_key',before['acf'].get('key'),after.get('acf',{}).get('key')),
+              ('content',before.get('content',{}).get('raw'),after.get('content',{}).get('raw')),
+              ('title',before.get('title',{}).get('raw'),after.get('title',{}).get('raw')),
+          ]
+          for name,x,y in invariants:
+              if x!=y:raise SystemExit('Unexpected change to Page '+name+'; requires immediate review')
+          print('PASS Page 53504: WordPress Action '+previous_action+' -> ProductsSSRPage')
+          print('PASS unchanged Page slug, key, content, title, and publish status')
+          PY

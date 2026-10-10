@@ -97,7 +97,18 @@ jobs:
             const edited=await frame.$$eval('[data-tablepress-preview]',nodes=>[
               ...new Set(nodes.map(el=>el.getAttribute('data-tablepress-preview')))]);
             result.reorder=edited[0]==='home_01'&&edited[1]==='home_00';
-            if(!result.reorder)throw Error('Section order was not previewed in iframe');
+            if(!result.reorder){
+              const diagnostic=await frame.evaluate(()=>[...document.querySelectorAll('[data-tablepress-preview]')]
+                .map(node=>({id:node.getAttribute('data-tablepress-preview'),
+                  tag:node.tagName,
+                  parent:node.parentElement?.tagName,
+                  parentClass:node.parentElement?.className?.toString().slice(0,80),
+                  ancestorTable:Boolean(node.parentElement?.closest('[data-tablepress-preview]'))})).slice(0,38));
+              const status=await page.$eval('#esc-vb-section-order-status',el=>el.textContent);
+              const list=await page.$eval('#esc-vb-section-order-list li',nodes=>nodes.map(n=>n.textContent?.trim()).slice(0,4));
+              console.log('SECTION_REORDER_DIAG='+JSON.stringify({original,edited,status,list,diagnostic}));
+              throw Error('Section order was not previewed in iframe');
+            }
             await page.click('#esc-vb-section-order-cancel');
             await page.waitForFunction(()=>document.getElementById('esc-vb-section-order-body')?.hidden===true,{timeout:8000});
             const restored=await frame.$$eval('[data-tablepress-preview]',nodes=>[

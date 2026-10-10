@@ -10,3 +10,4 @@ Verify latest Astro github commit 584b3d05106677a941ab44d6be69e731ac095e91 (17 c
 2026-10-10: Rerun only phase2 JavaScript extraction syntax after workflow regex parser fix; earlier PHP lint and unit tests already passed. No production changes.
 2026-10-10: Verify no-reload Visual Builder save. Source Astro github fcdf65a3 and WordPress PHP master 0efbfc59. Validate existing tests, scripts, WordPress save version guard, ASTRO saved-title local patch; no customer data modifications.
 2026-10-10: Builder latest overlay source QA after Astro github f2dc2aff and PHP master 0efbfc59. Validate tests and inline scripts.
+2026-10-10: Validate home_01 section heading editor source: PHP ESC Table name guard, JS selection and optimistic locking, Astro github inline preview no-reload. Run focused tests before deployment.

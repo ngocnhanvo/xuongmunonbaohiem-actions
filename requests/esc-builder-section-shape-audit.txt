@@ -1,1 +1,1 @@
-Read-only inspect exact HTML tag boundary sequences between 14 home Page shortcodes; needed to implement safe complete-block section reorder. No WordPress writes.
+Read-only exact WordPress Page 248 HTML reversible section blocks QA. Validate safe group reordering on actual HTML and byte-identical inverse in runner memory. Never write WordPress.

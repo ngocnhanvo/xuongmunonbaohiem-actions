@@ -134,6 +134,45 @@ jobs:
             console.log('BUILDER_ADMIN_DIAGNOSTICS=' + JSON.stringify({url:page.url(), ...pageSummary}));
             await page.screenshot({path:'reports/esc-builder-admin-before-frame.png',fullPage:false});
             await page.waitForSelector('#esc-vb-frame', {timeout:20000});
+            // Builder workspace regression: no document-level scroll on desktop,
+            // and each of the three panes owns its own scroll behavior.
+            const layoutAudit = await page.evaluate(() => {
+              const menu=document.querySelector('#adminmenuwrap');
+              const sidebar=document.querySelector('#esc-vb-layout .esc-vb-sidebar');
+              const preview=document.querySelector('#esc-vb-layout .esc-vb-preview-viewport');
+              const iframe=document.querySelector('#esc-vb-frame');
+              const wpbody=document.querySelector('#wpbody-content');
+              if (!menu || !sidebar || !preview || !iframe || !wpbody)
+                throw Error('Missing Visual Builder workspace region');
+              const style=el => getComputedStyle(el);
+              const asRect=el => {
+                const r=el.getBoundingClientRect();
+                return {top:Math.round(r.top),bottom:Math.round(r.bottom),
+                  width:Math.round(r.width),height:Math.round(r.height)};
+              };
+              return {
+                menuOverflow:style(menu).overflowY,
+                inspectorOverflow:style(sidebar).overflowY,
+                pageOverflow:style(document.body).overflow,
+                wpbodyOverflow:style(wpbody).overflow,
+                previewOverflow:style(preview).overflow,
+                menu:asRect(menu),sidebar:asRect(sidebar),
+                preview:asRect(preview),iframe:asRect(iframe),
+                viewportHeight:innerHeight
+              };
+            });
+            console.log('BUILDER_SCROLL_LAYOUT_QA='+JSON.stringify(layoutAudit));
+            if (layoutAudit.menuOverflow!=='auto' ||
+                layoutAudit.inspectorOverflow!=='auto' ||
+                layoutAudit.wpbodyOverflow!=='hidden' ||
+                layoutAudit.previewOverflow!=='hidden' ||
+                layoutAudit.pageOverflow!=='hidden')
+              throw Error('Builder independent scrolling styles missing: '+JSON.stringify(layoutAudit));
+            if (layoutAudit.iframe.height<300 ||
+                layoutAudit.sidebar.bottom>layoutAudit.viewportHeight+3 ||
+                layoutAudit.iframe.bottom>layoutAudit.viewportHeight+3 ||
+                Math.abs(layoutAudit.iframe.height-layoutAudit.preview.height)>3)
+              throw Error('Builder preview/inspector height exceeds the workspace: '+JSON.stringify(layoutAudit));
             const frameEl = await page.$('#esc-vb-frame');
             const frameSrc = await frameEl.evaluate(el => el.getAttribute('src'));
             if (!frameSrc || !frameSrc.includes('/esc-builder/preview/')) throw Error('Missing Builder preview URL');

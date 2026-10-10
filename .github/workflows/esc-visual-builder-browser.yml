@@ -238,7 +238,7 @@ jobs:
             if (JSON.parse(inspector).tableId === 'home_00') {
               const sourceTitle = await page.$eval('#esc-vb-edit-title', el=>el.value);
               const activeRow = await page.$eval('#esc-vb-edit-row', el=>Number(el.value));
-              const previewTarget = sourceTitle + ' [QA in-memory]';
+              const previewTarget = '[QA in-memory] ' + sourceTitle;
               const beforePreviewURL = frame.url();
               await page.evaluate(({activeRow,sourceTitle,previewTarget,origin}) => {
                 document.querySelector('#esc-vb-frame')?.contentWindow?.postMessage({
@@ -246,16 +246,17 @@ jobs:
                   original:sourceTitle,value:previewTarget
                 },origin);
               }, {activeRow,sourceTitle,previewTarget,origin});
-              await frame.waitForFunction(value => [...document.querySelectorAll('[data-tablepress-preview="home_00"]')]
-                .some(root => root.textContent?.includes(value)),{timeout:10000},previewTarget);
+              await frame.waitForFunction(value =>
+                document.querySelector('[data-esc-builder-local-saves]')?.textContent?.includes(value),
+                {timeout:10000},previewTarget);
               const nextRow = await page.$eval('#esc-vb-edit-row', el => {
                 const candidate=[...el.options].find(o=>Number(o.value)!==Number(el.value));
                 return candidate?.value || null;
               });
               if (nextRow !== null) await page.select('#esc-vb-edit-row',nextRow);
               const persisted = await frame.evaluate(value =>
-                [...document.querySelectorAll('[data-tablepress-preview="home_00"]')]
-                  .some(root=>root.textContent?.includes(value)),previewTarget);
+                document.querySelector('[data-esc-builder-local-saves]')?.textContent?.includes(value),
+                previewTarget);
               if (!persisted || frame.url()!==beforePreviewURL)
                 throw Error('Saved preview overlay disappeared on row switch or navigated the iframe');
               await page.evaluate(({activeRow,sourceTitle,previewTarget,origin}) => {
@@ -264,8 +265,9 @@ jobs:
                   original:previewTarget,value:sourceTitle
                 },origin);
               }, {activeRow,sourceTitle,previewTarget,origin});
-              await frame.waitForFunction(value => ![...document.querySelectorAll('[data-tablepress-preview="home_00"]')]
-                .some(root => root.textContent?.includes(value)),{timeout:10000},previewTarget);
+              await frame.waitForFunction(value =>
+                !document.querySelector('[data-esc-builder-local-saves]')?.textContent?.includes(value),
+                {timeout:10000},'[QA in-memory]');
               console.log('BUILDER_SAVED_OVERLAY_QA='+JSON.stringify({
                 localPatchVisible:true,retainedAcrossRowChange:true,
                 iframeReloaded:false,restoredOriginalInMemory:true,

@@ -1,5 +1,4 @@
-ESC Visual Builder port QA final gate.
-ESC Astro github: f5a4c9da3f40eea165d25eaecf39bb5813a8c3f8
-ESC PHP master: ec8d825b944bf311c875bfb9b5cc7ba5f1e0fbac
-Blue Sea PHP master: e1980d1771c8411a0f0b688d3b143e909968ad9e
-Only PHP lint/config regressions and scoped Astro vitest. No FTP, build, or production smoke.
+NVN Auto Discovery regression and PHP adapter lint.
+ESC Astro github=e84f9a5c2a8ce2347dde9d842376c49887b44160
+ESC PHP master=86ee289a9eee61fcf6a2dd627da9294ffec90b5b
+No deployment or production build. Test new automatic table discovery and API-data isolation.

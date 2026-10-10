@@ -49,6 +49,7 @@ jobs:
           php -l source/wp-content/plugins/esc-visual-builder/includes/change-index.php
           php -l source/wp-content/plugins/esc-visual-builder/includes/text-editor.php
           php -l source/wp-content/plugins/esc-visual-builder/includes/text-editor-ui.php
+          php -l source/wp-content/plugins/esc-visual-builder/includes/page-text.php
           php -l source/wp-content/plugins/github-trigger/vcs-hook.php
           grep -Fq "ESC Visual Builder" source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
           grep -Fq "current_user_can('edit_post'" source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
@@ -110,6 +111,8 @@ jobs:
           get includes/text-editor.php -o /tmp/esc-vb-text-editor-remote.php
           put source/wp-content/plugins/esc-visual-builder/includes/text-editor-ui.php -o includes/text-editor-ui.php
           get includes/text-editor-ui.php -o /tmp/esc-vb-text-ui-remote.php
+          put source/wp-content/plugins/esc-visual-builder/includes/page-text.php -o includes/page-text.php
+          get includes/page-text.php -o /tmp/esc-vb-page-text-remote.php
           put source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php -o esc-visual-builder.php
           get esc-visual-builder.php -o /tmp/esc-visual-builder-remote.php
           bye
@@ -121,6 +124,8 @@ jobs:
           php -l /tmp/esc-vb-revision-remote.php
           cmp source/wp-content/plugins/esc-visual-builder/includes/text-editor.php /tmp/esc-vb-text-editor-remote.php
           cmp source/wp-content/plugins/esc-visual-builder/includes/text-editor-ui.php /tmp/esc-vb-text-ui-remote.php
+          cmp source/wp-content/plugins/esc-visual-builder/includes/page-text.php /tmp/esc-vb-page-text-remote.php
+          php -l /tmp/esc-vb-page-text-remote.php
           php -l /tmp/esc-vb-text-editor-remote.php
           php -l /tmp/esc-vb-text-ui-remote.php
           php -l /tmp/esc-visual-builder-remote.php

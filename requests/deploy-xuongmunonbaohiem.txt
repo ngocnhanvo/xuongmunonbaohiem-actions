@@ -11,3 +11,5 @@ Deploy tested Astro master PR #47 merge 215fb4e661b934662aa599cf5c616a77ee851fcc
 2026-10-10: Deploy Astro master 6dd7c5c7a66d1b6087dd2171e8f37b7f18a1179a (PR57) for home_02 Visual Builder preview, safe HTML description paragraphs and temporary draft cancellation. PHP Visual Builder FTP PASS run 38030303115, source QA PASS run 38030203884. FTP once and verify.
 
 2026-10-10: Deploy Astro master be50e7bd943894be065b89afd4ed078d0479a2e2 (PR58) for Visual Builder home_03..13 safe section heading/static text preview; PHP plugin FTP PASS 38032726547; focused tests PASS 38032621591. Single build and FTP.
+
+2026-10-10: Deploy Astro master 55dda80c6e78c5b6fd3863dfa9a9765638ec172d (PR59) for WordPress Page Editor text preview and selection; PHP FTP PASS run 38037730850; API QA PASS 38037829675; source QA PASS 38037620093. One build + FTP then Chrome QA.

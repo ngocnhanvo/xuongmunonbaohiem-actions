@@ -167,6 +167,33 @@ jobs:
               return v.includes('"source"');
             }, {timeout:15000});
             const inspector = await page.$eval('#esc-vb-inspector', el=>el.textContent);
+            // Phase 2A/2C: exercise a local draft then Cancel, never writing
+            // any live customer value during automated Chrome QA.
+            if (JSON.parse(inspector).tableId === 'home_00') {
+              await page.waitForFunction(() => {
+                const panel=document.getElementById('esc-vb-text-editor');
+                const rows=document.getElementById('esc-vb-edit-row');
+                const input=document.getElementById('esc-vb-edit-title');
+                return panel?.style.display==='block' && rows?.options.length>0 &&
+                  input && !input.disabled;
+              },{timeout:35000});
+              const originalTitle=await page.$eval('#esc-vb-edit-title',el=>el.value);
+              await page.$eval('#esc-vb-edit-title',el=>{
+                el.value+=' QA draft';
+                el.dispatchEvent(new Event('input',{bubbles:true}));
+              });
+              const draftEnabled=await page.$eval('#esc-vb-edit-save',el=>!el.disabled);
+              if(!draftEnabled) throw Error('Builder title draft did not enable Save');
+              await page.click('#esc-vb-edit-cancel');
+              const restored=await page.$eval('#esc-vb-edit-title',el=>el.value);
+              const stillEnabled=await page.$eval('#esc-vb-edit-save',el=>!el.disabled);
+              if(restored!==originalTitle || stillEnabled)
+                throw Error('Builder Cancel did not restore the original title');
+              console.log('BUILDER_TITLE_DRAFT_QA='+JSON.stringify({
+                editorVisible:true,localDraftEnabledSave:true,cancelRestored:true,
+                customerDataWritten:false
+              }));
+            }
             const controls = await page.$$('.esc-vb-size');
             if (controls.length !== 2) throw Error('Desktop/Mobile controls missing');
             await controls[1].click();

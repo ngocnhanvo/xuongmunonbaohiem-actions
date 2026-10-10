@@ -17,3 +17,4 @@ Post-deploy final Visual Builder browser QA on Astro master merge 215fb4e661b934
 2026-10-10: Final Chrome test: correct Puppeteer plural element selector. Previous run already passed no-reload saved overlays and draft Cancel.
 2026-10-10: Diagnose manual refresh status after saved-preview regression passes. Production source unchanged.
 2026-10-10: Production Chrome QA for home_01 section heading: Astro PR56 master e04aa5a67f FTP 38027673306 PASS, PHP afe4bb80b9 FTP 38027776979 PASS, API section-title no-op and 409 run 38027864914 PASS. Validate H2 draft, cancel, temporary save overlay without customer write; existing refresh/ticket/F5 tests.
+2026-10-10: Retry Chrome section-heading QA with asynchronous iframe Cancel restoration wait. Previous run 38027980815 passed existing editor/draft/overlay but checked Cancel too early. No production code or data writes.

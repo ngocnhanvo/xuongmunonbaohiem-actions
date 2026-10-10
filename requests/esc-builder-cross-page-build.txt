@@ -1,1 +1,1 @@
-Check exact WordPress Action architecture; dev Astro github 8da1390d66f17f173a01082b34b148ae1af3e496. SSR product route dynamically chooses Page component from Action; Builder no mapping; strict regression and full build. QA only, DO NOT FTP.
+Validate permanent SSR WordPress Action cache reconciliation on Astro github 5ef018e69b72c304fa9fa512c5960e7c8a003afc. Tests: builder Product listing exact Action, SSR Action metadata drift and fail-closed; full Astro build. QA only, no FTP.

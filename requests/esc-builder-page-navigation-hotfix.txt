@@ -1,0 +1,3 @@
+Fix Builder page navigation (switching from home to another Page).
+Source PHP master=576deaba15ec658fd8f921b07865f669649d82d5.
+Patch only existing production esc-visual-builder.php form; verify FTP bytes, PHP syntax and an alternate Page authenticated route. No Astro change, no build.

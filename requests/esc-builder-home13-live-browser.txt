@@ -1,0 +1,1 @@
+2026-10-10: One-time production browser QA after Astro PR68 master 6d6a5d4d and successful deploy 38060912897. Verify both carousel buttons and editor selecting first offscreen home_13 logo. Read-only; no saves.

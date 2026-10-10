@@ -74,6 +74,17 @@ jobs:
             table_data=sources.get(table_id,{}).get('table',{})
             if table_data.get('id')!=table_id or not isinstance(table_data.get('items'),list):
               raise SystemExit('Builder batch source invalid: '+table_id)
+          # Builder Giai đoạn 2: inspect editable column names/types only.
+          # Never print actual website content, customer data or bearer tickets.
+          for tid in ['home_00','home_01']:
+            raw=sources.get(tid,{}).get('table',{})
+            rows=raw.get('items') or []
+            fields=[{'name':k,'type':type(v).__name__,'chars':len(str(v))}
+                    for k,v in (rows[0] if rows else {}).items()]
+            print('BUILDER_EDIT_SOURCE_SCHEMA='+str({
+              'id':tid,'row_count':len(rows),'fields':fields,
+              'meta_keys':list((raw.get('meta') or {}).keys())
+            }))
           layout=session.post(root+'/wp-json/esc-builder/v1/page-layout',json={
             'ticket':ticket,'page_id':page_id
           },timeout=35)

@@ -1,0 +1,84 @@
+name: ESC Builder Multi Image Contract QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-multi-image-contract.txt']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Read exact image source columns and verify stale-save protection
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,re,requests,json
+          from bs4 import BeautifulSoup
+          from urllib.parse import urlparse,parse_qs
+          root=os.environ['WP_ADMIN_URL'].split('/wp-admin')[0].rstrip('/')
+          sess=requests.Session()
+          sess.get(root+'/wp-login.php',timeout=30)
+          signed=sess.post(root+'/wp-login.php',data={
+            'log':os.environ['WP_ADMIN_USERNAME'],'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In','redirect_to':root+'/wp-admin/admin.php?page=esc-visual-builder',
+            'testcookie':'1'},timeout=45)
+          if 'wp-login.php' in signed.url:raise SystemExit('Login failed')
+          page=sess.get(root+'/wp-admin/admin.php?page=esc-visual-builder',timeout=45)
+          frame=BeautifulSoup(page.text,'html.parser').select_one('#esc-vb-frame')
+          if not frame:raise SystemExit('Builder iframe missing')
+          url=urlparse(frame.get('src',''))
+          ticket=parse_qs(url.query).get('ticket',[''])[0]
+          pageid=int(url.path.rstrip('/').split('/')[-1])
+          nonce=re.search(r'const restNonce\s*=\s*["\x27]([\w]+)["\x27]',page.text)
+          if not nonce:raise SystemExit('REST nonce missing')
+          headers={'X-WP-Nonce':nonce.group(1)}
+          endpoint=root+'/wp-json/esc-builder/v1/'
+          sources=[('home_01','img'),('home_02','img'),('home_09','icon'),
+                   ('home_09','background'),('home_11','img'),('home_13','img')]
+          results=[]
+          for table,field in sources:
+            body={'ticket':ticket,'page_id':pageid,'table_id':table,'field':field}
+            source=sess.post(endpoint+'editable-images',json=body,headers=headers,timeout=45)
+            if source.status_code!=200:raise SystemExit(table+'/'+field+' HTTP '+str(source.status_code))
+            data=source.json()
+            items=data.get('images') or []
+            if data.get('table_id')!=table or data.get('field')!=field or not items:
+              raise SystemExit(table+'/'+field+' has no recognized editable IMG cells')
+            if any(x.get('field')!=field or not x.get('editable') or len(x.get('hash',''))!=64
+              for x in items):raise SystemExit(table+'/'+field+' rows not guarded')
+            item=items[0]
+            chosen=sess.post(endpoint+'editable-images',
+              json={**body,'row':item['row']},headers=headers,timeout=45)
+            seo=next((x.get('seo') for x in chosen.json().get('images',[])
+              if x.get('row')==item['row']),None) if chosen.status_code==200 else None
+            if not isinstance(seo,dict) or not isinstance(seo.get('html_alt'),str):
+              raise SystemExit(table+'/'+field+' SEO read failed')
+            stale=sess.post(endpoint+'save-image',json={
+              **body,'row':item['row'],'alt':'READ_ONLY_QA_NEVER_SAVE',
+              'original_hash':item['hash'],'expected_version':'0'*64
+            },headers=headers,timeout=35)
+            if stale.status_code!=409:
+              raise SystemExit(table+'/'+field+' did not reject stale write: '+str(stale.status_code))
+            results.append({'table':table,'field':field,'items':len(items),
+              'selected_row':item['row'],'seo':True,'stale_save_http':stale.status_code})
+          for table,field in [('home_03','api-img'),('home_04','api-image'),
+                             ('home_10','api-img'),('home_12','api-img'),
+                             ('home_09','title'),('home_00','image')]:
+            response=sess.post(endpoint+'editable-images',json={
+              'ticket':ticket,'page_id':pageid,'table_id':table,'field':field
+            },headers=headers,timeout=30)
+            if response.status_code!=403:
+              raise SystemExit(table+'/'+field+' forbidden field accepted: '+str(response.status_code))
+          print('ESC_MULTI_IMAGE_CONTRACT_PASS='+json.dumps({
+            'sources':results,'blocked_api_sources':6,'customer_writes':0
+          }))
+          PY

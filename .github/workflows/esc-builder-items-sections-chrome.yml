@@ -111,11 +111,23 @@ jobs:
             }
             await page.click('#esc-vb-section-order-cancel');
             await page.waitForFunction(()=>document.getElementById('esc-vb-section-order-body')?.hidden===true,{timeout:8000});
-            const restored=await frame.$$eval('[data-tablepress-preview]',nodes=>[
+            // Parent hides its controls immediately, then postMessage delivers
+            // the undo command asynchronously to the iframe. Wait for the
+            // actual DOM transition instead of racing that message.
+            await frame.waitForFunction(expected=>{
+              const order=[...new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+                .map(el=>el.getAttribute('data-tablepress-preview')))];
+              return JSON.stringify(order)===JSON.stringify(expected);
+            },{timeout:9000},original).catch(()=>{});
+            const restored=await frame.$eval('[data-tablepress-preview]',nodes=>[
               ...new Set(nodes.map(el=>el.getAttribute('data-tablepress-preview')))]);
             result.undo=JSON.stringify(original)===JSON.stringify(restored);
             result.iframeStable=frame.url()===url;
-            if(!result.undo||!result.iframeStable)throw Error('Undo or iframe URL changed');
+            if(!result.undo||!result.iframeStable){
+              console.log('SECTION_UNDO_DIAG='+JSON.stringify({original,edited,restored,beforeUrl:url,afterUrl:frame.url(),
+                currentStatus:await page.$eval('#esc-vb-section-order-status',el=>el.textContent)}));
+              throw Error('Undo or iframe URL changed');
+            }
             if(result.writeCalls!==0)throw Error('QA unexpectedly wrote customer content');
             console.log('ESC_BUILDER_ITEMS_SECTIONS_QA_PASS='+JSON.stringify(result));
           } finally {await browser.close();}

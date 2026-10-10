@@ -117,6 +117,15 @@ jobs:
              !imageScript.includes("updateSEO()") ||
              !imageScript.includes("html_alt:current.seo?.html_alt"))
             throw Error('Image SEO must come from selected WordPress row and Media preview');
+          if(!shell.includes('textarea id="esc-vb-seo-html-alt"') ||
+             !imageScript.includes("isAltDirty()") ||
+             !imageScript.includes("altInput.addEventListener('input'") ||
+             !imageScript.includes("alt:requestedAlt") ||
+             !imageScript.includes("esc-vb-image-alt-draft") ||
+             !astro.includes('patchGalleryAlt(') ||
+             !astro.includes('esc-vb-image-alt-ack'))
+            throw Error('Editable ESC Table ALT contract missing');
+          console.log('Image SEO site-ALT edit state and preview PASS');
           console.log('Image SEO sidebar source and preview state PASS');
           const home01=readFileSync('source/src/astro/tablepress/Home_01.astro','utf8');
           if(!home01.includes('data-esc-builder-image-row={item.row}') ||
@@ -265,6 +274,29 @@ jobs:
           $missing=esc_vb_image_seo_metadata('<img src="/uploads/unmatched.jpg" alt="ALT gốc">','https://admin.example.test/uploads/unmatched.jpg');
           if($missing['attachment_found'] || $missing['html_alt']!=='ALT gốc' || $missing['title']!=='')
             exit("Missing image Media SEO fallback failed\n");
+          $alt_only=esc_vb_image_replace_alt($raw,'Khu vực kiểm tra & đóng gói');
+          if(!is_string($alt_only) ||
+             strpos($alt_only,'alt="Khu vực kiểm tra &amp; đóng gói"')===false ||
+             strpos($alt_only,'src="https://old.test/a.jpg"')===false ||
+             strpos($alt_only,'srcset="https://old.test/a-400.jpg 400w"')===false ||
+             strpos($alt_only,'class="factory"')===false)
+            exit("ALT-only change altered IMG source or other attributes\n");
+          $new_img_with_alt=esc_vb_image_replace_alt($next,'Ảnh nhà xưởng mới');
+          if(!is_string($new_img_with_alt) ||
+             strpos($new_img_with_alt,'src="https://new.test/image.jpg"')===false ||
+             strpos($new_img_with_alt,'alt="Ảnh nhà xưởng mới"')===false)
+            exit("Combined image and ALT update fixture failed\n");
+          $missing_alt=esc_vb_image_replace_alt('<img src="/uploads/old.jpg" />','Alt mới');
+          if(strpos($missing_alt,'alt="Alt mới"')===false)
+            exit("Missing ALT attribute was not inserted safely\n");
+          $decorative=esc_vb_image_replace_alt($raw,'');
+          if(strpos($decorative,'alt=""')===false)
+            exit("Empty ALT for decorative image rejected\n");
+          if(esc_vb_image_replace_alt($raw,'<script>')!==false)
+            exit("Unsafe ALT with HTML accepted\n");
+          if(esc_vb_image_replace_alt('<img src="x.jpg">','Alt')!==false)
+            exit("Unsafe URL IMG cell accepted\n");
+          echo "home_01 ALT-only, image+ALT, empty ALT, invalid ALT fixtures PASS\n";
           echo "home_01 image SEO metadata + Media fallback PASS\n";
           echo "home_01 canonical cell replacement and srcset cleanup PASS\n";
           PHP

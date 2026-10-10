@@ -13,3 +13,5 @@ Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 
 2026-10-10: Deploy ESC Visual Builder text-editor.php/text-editor-ui.php for home_03..13 after PASS code QA 38032621591. WP PHP master 580b015b4b7f1e39d9c7612294043a0a7489e526. Verify FTP bytes, php lint, secure REST only; no content writes.
 
 2026-10-10: Deploy WordPress Page Editor literal-text feature: PHP master 53286f74 (esc-visual-builder.php, page-text.php, text-editor-ui.php). Source QA 38037620093 PASS. Workflow uploads new page-text module before main plugin and byte-verifies. No customer content writes.
+
+2026-10-10: Apply one-line WordPress Editor empty-region null guard (PHP master 98613ff8), avoiding JavaScript exception when selected HTML part has no editable text. Upload plugin only; do not rerun Astro build or modify customer content.

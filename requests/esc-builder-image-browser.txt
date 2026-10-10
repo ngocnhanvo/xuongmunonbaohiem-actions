@@ -12,3 +12,5 @@
 2026-10-10: Retry ALT Chrome browser QA after correcting form-field assertion (run 38054509682 timed out waiting for textarea textContent rather than value). Production PHP/Astro FTP already PASS; no repeated deploy, no customer writes.
 
 2026-10-10: Retry Chrome ALT-only+combined draft after correcting remaining obsolete textarea textContent pending SEO check; previous run 38054672490 passed ALT-only interaction but failed QA assertion, no customer writes. PHP/Astro already FTP deployed.
+
+2026-10-10: Diagnose combined Media+ALT Cancel after Chrome 38054835406 timeout in multi-attribute restore. Log only equality flags of img src/srcset/alt against before-draft snapshots, no content/URL logging, no save POST. Do not redeploy until exact attribute issue identified.

@@ -1,0 +1,1 @@
+2026-10-10: Verify home_01 six editable image cells and secure WordPress Media REST source after PHP FTP SUCCESS run 38045978997. Read only, check bad token, invalid media ID, unchanged version; no customer writes.

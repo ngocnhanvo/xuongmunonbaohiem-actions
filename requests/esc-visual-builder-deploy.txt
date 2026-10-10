@@ -35,3 +35,5 @@ Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 
 2026-10-10: Update Visual Builder stale phase-2 header to 'Chỉnh sửa chữ & hình ảnh' and intro to describe both image and text editing. PHP master 5e95f7ec4a329b49a6c2eadd2983add29067b263. FTP plugin-only deploy with PHP syntax, byte verification; Astro unchanged, no site content edits. Final Chrome UI title check follows.
 
 2026-10-10: Deploy read-only home_01 image SEO detail panel, PHP master d1196041724c6aae26b03a21f0b279dfa02aa67f. Show ESC Table actual IMG alt separately from WP Media alt/title/caption/description, and pending selected-image SEO preview. Existing image save/cancel unchanged; source QA PASS run 38052471902. PHP FTP plugin-only with byte verification, no Astro rebuild, no customer media data mutations.
+
+2026-10-10: Deploy PHP master 5b3e84b002e126c07352b5f02c509f4c4aeba0d9. home_01 editable ESC Table HTML ALT (Alt-only or combined photo+Alt) and editor UI. Source QA PASS run 38053805525. FTP plugin only with syntax/byte checks, no customer data modifications. Astro preview remains on github until backend production verified.

@@ -31,3 +31,5 @@ Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 
 2026-10-10: Deploy PHP master f30739ff, corrected home_01 image-editor.php root-relative IMG src support. The six existing gallery cells use img HTML with /wp-content/uploads/... paths; preserve their relative paths on media replacement. Source QA PASS 38046405281. WordPress FTP only; no content changes.
 
 2026-10-10: Sync Media Library relative URL handling, PHP master 11f4160642e03fb1605f21cdf346273869d62ae3; selected attachment ID valid but Media JS URL is root-relative. Both UI and REST now normalize to WordPress HTTPS origin and preserve relative ESC Table cell. Code QA PASS run 38047336228. Deploy WordPress plugin only (Astro already FTP PASS), do not modify content.
+
+2026-10-10: Update Visual Builder stale phase-2 header to 'Chỉnh sửa chữ & hình ảnh' and intro to describe both image and text editing. PHP master 5e95f7ec4a329b49a6c2eadd2983add29067b263. FTP plugin-only deploy with PHP syntax, byte verification; Astro unchanged, no site content edits. Final Chrome UI title check follows.

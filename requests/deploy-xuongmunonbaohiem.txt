@@ -1,4 +1,1 @@
-Deploy Blue Sea Astro production with ESC Visual Builder Auto Discovery + cross-Page HTML images/Alt.
-Astro master=57c5e7490aa055c5612159687978bde8080c08a0; full build QA PASS run 38070095151.
-PHP production addon PASS run 38069916645.
-Use existing production build/FTP pipeline and smoke tests. Do not rerun earlier home_00/home_13 Chrome QA.
+Deploy Blue Sea Astro Builder Products Page parity fix; Astro master 7c0bdf1e1875505201bf498cd6b44c37f19e83ae, full-build and regression QA PASS 38072117440. Preserve other Pages and ESC Table handlers. Post-deploy smoke runs automatically.

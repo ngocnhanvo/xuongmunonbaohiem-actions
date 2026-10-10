@@ -1,0 +1,1 @@
+Read-only production QA: compare Products Page in Builder and /preview/san-pham, find missing hero banner, main heading and header behavior. Do not save or trigger rebuild.

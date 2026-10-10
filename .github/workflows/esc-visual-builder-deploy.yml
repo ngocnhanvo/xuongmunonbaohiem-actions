@@ -46,6 +46,11 @@ jobs:
           set -euo pipefail
           git -C source rev-parse HEAD
           php -l source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          php -l source/wp-content/plugins/esc-visual-builder/includes/site-config.php
+          php -l source/wp-content/plugins/esc-visual-builder/includes/page-image.php
+          php source/wp-content/plugins/esc-visual-builder/tests/site-config.test.php
+          php source/wp-content/plugins/esc-visual-builder/tests/auto-discovery.test.php
+          php source/wp-content/plugins/esc-visual-builder/tests/page-image.test.php
           php -l source/wp-content/plugins/esc-visual-builder/includes/change-index.php
           php -l source/wp-content/plugins/esc-visual-builder/includes/text-editor.php
           php -l source/wp-content/plugins/esc-visual-builder/includes/text-editor-ui.php
@@ -107,6 +112,10 @@ jobs:
           get vcs-hook.php -o /tmp/esc-vb-github-hook-remote.php
           cd "$REMOTE_DIR"
           mkdir -pf includes
+          put source/wp-content/plugins/esc-visual-builder/includes/site-config.php -o includes/site-config.php
+          get includes/site-config.php -o /tmp/esc-vb-site-config-remote.php
+          put source/wp-content/plugins/esc-visual-builder/includes/page-image.php -o includes/page-image.php
+          get includes/page-image.php -o /tmp/esc-vb-page-image-remote.php
           put source/wp-content/plugins/esc-visual-builder/includes/change-index.php -o includes/change-index.php
           get includes/change-index.php -o /tmp/esc-vb-revision-remote.php
           put source/wp-content/plugins/esc-visual-builder/includes/text-editor.php -o includes/text-editor.php
@@ -126,6 +135,10 @@ jobs:
           cmp source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php /tmp/esc-visual-builder-remote.php
           cmp source/wp-content/plugins/github-trigger/vcs-hook.php /tmp/esc-vb-github-hook-remote.php
           php -l /tmp/esc-vb-github-hook-remote.php
+          cmp source/wp-content/plugins/esc-visual-builder/includes/site-config.php /tmp/esc-vb-site-config-remote.php
+          php -l /tmp/esc-vb-site-config-remote.php
+          cmp source/wp-content/plugins/esc-visual-builder/includes/page-image.php /tmp/esc-vb-page-image-remote.php
+          php -l /tmp/esc-vb-page-image-remote.php
           cmp source/wp-content/plugins/esc-visual-builder/includes/change-index.php /tmp/esc-vb-revision-remote.php
           php -l /tmp/esc-vb-revision-remote.php
           cmp source/wp-content/plugins/esc-visual-builder/includes/text-editor.php /tmp/esc-vb-text-editor-remote.php

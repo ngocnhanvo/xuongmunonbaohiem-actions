@@ -167,7 +167,7 @@ jobs:
             await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled,
               {timeout:10000});
             const draftSeo=await page.evaluate(()=>({
-              alt:document.getElementById('esc-vb-seo-html-alt').textContent,
+              alt:document.getElementById('esc-vb-seo-html-alt').value,
               status:document.getElementById('esc-vb-seo-status').textContent
             }));
             if(draftSeo.alt!==originalSeo.alt || !draftSeo.status.includes('chưa lưu'))

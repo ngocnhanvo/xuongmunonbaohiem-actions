@@ -167,6 +167,20 @@ jobs:
              !imagePHP.includes("'field' => $field") ||
              !imagePHP.includes("esc_vb_text_authorize($request)"))
             throw Error('Backend static image field whitelist or auth missing');
+          const home00Data=readFileSync('source/src/lib/wordpress/tablepress/home00.ts','utf8');
+          const home00Component=readFileSync('source/src/astro/tablepress/Home_00.astro','utf8');
+          if(!home00Data.includes('row,') ||
+             !home00Component.includes('data-esc-builder-image-row={slide.row}') ||
+             !home00Component.includes('data-esc-builder-image-field="image"') ||
+             !astro.includes('const draftGallerySourceSets = new Map()') ||
+             !astro.includes('draftGallerySourceSets.forEach(') ||
+             !astro.includes('figure.querySelectorAll("source")') ||
+             !astro.includes('source.setAttribute("srcset",url)') ||
+             !astro.includes('element.closest("[data-home-slide]") ? "home_00"') ||
+             !imageScript.includes("home_00:['image']") ||
+             !imagePHP.includes("'home_00' => ['image']"))
+            throw Error('home_00 desktop/mobile picture source, ALT or Cancel contract missing');
+          console.log('home_00 desktop/mobile banner image and ALT draft source PASS');
           console.log('Expanded ESC Table static image source contract PASS');
           console.log('home_01 image editor source contract PASS');
           const extract=readFileSync('source/src/astroutils/ExtractHTML.astro','utf8');
@@ -299,7 +313,8 @@ jobs:
             exit("Non-HTTPS replacement accepted\n");
           if(esc_vb_image_column(['id','title','image'])!==2)exit("Column lookup failed\n");
           $allowed=esc_vb_image_allowed_fields();
-          if(($allowed['home_02'] ?? [])!==['img'] ||
+          if(($allowed['home_00'] ?? [])!==['image'] ||
+             ($allowed['home_02'] ?? [])!==['img'] ||
              ($allowed['home_09'] ?? [])!==['icon','background'] ||
              ($allowed['home_11'] ?? [])!==['img'] ||
              ($allowed['home_13'] ?? [])!==['img'] ||

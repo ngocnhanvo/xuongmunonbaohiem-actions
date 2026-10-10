@@ -36,6 +36,11 @@ jobs:
           git -C backend rev-parse HEAD
           php -l backend/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
           php -l backend/wp-content/plugins/esc-visual-builder/includes/change-index.php
+          php -l backend/wp-content/plugins/esc-visual-builder/includes/text-editor.php
+          php -l backend/wp-content/plugins/esc-visual-builder/includes/text-editor-ui.php
+          grep -Fq "editor_conflict" backend/wp-content/plugins/esc-visual-builder/includes/text-editor.php
+          grep -Fq "wp_verify_nonce" backend/wp-content/plugins/esc-visual-builder/includes/text-editor.php
+          grep -Fq "esc_vb_text_ui_scripts" backend/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
           php -l backend/wp-content/plugins/github-trigger/vcs-hook.php
           grep -Fq "vcs_astro_log_written" backend/wp-content/plugins/github-trigger/vcs-hook.php
           grep -Fq "resync_required" backend/wp-content/plugins/esc-visual-builder/includes/change-index.php

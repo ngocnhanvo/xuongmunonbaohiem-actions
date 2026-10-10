@@ -82,10 +82,13 @@ jobs:
                   {timeout:18000});
                 const candidate=await frame.evaluate(()=>{
                   const html=[...document.querySelectorAll('[data-esc-builder-html-part] img')]
-                    .find(img=>img.getBoundingClientRect().width>10);
-                  if(html)return {kind:'html',selector:'[data-esc-builder-html-part="'+
-                    html.closest('[data-esc-builder-html-part]').getAttribute('data-esc-builder-html-part')+
-                    '"] img:nth-of-type(1)'};
+                    .find(img=>img.getBoundingClientRect().width>10 && !img.closest('picture'));
+                  if(html){
+                    const root=html.closest('[data-esc-builder-html-part]');
+                    return {kind:'html',
+                      part:Number(root.getAttribute('data-esc-builder-html-part')),
+                      index:[...root.querySelectorAll('img')].indexOf(html)};
+                  }
                   const tagged=[...document.querySelectorAll(
                     '[data-tablepress-preview] img[data-esc-builder-image-row][data-esc-builder-image-field]')]
                     .find(img=>img.getBoundingClientRect().width>10);
@@ -102,16 +105,20 @@ jobs:
             const {frame,item}=found;
             stats.selectedPage=item.title;
             stats.source=found.kind;
-            let selector;
+            const frameUrl=frame.url();
             if(found.kind==='html'){
-              selector='[data-esc-builder-html-part] img';
+              await frame.evaluate(({part,index})=>{
+                const root=document.querySelector('[data-esc-builder-html-part="'+part+'"]');
+                const img=root?.querySelectorAll('img')[index];
+                if(!img)throw Error('Selected Page HTML image disappeared');
+                img.click();
+              },{part:found.part,index:found.index});
             }else{
-              selector='[data-tablepress-preview="'+found.table+'"] img'+
+              const selector='[data-tablepress-preview="'+found.table+'"] img'+
                 '[data-esc-builder-image-row="'+found.row+'"]'+
                 '[data-esc-builder-image-field="'+found.field+'"]';
+              await frame.$eval(selector,img=>img.click());
             }
-            const frameUrl=frame.url();
-            await frame.$eval(selector,img=>img.click());
             await page.waitForFunction(()=>document.querySelector('#esc-vb-image-editor')?.style.display==='block' &&
               !document.querySelector('#esc-vb-image-choose')?.disabled,{timeout:22000});
             const before=await page.$eval('#esc-vb-seo-html-alt',el=>el.value);

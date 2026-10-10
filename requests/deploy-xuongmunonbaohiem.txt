@@ -1,33 +1,4 @@
-Deploy tested Astro master PR #47 merge 215fb4e661b934662aa599cf5c616a77ee851fcc. Visual Builder snapshot+selective live section refresh, dedicated WordPress Media Library originals, legacy public /preview still live. Source contract QA 37952287820 PASS, architecture QA 37952240993 PASS, focused Astro QA 37953488838 PASS, FTP-layout SSR QA 37953501673 PASS. Run production smoke and Chrome visual QA after deploy; no additional build if run already active. 2026-10-09.
-2026-10-10: Deploy Astro master 0ebad15134d9ec8e707d6da00e2cc5c845504ebe with Builder iframe renewed-ticket URL synchronization (PR #48); source verification PASS run 37993317015.
-2026-10-10: Astro production release PR #49 master 2f0a4d3522fb36ae14e9a3da3f03a6a27356efba. Preserve manually refreshed home_00/home_01 together via refresh_tables while selecting sections never auto-refreshes. Hub phase2 PASS 37995581229.
-2026-10-10: Deploy Astro production master 0ed0e664527e5642a0f74084befd522ebc4aaa3f (PR #50). Live WordPress Page HTML + ESC Table snapshots on first access/F5, version-cache, scoped up to four-table batches, detecting changes and bulk button. Source QA PASS 37999777343, backend contract PASS 37999959018; PHP master 5f113aa051db87b0d4f91b0e9e3edfd206b8f6fd deployed run 37999840555.
-2026-10-10: Deploy Astro master 7a94345f67cc510053a2667e14850d50b0fa9af7 PR #51. Only referenced live Product records for home_04...08; no whole WooCommerce fetch. Source regression PASS 38001037925, backend PHP master 70cbb952de7a027ee7209177018759db6f4cb359 deployment run 38001098765. Smoke and browser QA after FTP.
-2026-10-10: Deploy Astro master 22f8c7882ebba7781393a5806a379514cccb293d PR52. Fix transient WordPress /esc-builder/v1/verify timeout incorrectly reported HTTP403/CSP frame-ancestors none; retry bounded and distinguish HTTP503 with visible iframe recovery. Phase2 verification PASS 38001748870. Previous Product live snapshots already deployed.
-2026-10-10: Deploy Astro master f5340cfa162523cda76bb5377903cd71d4e2264c PR #53 after PHP phase2 editor FTP PASS 38012449355, WP read/no-op/conflict QA PASS 38012656717. Private iframe reversible title text-node previews for home_00/home_01, no production customer data writes; run build and FTP once.
-2026-10-10: Deploy Astro master 82338d854fb485370f58978886cbc85ccfb673d1. PR #54 merges github fcdf65a3 and synced production. Builder local saved title overlays without iframe navigation; PHP deploy will follow. Avoid unrelated changes.
-2026-10-10: Builder preview follow-up PR55, Astro master d7cc76fe. Include mobile title metadata annotations and cached preview status.
-2026-10-10: Deploy Astro master e04aa5a67f90606170c8437f64626ed7536ec1d0 for Visual Builder home_01 heading edit. PR56. Source QA run 38027574839 success. PHP deploy will follow after Astro.
-2026-10-10: Deploy Astro master 6dd7c5c7a66d1b6087dd2171e8f37b7f18a1179a (PR57) for home_02 Visual Builder preview, safe HTML description paragraphs and temporary draft cancellation. PHP Visual Builder FTP PASS run 38030303115, source QA PASS run 38030203884. FTP once and verify.
-
-2026-10-10: Deploy Astro master be50e7bd943894be065b89afd4ed078d0479a2e2 (PR58) for Visual Builder home_03..13 safe section heading/static text preview; PHP plugin FTP PASS 38032726547; focused tests PASS 38032621591. Single build and FTP.
-
-2026-10-10: Deploy Astro master 55dda80c6e78c5b6fd3863dfa9a9765638ec172d (PR59) for WordPress Page Editor text preview and selection; PHP FTP PASS run 38037730850; API QA PASS 38037829675; source QA PASS 38037620093. One build + FTP then Chrome QA.
-
-2026-10-10: Deploy Astro master aee7b896 (PR60) for WordPress Editor LABEL/leaf click selection fix. PHP cache FTP 38038641396 successful, source QA 38038766885 PASS. Build/deploy once and smoke.
-
-2026-10-10: Deploy Astro master af3e8244950ac8ef7f8149271412a8881c2ae4c1 PR61 for precise WordPress Editor substring Range selection; PHP FTP PASS run 38039999048, source QA PASS run 38040056934. One build and upload, then Chrome test. No customer content changes.
-
-2026-10-10: Deploy Astro master 5667a3476e4b3eb677dce1b8ff05eca779eca182 PR62, iframe draft ACK now includes nodeIndex so Save unlocks on an exact partial match. PHP master bf31f5b0 FTP PASS run 38040547324; source QA PASS 38040487351. Single build/upload + production Chrome partial draft/cancel regression.
-
-2026-10-10: Deploy Astro master ff3587635c4b98546179d0f2373420c6ffd8403e PR63. Fix homepage home_02 video heading click/drag selecting exact video_title field; backend PHP master b403f2b3 FTP verified PASS run 38043274083; source QA run 38043212953 PASS. Single Astro build and FTP, post-deploy Chrome QA. Preserve all user content.
-
-2026-10-10: Deploy Astro master 1800e41d3b514e7508667efc4f45d50f8e0b97dd PR64 for home_01 editable images: six stable gallery row handles, iframe image preview/Cancel and first-image background sync. PHP backend FTP PASS 38046468762 and image source contract PASS 38046582445 (6 rows; security guards). Source QA PASS 38046405281. Single build/FTP, then production Chrome image QA; no customer data writes.
-
-2026-10-10: Deploy Astro master 998e33e3d7c1ca9acaedd8db29fa3b0ddc056e98 PR65 for home_01 ALT draft/ack and Cancel. WordPress PHP ALT-only/image+ALT master 5b3e84b0 FTP PASS 38053939423; source QA PASS 38053805525; production no-write ALT security contract PASS 38054109784. Build/FTP once, smoke and Chrome non-writing ALT preview QA.
-
-2026-10-10: Deploy Astro master 33b4f5838e7a66f50050bba9e416ed8821d64184 PR66. ESC Visual Builder multi-static-image support for home_02 img, home_09 icon/background, home_11 img, home_13 img; existing home_01 unchanged. Backend PHP master bb312d3f FTP PASS 38056848545; live field+row contract QA PASS 38056973456, no user data writes; source QA PASS 38056755133. One build/FTP and smoke, then Chrome QA without save-image write.
-
-2026-10-10: Single Astro master build/FTP for PR67 merged SHA 5869044804313618b77ba9d0c3e0426f61e7e55f. Enable Visual Builder editing of home_00 banner images and Alt with both desktop/mobile <picture><source srcset> preview and exact Cancel, preserve row IDs. PHP b9a36399 FTP SUCCESS 38058851957, source QA SUCCESS 38058766063, production no-write API contract SUCCESS 38058982788. No customer content changes. After deploy run Chrome banner QA once.
-
-2026-10-10: Deploy Astro master 6d6a5d4df0af4c944073adc328b661c7c93dec93 PR68 once. Builder home_13 prev/next slider clicks bypass capture blocker while logo clicks stay editable. Targeted regression 38060776850 PASS. No PHP edits, no customer data writes. After FTP, run focused browser QA for navigation + selection behind carousel.
+Deploy Blue Sea Astro production with ESC Visual Builder Auto Discovery + cross-Page HTML images/Alt.
+Astro master=57c5e7490aa055c5612159687978bde8080c08a0; full build QA PASS run 38070095151.
+PHP production addon PASS run 38069916645.
+Use existing production build/FTP pipeline and smoke tests. Do not rerun earlier home_00/home_13 Chrome QA.

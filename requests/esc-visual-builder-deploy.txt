@@ -17,3 +17,5 @@ Deploy PHP Builder source resolver fix cbac568d1b7638312df5cea2043ed0e73cae7027 
 2026-10-10: Apply one-line WordPress Editor empty-region null guard (PHP master 98613ff8), avoiding JavaScript exception when selected HTML part has no editable text. Upload plugin only; do not rerun Astro build or modify customer content.
 
 2026-10-10: Publish PHP master c96ea7d0 Page manifest reuse to reduce repeated WordPress API calls when clicking several Editor text nodes. Code QA 38038599058 success. Deploy only WP plugin, Astro unchanged.
+
+2026-10-10: Deploy selected-only text edit WordPress backend f0cccd0e, page-text.php and text-editor-ui.php. Source QA run 38039816851 PASS, no customer content changes. Upload plugin via FTP and byte-verify; do not redeploy Astro yet.

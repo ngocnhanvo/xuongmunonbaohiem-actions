@@ -96,6 +96,22 @@ jobs:
             await attachments[Math.min(1,attachments.length-1)].click({delay:40});
             await page.waitForFunction(()=>!document.querySelector('.media-modal .media-button-select')?.disabled,
               {timeout:12000});
+            const attachmentInfo=await page.evaluate(()=>{
+              const wp=window.wp;
+              const frame=wp?.media?.frame;
+              const model=frame?.state?.()?.get?.('selection')?.first?.();
+              const a=model?.toJSON?.()||{};
+              const url=String(a.url||'');
+              return {
+                globalFrame:!!frame,selected:!!model,
+                idType:typeof a.id,idInteger:Number.isSafeInteger(a.id),
+                mime:a.mime || '',hasUrl:!!url,
+                urlScheme:url.startsWith('https://')?'https':url.startsWith('http://')?'http':
+                  url.startsWith('/')?'relative':'other',
+                urlHostMatch:(()=>{try{return new URL(url,location.href).host===location.host}catch{return false}})()
+              };
+            });
+            console.log('HOME01_MEDIA_ATTACHMENT_SHAPE='+JSON.stringify(attachmentInfo));
             await page.click('.media-modal .media-button-select');
             await new Promise(r=>setTimeout(r,2000));
             const diagnostics=await page.evaluate(()=>{

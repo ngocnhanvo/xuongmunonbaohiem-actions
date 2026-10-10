@@ -88,6 +88,17 @@ jobs:
               {timeout:45000});
             const source=await page.$eval('#esc-vb-image-preview',el=>el.getAttribute('src'));
             if(!source || !source.startsWith('https://'))throw Error('Media preview source invalid');
+            await page.waitForFunction(()=>{
+              const panel=document.getElementById('esc-vb-image-seo');
+              return panel?.style.display==='block' &&
+                ['html-alt','media-alt','title','caption','description'].every(key=>
+                  !!document.getElementById('esc-vb-seo-'+key)?.textContent?.trim());
+            },{timeout:15000});
+            const originalSeo=await page.evaluate(()=>({
+              alt:document.getElementById('esc-vb-seo-html-alt').textContent,
+              mediaAlt:document.getElementById('esc-vb-seo-media-alt').textContent,
+              status:document.getElementById('esc-vb-seo-status').textContent
+            }));
             await page.click('#esc-vb-image-choose');
             await page.waitForSelector('.media-modal',{visible:true,timeout:20000});
             await page.waitForFunction(()=>document.querySelectorAll('.media-modal .attachments .attachment').length>1,
@@ -130,6 +141,12 @@ jobs:
             console.log('HOME01_IMAGE_MEDIA_DIAGNOSTIC='+JSON.stringify(diagnostics));
             await page.waitForFunction(()=>!document.querySelector('#esc-vb-image-save')?.disabled,
               {timeout:10000});
+            const draftSeo=await page.evaluate(()=>({
+              alt:document.getElementById('esc-vb-seo-html-alt').textContent,
+              status:document.getElementById('esc-vb-seo-status').textContent
+            }));
+            if(draftSeo.alt!==originalSeo.alt || !draftSeo.status.includes('chưa lưu'))
+              throw Error('Pending Media SEO preview changed actual ESC Table alt or lost draft status');
             const draft=await frame.$eval(imgSelector,img=>({
               src:img.getAttribute('src'),srcset:img.getAttribute('srcset')
             }));
@@ -142,6 +159,15 @@ jobs:
               const img=document.querySelector(selector);
               return img?.getAttribute('src')===src && img.getAttribute('srcset')===srcset;
             },{timeout:12000},{selector:imgSelector,...original});
+            const restoredSeo=await page.evaluate(()=>({
+              alt:document.getElementById('esc-vb-seo-html-alt').textContent,
+              mediaAlt:document.getElementById('esc-vb-seo-media-alt').textContent,
+              status:document.getElementById('esc-vb-seo-status').textContent
+            }));
+            if(restoredSeo.alt!==originalSeo.alt ||
+               restoredSeo.mediaAlt!==originalSeo.mediaAlt ||
+               restoredSeo.status!==originalSeo.status)
+              throw Error('SEO metadata did not restore after Cancel');
             const restoredBackground=await frame.$eval('[data-esc-builder-gallery-background="home_01"]',el=>el.getAttribute('srcset'));
             if(restoredBackground!==oldBackground)throw Error('Gallery background did not restore after Cancel');
             if(frame.url()!==frameUrl)throw Error('Gallery preview unexpectedly reloaded iframe');
@@ -151,6 +177,7 @@ jobs:
               imageSelected:true,mediaLibraryOpened:true,
               previewImmediate:true,srcsetCleared:true,
               backgroundSynced:true,cancelRestored:true,
+              seoFieldsVisible:true,seoPreviewSynced:true,seoCancelRestored:true,
               iframeReloaded:false,customerWrites:0
             }));
           }finally{await browser.close();}

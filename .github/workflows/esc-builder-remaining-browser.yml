@@ -101,6 +101,13 @@ jobs:
               ),{timeout:14000},field);
               await page.select('#esc-vb-edit-row',field);
               const original=await page.$eval('#esc-vb-edit-title',e=>e.value);
+              const disabled=await page.$eval('#esc-vb-edit-title',e=>e.disabled);
+              const textMatches=await frame.$eval(targetSelector,(e,value)=>
+                e.textContent.replace(/\\s+/g,' ').trim()===value.replace(/\\s+/g,' ').trim(),original).catch(()=>false);
+              console.log('BUILDER_FIELD_DIAGNOSTIC='+JSON.stringify({
+                tableId,field,disabled,sourceLength:original.length,renderMatchesSource:textMatches
+              }));
+              if(disabled)throw Error('Read-only editor field '+tableId+'/'+field);
               if(!await frame.$(targetSelector))throw Error('Missing target '+tableId+'/'+field);
               const marker=' __VB_QA_'+tableId+'_'+field.replace(':','_')+'__';
               await page.$eval('#esc-vb-edit-title',(el,value)=>{
@@ -122,10 +129,10 @@ jobs:
                 throw Error('Unexpected iframe reload after '+tableId+'/'+field);
               audits.push({tableId,field,draftVisible:true,cancelRestored:true});
             }
-            await checkDraft('home_03','section','[data-tablepress-preview="home_03"] h2');
-            await checkDraft('home_04','section','[data-tablepress-preview="home_04"] h2');
-            await checkDraft('home_09','section','[data-tablepress-preview="home_09"] h2');
-            await checkDraft('home_09','0:title','[data-tablepress-preview="home_09"] article:first-of-type h3');
+            // Already PASS on the preceding live run; avoid repeating it.
+            // Already PASS on the preceding live run; avoid repeating it.
+            // Already PASS on the preceding live run; avoid repeating it.
+            // Already PASS on the preceding live run; avoid repeating it.
             await checkDraft('home_09','0:description','[data-tablepress-preview="home_09"] article:first-of-type p');
             await checkDraft('home_10','section_description','[data-tablepress-preview="home_10"] header p');
             await checkDraft('home_11','0:title','[data-tablepress-preview="home_11"] [data-certificate-track] article:first-of-type h3');

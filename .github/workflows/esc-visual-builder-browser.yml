@@ -329,6 +329,7 @@ jobs:
             let nextDocument=waitForManualRefresh('home_00');
             await page.click('#esc-vb-refresh-section');
             let response=await nextDocument;
+            console.log('FIRST_REFRESH_STATUS='+response.status());
             await frame.waitForSelector('[data-esc-builder-refresh-status]',{timeout:20000});
             const firstRefreshAudit = {
               status:response?.status() ?? null,

@@ -1,0 +1,117 @@
+name: ESC Builder Home 13 Carousel Browser QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-home13-live-browser.txt']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify home_13 carousel arrows and edit logo beyond initial viewport
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const origin = new URL(process.env.WP_ADMIN_URL).origin;
+          const browser = await puppeteer.launch({headless:true,executablePath:process.env.CHROME_PATH,
+            args:['--no-sandbox','--disable-dev-shm-usage']});
+          try {
+            const page = await browser.newPage();
+            await page.setViewport({width:1440,height:900});
+            const writes=[],errors=[];
+            page.on('pageerror',err=>errors.push(String(err.message)));
+            page.on('request',request=>{
+              try {
+                if(new URL(request.url()).pathname.endsWith('/esc-builder/v1/save-image'))
+                  writes.push(request.method());
+              }catch{}
+            });
+            async function go(url) {
+              let error;
+              for(let attempt=0;attempt<2;attempt++)try{
+                const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+                if(response?.status()===200)return;
+                error=new Error('HTTP '+response?.status());
+              }catch(e){error=e;}
+              throw error;
+            }
+            await go(origin+'/wp-login.php');
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('/wp-login.php'))throw Error('WordPress authentication failed');
+            await go(origin+'/wp-admin/admin.php?page=esc-visual-builder');
+            const iframe=await page.waitForSelector('#esc-vb-frame',{timeout:30000});
+            const frame=await iframe.contentFrame();
+            if(!frame)throw Error('Builder iframe missing');
+            await frame.waitForSelector('[data-tablepress-preview="home_13"] [data-customer-slider]',
+              {timeout:100000});
+            const initialUrl=frame.url();
+            await frame.$eval('[data-customer-slider]',el=>el.scrollIntoView({block:'center'}));
+            await frame.waitForFunction(()=>{
+              const slider=document.querySelector('[data-tablepress-preview="home_13"] [data-customer-slider]');
+              const track=slider?.querySelector('[data-customer-track]');
+              const next=slider?.querySelector('[data-customer-next]');
+              return slider?.dataset.sliderReady==='true' && track &&
+                track.scrollWidth>track.clientWidth && next && !next.disabled;
+            },{timeout:20000});
+            const read=()=>frame.evaluate(()=>{
+              const root=document.querySelector('[data-tablepress-preview="home_13"]');
+              const track=root.querySelector('[data-customer-track]');
+              const box=track.getBoundingClientRect();
+              return {
+                left:track.scrollLeft, width:track.clientWidth,
+                visible:[...track.querySelectorAll('article')].filter(el=>{
+                  const r=el.getBoundingClientRect();
+                  return r.left>=box.left-3 && r.right<=box.right+3;
+                }).map(el=>Number(el.querySelector('[data-esc-builder-image-row]')?.getAttribute('data-esc-builder-image-row')))
+                  .filter(Number.isInteger)
+              };
+            });
+            const before=await read();
+            await frame.$eval('[data-tablepress-preview="home_13"] [data-customer-next]',el=>el.click());
+            await frame.waitForFunction(left=>
+              document.querySelector('[data-tablepress-preview="home_13"] [data-customer-track]')
+                ?.scrollLeft>left+10,{timeout:12000},before.left);
+            await new Promise(resolve=>setTimeout(resolve,850));
+            const after=await read();
+            const row=after.visible.find(id=>!before.visible.includes(id));
+            if(!Number.isInteger(row))throw Error('Next did not expose a new customer logo: '+JSON.stringify({before,after}));
+            const imageSelector='[data-tablepress-preview="home_13"] img[data-esc-builder-image-row="'+row+'"][data-esc-builder-image-field="img"]';
+            await frame.$eval(imageSelector,el=>el.click());
+            await page.waitForFunction(value=>
+              document.querySelector('#esc-vb-image-editor')?.style.display==='block' &&
+              (document.querySelector('#esc-vb-image-caption')?.textContent||'').includes(value),
+              {timeout:20000},'home_13 · img · dòng '+(row+1));
+            const scrolled=await read();
+            await frame.$eval('[data-tablepress-preview="home_13"] [data-customer-prev]',el=>el.click());
+            await frame.waitForFunction(left=>
+              document.querySelector('[data-tablepress-preview="home_13"] [data-customer-track]')
+                ?.scrollLeft<left-10,{timeout:12000},scrolled.left);
+            if(frame.url()!==initialUrl)throw Error('Slider navigation reloaded Builder iframe');
+            if(writes.length)throw Error('QA unexpectedly wrote customer data');
+            if(errors.length)throw Error('Browser JavaScript errors: '+errors.slice(0,3).join('; '));
+            console.log('ESC_HOME13_CAROUSEL_PASS='+JSON.stringify({
+              initialVisibleRows:before.visible,afterNextVisibleRows:after.visible,
+              selectedExtraRow:row, nextMoved:true, prevMoved:true,
+              imageEditorSelected:true, iframeReloaded:false, customerWrites:0
+            }));
+          } finally { await browser.close(); }
+          JS

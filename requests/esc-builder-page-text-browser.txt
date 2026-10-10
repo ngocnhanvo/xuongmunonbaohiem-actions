@@ -4,3 +4,5 @@
 2026-10-10: Retry Browser QA after correcting selector enumeration (prior run 38038218245 stopped before first candidate; Page DOM shows 1 editor part with 4 text nodes). No writes.
 
 2026-10-10: Fix workflow YAML truncated selector before runtime (runs 38038307570, 38038319671 had no jobs). DOM-index click test now valid; no writes.
+
+2026-10-10: Retry Chrome QA after removing duplicate malformed YAML tail; previous workflow compile failed before any job. Valid run script terminates at first JS here-doc. No customer data writes.

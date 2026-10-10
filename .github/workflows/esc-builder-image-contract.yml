@@ -73,6 +73,20 @@ jobs:
                 'has_data_src':'data-src=' in data.lower(),
                 'contains_url_key':'url' in data.lower()
               }
+            img_rows=[]
+            for item in entries:
+              node=BeautifulSoup(str(item.get('img') or ''),'html.parser').find('img')
+              src=(node.get('src') or '') if node else ''
+              img_rows.append({
+                'src_length':len(src),
+                'src_absolute':src.startswith('https://') or src.startswith('http://'),
+                'src_root_relative':src.startswith('/') and not src.startswith('//'),
+                'src_protocol_relative':src.startswith('//'),
+                'src_data':src.startswith('data:'),
+                'src_scheme_other':':' in src.split('/')[0],
+                'attributes':list(node.attrs.keys()) if node else []
+              })
+            print('HOME01_IMG_SOURCE_LOCATOR='+str(img_rows))
             print('HOME01_SOURCE_SHAPE='+str({
               'fields':list(entries[0].keys()) if entries else [],
               'cells':[{'index':i,'image':describe(row.get('image')),

@@ -101,6 +101,12 @@ jobs:
             imageScript=imageScript.replaceAll(marker,'"test-value"');
           }
           if(imageScript.includes('<?php')) throw Error('Unsubstituted gallery PHP token');
+          if(!imageScript.includes("rawUrl.startsWith('/')") ||
+             !imageScript.includes('new URL(rawUrl,window.location.origin).href'))
+            throw Error('Media Library root-relative source normalization missing');
+          if(new URL('/wp-content/uploads/2026/10/kit.webp','https://admin.example.test').href!==
+             'https://admin.example.test/wp-content/uploads/2026/10/kit.webp')
+            throw Error('Media URL normalization fixture failed');
           new Function(imageScript);
           const home01=readFileSync('source/src/astro/tablepress/Home_01.astro','utf8');
           if(!home01.includes('data-esc-builder-image-row={item.row}') ||

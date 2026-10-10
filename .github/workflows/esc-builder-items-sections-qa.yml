@@ -1,0 +1,66 @@
+name: ESC Builder Items and Section Order QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-items-sections-qa.txt']
+permissions:
+  contents: read
+concurrency:
+  group: esc-builder-items-sections-qa
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: php
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: astro
+      - name: Validate WordPress module syntax, item save and section order
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in esc-visual-builder.php includes/item-manager.php includes/section-order.php includes/item-section-ui.php; do
+            php -l "php/wp-content/plugins/esc-visual-builder/$module"
+          done
+          php php/wp-content/plugins/esc-visual-builder/tests/items-and-sections.test.php
+          php php/wp-content/plugins/esc-visual-builder/tests/item-ui-script.test.php > /tmp/esc-vb-item-ui.js
+          node --check /tmp/esc-vb-item-ui.js
+          grep -Fq 'esc-vb-item-form' /tmp/esc-vb-item-ui.js
+      - uses: pnpm/action-setup@v4
+        with: {version: 9.15.9}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: astro/pnpm-lock.yaml
+      - name: Install Astro dependencies
+        working-directory: astro
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Verify no iframe reload, safe section order, old Builder features
+        working-directory: astro
+        run: pnpm exec vitest run src/lib/wordpress/builderSectionDrafts.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts src/lib/wordpress/builderProductListing.test.ts
+      - name: Compile full Astro development branch (no deploy)
+        working-directory: astro
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENV_FILE"
+          printf '%s\n' "$ENV_FILE" > .env
+          pnpm run build-git
+          node --check dist/server/entry.mjs
+          echo "Builder item and section order source QA: PASS"

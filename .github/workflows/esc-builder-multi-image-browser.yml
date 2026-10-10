@@ -1,0 +1,118 @@
+name: ESC Builder Multi Image Chrome QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-multi-image-browser.txt']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Test expanded image ALT drafts and Cancel without WordPress writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const origin=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({headless:true,executablePath:process.env.CHROME_PATH,
+            args:['--no-sandbox','--disable-dev-shm-usage']});
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1440,height:900});
+            const writes=[],errors=[];
+            page.on('request',req=>{try{
+              const path=new URL(req.url()).pathname;
+              if(path.endsWith('/esc-builder/v1/save-image'))writes.push(req.method());
+            }catch{}});
+            page.on('pageerror',error=>errors.push(error.message));
+            const go=async url=>{let last;
+              for(let i=0;i<2;i++)try{
+                const res=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+                if(res?.status()===200)return;
+                last=Error('HTTP '+res?.status());
+              }catch(e){last=e;}throw last;
+            };
+            await go(origin+'/wp-login.php');
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('/wp-login.php'))throw Error('WordPress login failed');
+            await go(origin+'/wp-admin/admin.php?page=esc-visual-builder');
+            const element=await page.waitForSelector('#esc-vb-frame',{timeout:30000});
+            const frame=await element.contentFrame();
+            if(!frame)throw Error('No Builder iframe');
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:100000});
+            const originalUrl=frame.url();
+            const cases=[
+              {table:'home_02',field:'img',row:0},
+              {table:'home_09',field:'icon',row:0},
+              {table:'home_09',field:'background',row:0},
+              {table:'home_11',field:'img',row:0},
+              {table:'home_13',field:'img',row:0}
+            ];
+            const results=[];
+            for(const item of cases){
+              const root='[data-tablepress-preview="'+item.table+'"] ';
+              const imgSelector=root+'img[data-esc-builder-image-row="'+item.row+'"][data-esc-builder-image-field="'+item.field+'"]';
+              await frame.waitForSelector(imgSelector,{timeout:20000});
+              const before=await frame.$eval(imgSelector,el=>({
+                alt:el.getAttribute('alt'),src:el.getAttribute('src'),srcset:el.getAttribute('srcset')
+              }));
+              const clickSelector=item.field==='background' ?
+                root+'[data-esc-builder-bg-edit]' : imgSelector;
+              const canClick=await frame.$eval(clickSelector,el=>{
+                const visible=getComputedStyle(el).display!=='none';
+                el.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+                return visible;
+              });
+              if(!canClick)throw Error('Builder image control not visible: '+item.table+'/'+item.field);
+              await page.waitForFunction((value)=>
+                document.querySelector('#esc-vb-image-editor')?.style.display==='block' &&
+                (document.querySelector('#esc-vb-image-caption')?.textContent||'').includes(value) &&
+                !document.querySelector('#esc-vb-seo-html-alt')?.disabled,
+                {timeout:45000},item.table+' · '+item.field+' · dòng 1');
+              const initial=await page.$eval('#esc-vb-seo-html-alt',el=>el.value);
+              const next='__ESC_MULTI_IMAGE_ALT_QA_'+item.table+'_'+item.field+'__';
+              await page.$eval('#esc-vb-seo-html-alt',(el,value)=>{
+                el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));
+              },next);
+              await frame.waitForFunction(({selector,alt})=>
+                document.querySelector(selector)?.getAttribute('alt')===alt,
+                {timeout:16000},{selector:imgSelector,alt:next});
+              await page.waitForFunction(()=>
+                !document.querySelector('#esc-vb-image-save')?.disabled,
+                {timeout:12000});
+              await page.click('#esc-vb-image-cancel');
+              await frame.waitForFunction(({selector,old})=>{
+                const img=document.querySelector(selector);
+                return img?.getAttribute('alt')===old.alt &&
+                  img.getAttribute('src')===old.src && img.getAttribute('srcset')===old.srcset;
+              },{timeout:14000},{selector:imgSelector,old:before});
+              if(await page.$eval('#esc-vb-seo-html-alt',el=>el.value)!==initial)
+                throw Error('ALT sidebar not restored '+item.table+'/'+item.field);
+              if(frame.url()!==originalUrl)throw Error('iframe reloaded');
+              results.push({table:item.table,field:item.field,row:item.row,
+                sourceMatched:true,altDraft:true,saveEnabled:true,cancelRestored:true});
+            }
+            if(writes.length)throw Error('QA attempted a customer image save');
+            if(errors.length)throw Error('Browser JS error: '+errors.slice(0,3).join('; '));
+            console.log('ESC_MULTI_IMAGE_CHROME_PASS='+JSON.stringify({
+              items:results,customerWrites:0,iframeReloaded:false
+            }));
+          }finally{await browser.close();}
+          JS

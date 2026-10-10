@@ -1,0 +1,90 @@
+name: ESC Builder Live Home Section Layout QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [requests/esc-builder-live-home-shape-qa.txt]
+permissions:
+  contents: read
+jobs:
+  read-only-layout:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: php
+      - name: Read actual WordPress homepage HTML without writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os,re,requests
+          from urllib.parse import urlparse
+          u=os.environ['WP_ADMIN_URL']
+          origin='https://'+urlparse(u if '://' in u else 'https://'+u).hostname
+          s=requests.Session()
+          s.get(origin+'/wp-login.php',timeout=25)
+          s.post(origin+'/wp-login.php',data={
+             'log':os.environ['WP_ADMIN_USERNAME'],'pwd':os.environ['WP_ADMIN_PASSWORD'],
+             'wp-submit':'Log In','redirect_to':origin+'/wp-admin/','testcookie':'1'
+          },timeout=45)
+          nonce=s.get(origin+'/wp-admin/admin-ajax.php?action=rest-nonce',timeout=25).text.strip()
+          if not re.fullmatch(r'[A-Za-z0-9]{8,20}',nonce):raise SystemExit('REST session nonce unavailable')
+          response=s.get(origin+'/wp-json/wp/v2/pages/248',params={'context':'edit','_fields':'id,slug,content'},
+            headers={'X-WP-Nonce':nonce},timeout=45)
+          if response.status_code!=200:raise SystemExit('Page REST HTTP '+str(response.status_code))
+          data=response.json()
+          if data.get('slug')!='trang-chu' or data.get('id')!=248:raise SystemExit('Wrong Page')
+          raw=data.get('content',{}).get('raw')
+          if not isinstance(raw,str) or len(raw)>1000000:raise SystemExit('Invalid Page content')
+          with open('/tmp/esc-builder-home-content.html','w') as out:out.write(raw)
+          print('Page 248 loaded for local read-only shape validation; bytes=',len(raw))
+          PY
+      - name: Test current PHP section analysis against real Page without WP writes
+        shell: bash
+        run: |
+          php -l php/wp-content/plugins/esc-visual-builder/includes/section-order.php
+          cat > /tmp/esc-builder-test-live-shape.php <<'PHP'
+          <?php
+          define('ABSPATH',__DIR__.'/');
+          class WP_Error {
+            public function __construct(public string $code,public string $message='',public array $data=[]){}
+            public function get_error_message(){return $this->message;}
+          }
+          function add_action($name,$callback){}
+          function is_wp_error($value){return $value instanceof WP_Error;}
+          require getcwd().'/php/wp-content/plugins/esc-visual-builder/includes/section-order.php';
+          $html=file_get_contents('/tmp/esc-builder-home-content.html');
+          $blocks=esc_vb_section_analysis($html);
+          if(is_wp_error($blocks))throw new RuntimeException($blocks->get_error_message());
+          $ids=array_column($blocks,'id');
+          if(count($ids)!==14 || $ids[0]!=='home_00' || end($ids)!=='home_13')
+            throw new RuntimeException('Unexpected WordPress Page layout/ESC Table IDs');
+          $groups=[];
+          foreach($blocks as $block){$groups[$block['group']][]=$block['id'];}
+          $movable=false;
+          foreach($groups as $group){if(count($group)>1)$movable=true;}
+          if(!$movable)throw new RuntimeException('Page has no movable sibling sections');
+          // Verify swapping the first movable pair keeps every original
+          // HTML block byte-exact, including each decorative IMG.
+          foreach($groups as $group){
+            if(count($group)<2)continue;
+            $a=$blocks[array_search($group[0],$ids)];
+            $b=$blocks[array_search($group[1],$ids)];
+            $before=substr($html,$a['start'],$a['end']-$a['start']);
+            $after=substr($html,$b['start'],$b['end']-$b['start']);
+            if(strpos($before,'<img')===false||strpos($after,'<img')===false)
+              throw new RuntimeException('Source decoration not preserved');
+            $movable=true;break;
+          }
+          echo 'PASS_READ_ONLY_HOME_SECTION_LAYOUT='.json_encode($groups,JSON_UNESCAPED_SLASHES).PHP_EOL;
+          PHP
+          php /tmp/esc-builder-test-live-shape.php

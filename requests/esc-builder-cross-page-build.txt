@@ -1,1 +1,1 @@
-Verify the complete Blue Sea Astro build on github branch 2a077692ad83c403146e2b8f682571248a958219 after cross-page images and Auto Discovery. Build-only, no FTP, no production deploy.
+Final full build of Blue Sea Astro github 57c5e7490aa055c5612159687978bde8080c08a0, including original WordPress image URL fixes. No deploy, no FTP. Previous build passed at earlier revision; validate this changed revision only.

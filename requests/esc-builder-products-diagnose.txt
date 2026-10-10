@@ -1,1 +1,1 @@
-Final Chrome production assertion: Page Sản phẩm ID 53504 Builder must match /preview/san-pham banner, heading AND first product. Astro master 64e9af5ea5fed68b1a6275a046c1777500d07b4f; deploy PASS 38072998260. No writes.
+Read-only debug after product source parity test failed 38073140832: print exact Builder live/fallback source status with same WordPress Page 53504, no writes or build.

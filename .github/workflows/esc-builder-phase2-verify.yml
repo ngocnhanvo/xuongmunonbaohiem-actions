@@ -72,14 +72,22 @@ jobs:
           node --input-type=module <<'NODE'
           import {readFileSync} from 'node:fs';
           const astro=readFileSync('source/src/pages/esc-builder/preview/[pageId].astro','utf8');
-          const script=astro.match(/<script is:inline define:vars=\\{\\{[^>]+>([\\s\\S]*?)<\\/script>/);
-          if (!script) throw Error('Astro Builder inline script not found');
-          new Function(script[1]);
+          const previewStart=astro.indexOf('<script is:inline define:vars=');
+          if (previewStart<0) throw Error('Astro Builder inline script not found');
+          const scriptStart=astro.indexOf('>',previewStart)+1;
+          const scriptEnd=astro.indexOf('</script>',scriptStart);
+          if (scriptEnd<=scriptStart) throw Error('Astro Builder closing tag missing');
+          new Function(astro.slice(scriptStart,scriptEnd));
           const php=readFileSync('backend/wp-content/plugins/esc-visual-builder/includes/text-editor-ui.php','utf8');
-          const editor=php.match(/<script>([\\s\\S]*?)<\\/script>/);
-          if (!editor) throw Error('WordPress title editor inline script not found');
-          const stubbed=editor[1].replace(/<\\?php echo[^>]*\\?>/g,'"test-value"');
-          new Function(stubbed);
+          const phpScriptStart=php.indexOf('<script>')+8;
+          const phpScriptEnd=php.indexOf('</script>',phpScriptStart);
+          if (phpScriptStart<8 || phpScriptEnd<=phpScriptStart) throw Error('Editor inline script not found');
+          let editor=php.slice(phpScriptStart,phpScriptEnd);
+          for(const variable of ['rest_read','rest_save','rest_nonce','astro_origin','page_id']){
+            editor=editor.replaceAll('<?php echo $'+variable+'; ?>','"test-value"');
+          }
+          if(editor.includes('<?php')) throw Error('Unsubstituted PHP marker in UI script');
+          new Function(editor);
           console.log('Builder Astro + WordPress editor inline JS syntax PASS');
           NODE
       - name: Verify preview isolation

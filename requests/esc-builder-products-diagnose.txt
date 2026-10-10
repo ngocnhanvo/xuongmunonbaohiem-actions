@@ -1,1 +1,1 @@
-Read-only production QA: compare Products Page in Builder and /preview/san-pham, find missing hero banner, main heading and header behavior. Do not save or trigger rebuild.
+Production Chrome assert Products Page 53504 banner + H1 must match /preview/san-pham after Astro master 7c0bdf1e deploy PASS 38072344680. Report any product list source differences; read-only, no writes or duplicate build.

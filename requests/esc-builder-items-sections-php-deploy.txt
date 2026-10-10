@@ -1,0 +1,1 @@
+Deploy backend for approved ESC Table Dynamic Popup and safe section ordering. PHP master=84410f668db08283bcad9074e649cade0e0b1df9. Source QA full build PASS 38081102537 and real Home Page reversible markup PASS 38081160712. FTP exactly plugin entry and three new item/section files, verify bytes. No customer content writes or frontend deploy here.

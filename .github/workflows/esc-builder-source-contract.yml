@@ -130,7 +130,7 @@ jobs:
           # Only perform no-op title saves and known 409 conflict requests.
           # Never change customer data or trigger a build during QA.
           import re
-          nonce_match=re.search(r'const restNonce\\s*=\\s*"([A-Za-z0-9]+)"',page.text)
+          nonce_match=re.search(r'const restNonce\s*=\s*"([A-Za-z0-9]+)"',page.text)
           if not nonce_match: raise SystemExit('Visual Builder edit REST nonce not found')
           wp_nonce=nonce_match.group(1)
           edit_headers={'X-WP-Nonce':wp_nonce}

@@ -1,1 +1,1 @@
-Run Browser QA once for the post-deploy WordPress Editor page. The test must wait for API data before reading the editor input. Read and cancel only; never save content.
+Final browser QA after Astro production PR60 deploy 38038831704 and PHP Page text cache FTP 38038641396. On Page 51979 click a WordPress Editor label or leaf text; assert it selects the correct source row, updates preview on typing, Cancel restores, no iframe navigation, and no customer content write.

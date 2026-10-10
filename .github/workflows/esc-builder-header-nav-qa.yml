@@ -1,0 +1,78 @@
+name: Blue Sea Builder Safe Header Navigation QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/esc-builder-header-nav-qa.txt
+permissions:
+  contents: read
+concurrency:
+  group: bluesea-builder-nav-qa
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: php
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: astro
+      - name: Validate WordPress plugin, parent JS and route constraints
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l php/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path('php/wp-content/plugins/esc-visual-builder/esc-visual-builder.php').read_text()
+          begin=src.index("<<<'JS'\n")+len("<<<'JS'\n")
+          end=src.index("\nJS;",begin)
+          js=src[begin:end]
+          Path('/tmp/esc-builder-parent-nav.js').write_text('('+js+');\n')
+          for token in ['requestSubmit','esc-vb-header-navigate','event.source !== frame.contentWindow',
+                        'event.origin !== previewOrigin','currentPageId','get_page_uri']:
+              if token not in src:raise SystemExit('Missing safe bridge contract: '+token)
+          assert 'DOMContentLoaded' in src, 'Navigation bridge initialized before iframe exists'
+          print('WordPress navigation bridge security checks: PASS')
+          PY
+          node --check /tmp/esc-builder-parent-nav.js
+          grep -Fq "installBuilderHeaderNavLock" astro/src/pages/esc-builder/preview/'[pageId].astro'
+          grep -Fq "data-parent-origin={parentOrigin}" astro/src/pages/esc-builder/preview/'[pageId].astro'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: astro/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: astro
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Test preview navigation and accessibility
+        working-directory: astro
+        run: pnpm exec vitest run src/lib/wordpress/builderHeaderNavLock.test.ts
+      - name: Compile complete Astro site (QA only)
+        working-directory: astro
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENV_FILE"
+          printf '%s\n' "$ENV_FILE" > .env
+          pnpm run build-git
+          node --check dist/server/entry.mjs
+          echo "Builder header navigation QA and full build: PASS"

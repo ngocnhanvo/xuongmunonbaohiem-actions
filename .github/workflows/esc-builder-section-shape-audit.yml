@@ -1,0 +1,55 @@
+name: ESC Builder Page Section Shape Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-section-shape-audit.txt']
+permissions:
+  contents: read
+jobs:
+  read-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Inspect WordPress Page shortcode boundaries without content writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os,re,requests
+          from urllib.parse import urlparse
+          for key in ('WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD'):
+              if not os.getenv(key): raise SystemExit('Missing '+key)
+          url=os.environ['WP_ADMIN_URL']
+          base='https://'+urlparse(url if '://' in url else 'https://'+url).hostname
+          s=requests.Session()
+          s.get(base+'/wp-login.php',timeout=20)
+          s.post(base+'/wp-login.php',data={
+            'log':os.environ['WP_ADMIN_USERNAME'],
+            'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In','redirect_to':base+'/wp-admin/',
+            'testcookie':'1'
+          },timeout=45)
+          nonce=s.get(base+'/wp-admin/admin-ajax.php?action=rest-nonce',timeout=30).text.strip()
+          if not re.fullmatch(r'[a-zA-Z0-9]{8,20}',nonce):
+            raise SystemExit('REST nonce unavailable')
+          headers={'X-WP-Nonce':nonce}
+          for page_id in (53463,53504):
+              r=s.get(base+'/wp-json/wp/v2/pages/'+str(page_id),
+                params={'context':'edit','_fields':'id,slug,content'},
+                headers=headers,timeout=45)
+              print('PAGE',page_id,'status',r.status_code)
+              if r.status_code!=200:continue
+              obj=r.json()
+              raw=obj.get('content',{}).get('raw','')
+              pattern=re.compile(r'\[table\s+id\s*=\s*["\x27]?([a-zA-Z0-9_-]{1,80})(?:["\x27])?\s*/\]',re.I)
+              matches=list(pattern.finditer(raw))
+              gaps=[raw[matches[i].end():matches[i+1].start()] for i in range(len(matches)-1)]
+              print('PAGE_SECTION_AUDIT',page_id,'slug',obj.get('slug'),
+                'table_count',len(matches),'ids',[m.group(1) for m in matches],
+                'non_whitespace_between',sum(bool(g.strip()) for g in gaps),
+                'gap_html_counts',[len(re.findall(r'<[a-zA-Z]',g)) for g in gaps][:30],
+                'start_html_tags',len(re.findall(r'<[a-zA-Z]',raw[:matches[0].start()])) if matches else 0)
+          PY

@@ -194,7 +194,18 @@ jobs:
             const newBackground=await frame.$eval('[data-esc-builder-gallery-background="home_01"]',el=>el.getAttribute('srcset'));
             if(newBackground!==draft.src)throw Error('First-image background was not updated');
             await page.click('#esc-vb-image-cancel');
-            await frame.waitForFunction(({selector,src,srcset})=>{
+            await new Promise(r=>setTimeout(r,1000));
+            const rollback=await frame.$eval(imgSelector,img=>({
+              src:img.getAttribute('src'),srcset:img.getAttribute('srcset'),alt:img.getAttribute('alt')
+            }));
+            console.log('HOME01_COMBINED_CANCEL_DIAGNOSTIC='+JSON.stringify({
+              srcRestored:rollback.src===original.src,
+              srcsetRestored:rollback.srcset===original.srcset,
+              altRestored:rollback.alt===original.alt,
+              originalAltPresent:original.alt!==null,
+              draftImgWasDifferent:draft.src!==original.src
+            }));
+            await frame.waitForFunction(({selector,src,srcset,alt})=>{
               const img=document.querySelector(selector);
               return img?.getAttribute('src')===src && img.getAttribute('srcset')===srcset &&
                 img.getAttribute('alt')===alt;

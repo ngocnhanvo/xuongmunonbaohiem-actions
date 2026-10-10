@@ -1,1 +1,2 @@
 2026-10-10: Inspect only homepage ESC Table home_00..13 image field names and storage shapes. No user data, URLs or secrets printed. Use inventory to safely widen image editing beyond home_01, excluding API-derived images.
+2026-10-10: Retry table schema inventory after learning builder table-batch maximum four IDs per request (run 38056015618 HTTP400). Use four-table chunks and no writes.

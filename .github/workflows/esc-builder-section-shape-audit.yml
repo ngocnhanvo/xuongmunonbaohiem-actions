@@ -11,6 +11,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: php
       - name: Inspect WordPress Page shortcode boundaries without content writes
         env:
           WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
@@ -52,6 +59,8 @@ jobs:
               if r.status_code!=200:continue
               obj=r.json()
               raw=obj.get('content',{}).get('raw','')
+              if obj.get('slug')=='trang-chu':
+                open('/tmp/esc-builder-home-content.raw','w').write(raw)
               pattern=re.compile(r'\[table\s+id\s*=\s*["\x27]?([a-zA-Z0-9_-]{1,80})(?:["\x27])?\s*/\]',re.I)
               matches=list(pattern.finditer(raw))
               gaps=[raw[matches[i].end():matches[i+1].start()] for i in range(len(matches)-1)]
@@ -68,3 +77,62 @@ jobs:
                 'suffix_tags',[m.group(0) for m in re.finditer(r'</?[a-zA-Z][a-zA-Z0-9:-]*',raw[matches[-1].end():])][:18] if matches else [],
                 'start_html_tags',len(re.findall(r'<[a-zA-Z]',raw[:matches[0].start()])) if matches else 0)
           PY
+      - name: Verify exact Home Page wrapped section moves in memory, not WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s /tmp/esc-builder-home-content.raw
+          php -l php/wp-content/plugins/esc-visual-builder/includes/section-order.php
+          php <<'PHP'
+          <?php
+          define('ABSPATH', __DIR__);
+          class WP_Error {
+            public function __construct(public string $code,public string $message=''){}
+            public function get_error_message(){return $this->message;}
+          }
+          class WP_REST_Request {
+            public function __construct(private array $params=[]){}
+            public function get_param($name){return $this->params[$name]??null;}
+          }
+          class TestResponse {
+            public function __construct(public array $data){}
+            public function header($name,$value){}
+          }
+          function rest_ensure_response($value){return new TestResponse($value);}
+          function is_wp_error($obj){return $obj instanceof WP_Error;}
+          function add_action($name,$callback){}
+          function esc_vb_page_text_authorize($req){return $GLOBALS['page'];}
+          function wp_slash($data){return $data;}
+          function wp_update_post($payload,$throw=false){
+            $GLOBALS['page']->post_content=$payload['post_content'];
+            return $payload['ID'];
+          }
+          require 'php/wp-content/plugins/esc-visual-builder/includes/section-order.php';
+          $raw=file_get_contents('/tmp/esc-builder-home-content.raw');
+          $GLOBALS['page']=(object)['ID'=>248,'post_content'=>$raw];
+          $blocks=esc_vb_section_analysis($raw);
+          if(is_wp_error($blocks))throw new RuntimeException($blocks->get_error_message());
+          $ids=array_column($blocks,'id');
+          if(count($blocks)!==14)throw new RuntimeException('Expected exactly 14 original Home Page ESC Table sections');
+          $groups=array_column($blocks,'group');
+          $moveAt=-1;
+          for($i=0;$i<count($groups)-1;$i++){
+            if($groups[$i]===$groups[$i+1]){$moveAt=$i;break;}
+          }
+          if($moveAt<0)throw new RuntimeException('No safely movable sibling section block');
+          $order=$ids;
+          [$order[$moveAt],$order[$moveAt+1]]=[$order[$moveAt+1],$order[$moveAt]];
+          $saved=esc_vb_section_order_save(new WP_REST_Request([
+            'expected_version'=>hash('sha256',$raw),'order'=>$order,
+          ]));
+          if(is_wp_error($saved) || !$saved->data['saved'])throw new RuntimeException('Section move failed');
+          $after=$GLOBALS['page']->post_content;
+          if($after===$raw)throw new RuntimeException('Section move did not change order');
+          $back=esc_vb_section_order_save(new WP_REST_Request([
+            'expected_version'=>hash('sha256',$after),'order'=>$ids,
+          ]));
+          if(is_wp_error($back) || $GLOBALS['page']->post_content!==$raw){
+            throw new RuntimeException('Inverse move did not reproduce identical HTML bytes');
+          }
+          echo 'PASS actual Home Page: 14 sections, safe sibling reorder and byte-exact undo; zero WordPress writes'.PHP_EOL;
+          PHP

@@ -52,9 +52,21 @@ jobs:
             if(page.url().includes('wp-login.php'))throw Error('WordPress login unavailable; no Builder test run');
             const base=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
             await page.goto(base,{waitUntil:'domcontentloaded',timeout:65000});
-            const options=await page.$$eval('#esc-vb-page option',all=>
+            const options=await page.$eval('#esc-vb-page option',all=>
               all.filter(e=>!e.selected).map(e=>({id:e.value,title:e.textContent.trim()})));
-            outer:for(const choice of options.slice(0,5)){
+            // The old alphabetical first-five scan hit only cart/password
+            // utility pages. Prioritize content Pages where ESC Table
+            // sections may actually occur, then sample other non-utility Pages.
+            const score=title=>{
+              if(/^(?:giỏ hàng|bài viết|lịch sử mua hàng|đặt lại mật khẩu|quên mật khẩu|thanh toán|đăng nhập|đăng ký|hoàn tất)/i.test(title))return -10;
+              if(/(?:về chúng tôi|giới thiệu|nhà xưởng|sản xuất|xưởng|dịch vụ|mũ bảo hiểm|quy trình|năng lực|sản phẩm|tin tức|khách hàng|liên hệ)/i.test(title))return 10;
+              return 0;
+            };
+            const candidates=options.filter(p=>score(p.title)>=0)
+              .sort((a,b)=>score(b.title)-score(a.title)||a.title.localeCompare(b.title,'vi'))
+              .slice(0,12);
+            stats.candidateTitles=candidates.map(x=>x.title);
+            outer:for(const choice of candidates){
               await page.goto(base+'&esc_vb_page='+encodeURIComponent(choice.id),
                 {waitUntil:'domcontentloaded',timeout:65000});
               stats.pages++;
@@ -131,6 +143,9 @@ jobs:
             // If no eligible non-home Page was found, this is an evidence
             // gap, not proof of a broken generic adapter.
             console.log('ESC_CROSS_PAGE_ITEM_AUDIT='+JSON.stringify(stats));
-            if(!stats.tableId)console.log('SKIP: no qualifying static multi-row ESC Table found in scanned Pages');
+            if(!stats.tableId){
+              console.log('::warning::No qualifying static multi-row ESC Table found in prioritized non-home Pages; cross-page Chrome test was NOT exercised.');
+              console.log('SKIP: cross-page item selection not functionally verified in production');
+            }
           }finally{await browser.close();}
           JS

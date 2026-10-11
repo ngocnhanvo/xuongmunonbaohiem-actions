@@ -32,23 +32,20 @@ jobs:
           const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
           try{
             const page=await browser.newPage();
-            await page.goto(new URL(process.env.WP_ADMIN_URL).origin+'/wp-login.php',{waitUntil:'domcontentloaded'});
+            await page.goto(new URL(process.env.WP_ADMIN_URL).origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
             await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
             await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
-            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}).catch(()=>{}),page.click('#wp-submit')]);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),page.click('#wp-submit')]);
             const base=new URL(process.env.WP_ADMIN_URL).origin;
-            await page.goto(base+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',{waitUntil:'domcontentloaded'});
+            await page.goto(base+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',{waitUntil:'domcontentloaded',timeout:80000});
             const frame=await (await page.waitForSelector('#esc-vb-frame')).contentFrame();
             await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:60000});
-            const data=await page.evaluate(async()=>{
-              const ticket=await window.escVBGetTicket(false);
-              const r=await fetch('/wp-json/esc-builder/v1/section-order',{
-                method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',
-                'X-WP-Nonce':window.wpApiSettings?.nonce||document.querySelector('#_wpnonce')?.value||''},
-                body:JSON.stringify({page_id:248,ticket})
-              });
-              return {status:r.status,body:await r.json()};
-            });
+            const responsePromise=page.waitForResponse(r=>
+              r.request().method()==='POST'&&
+              /\/esc-builder\/v1\/section-order\/?$/.test(new URL(r.url()).pathname),{timeout:30000});
+            await page.click('#esc-vb-section-order-open');
+            const response=await responsePromise;
+            const data={status:response.status(),body:await response.json()};
             const dom=await frame.evaluate(()=>{
               const ids=['home_01','home_09'];
               return ids.map(id=>{

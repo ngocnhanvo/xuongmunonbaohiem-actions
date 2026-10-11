@@ -1,0 +1,125 @@
+name: Chrome QA - ESC Builder Item Delete Dialog (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-delete-item-chrome.yml']
+permissions:
+  contents: read
+concurrency:
+  group: esc-builder-delete-item-chrome
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Select an actual item, inspect delete confirmation, then cancel (no content writes)
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const name of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[name])throw Error('Missing '+name);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({
+            executablePath:process.env.CHROME_PATH,headless:true,
+            args:['--no-sandbox','--disable-dev-shm-usage']
+          });
+          const audit={page:248,table:'',realItemSelected:false,dialog:false,
+            confirmationGuard:false,cancel:true,sectionSelectionDisables:false,
+            writeAttempts:0,iframeStable:false};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1490,height:960});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const path=new URL(req.url()).pathname;
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(?:delete-item|insert-item|save-section-order|save-text|save-image|save-page-text|save-page-image)\/?$/.test(path)){
+                audit.writeAttempts++;
+                req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('wp-login.php'))throw Error('WP login failed');
+            await page.goto(wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:80000});
+            const element=await page.waitForSelector('#esc-vb-frame',{timeout:25000});
+            const frame=await element.contentFrame();
+            if(!frame)throw Error('Missing iframe');
+            await frame.waitForSelector('[data-tablepress-preview="home_01"]',{timeout:65000});
+            const frameUrl=frame.url();
+            const item=await frame.evaluate(()=>{
+              for(const id of ['home_01','home_00','home_09']){
+                const section=document.querySelector('[data-tablepress-preview="'+id+'"]');
+                const node=section?.querySelector('[data-esc-builder-image-row],[data-esc-builder-row]');
+                if(node){
+                  const value=node.getAttribute('data-esc-builder-image-row') ??
+                    node.getAttribute('data-esc-builder-row');
+                  const row=Number(value);
+                  if(Number.isInteger(row)&&row>=0&&row<40)return {id,row};
+                }
+              }
+              return null;
+            });
+            if(!item)throw Error('No actual tagged row available in homepage ESC Table');
+            audit.table=item.id;
+            await frame.$eval('[data-tablepress-preview="'+item.id+'"] [data-esc-builder-image-row], [data-tablepress-preview="'+item.id+'"] [data-esc-builder-row]',
+              node=>{
+                node.addEventListener('click',e=>e.preventDefault(),{capture:true,once:true});
+                node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+              });
+            await page.waitForFunction(item=>{
+              const button=document.getElementById('esc-vb-item-delete');
+              return button&&!button.hidden&&!button.disabled&&
+                (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith(item.id);
+            },{timeout:18000},item);
+            audit.realItemSelected=true;
+            await page.click('#esc-vb-item-delete');
+            await page.waitForFunction(()=>document.getElementById('esc-vb-item-delete-dialog')?.open===true,
+              {timeout:11000});
+            audit.dialog=true;
+            const dataPromise=page.waitForFunction(()=>document.getElementById('esc-vb-item-delete-confirm')?.disabled===false ||
+              (document.getElementById('esc-vb-item-delete-status')?.style.color==='rgb(179, 45, 46)'),
+              {timeout:25000});
+            await dataPromise;
+            audit.confirmationGuard=await page.$eval('#esc-vb-item-delete-confirm',e=>!e.disabled);
+            if(!audit.confirmationGuard){
+              const message=await page.$eval('#esc-vb-item-delete-status',e=>e.textContent);
+              throw Error('Deletion confirmation was not authorized: '+message);
+            }
+            const detail=await page.$eval('#esc-vb-item-delete-context',e=>e.textContent);
+            if(!detail?.includes(item.id)||!detail?.includes('dòng '+(item.row+1)))
+              throw Error('Wrong row in delete confirmation: '+detail);
+            await page.click('#esc-vb-item-delete-dismiss');
+            await page.waitForFunction(()=>!document.getElementById('esc-vb-item-delete-dialog')?.open,{timeout:9000});
+            audit.cancel=true;
+            await frame.$eval('[data-tablepress-preview="'+item.id+'"]',node=>{
+              node.addEventListener('click',e=>e.preventDefault(),{capture:true,once:true});
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await page.waitForFunction(()=>{
+              const button=document.getElementById('esc-vb-item-delete');
+              return button.hidden&&button.disabled;
+            },{timeout:10000});
+            audit.sectionSelectionDisables=true;
+            audit.iframeStable=frame.url()===frameUrl;
+            if(audit.writeAttempts!==0||!audit.iframeStable)
+              throw Error('Unexpected content write or iframe reload');
+            console.log('ESC_BUILDER_DELETE_ITEM_CHROME_PASS='+JSON.stringify(audit));
+          }finally{await browser.close();}
+          JS

@@ -143,7 +143,9 @@ jobs:
             // DOM-only fixture on the real, authenticated non-home preview.
             // This tests the deployed generic adapter without writing WP data.
             if(!stats.tableId && candidates.length){
-              await page.goto(base+'&esc_vb_page='+encodeURIComponent(candidates[0].id),
+              const fixtureCandidate=candidates.find(x=>stats.samples.some(s=>
+                s.page===x.title && s.title && s.excerpt))||candidates[0];
+              await page.goto(base+'&esc_vb_page='+encodeURIComponent(fixtureCandidate.id),
                 {waitUntil:'domcontentloaded',timeout:65000});
               const iframe=await page.waitForSelector('#esc-vb-frame',{timeout:14000});
               const frame=await iframe.contentFrame();
@@ -194,7 +196,7 @@ jobs:
                   '[data-tablepress-preview="'+id+'"] li span'
                 )].map(x=>x.textContent).join('|')==='A|B|C',{timeout:7000},fixtureId);
                 if(await order()!=='A|B|C')throw Error('Cancel did not restore generic rows');
-                stats.syntheticFixture='PASS: generic swap/retag/cancel on '+candidates[0].title;
+                stats.syntheticFixture='PASS: generic swap/retag/cancel on '+fixtureCandidate.title;
                 await frame.evaluate(id=>document.querySelector(
                   '[data-tablepress-preview="'+id+'"]')?.remove(),fixtureId);
               }

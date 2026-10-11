@@ -1,0 +1,1 @@
+Baseline only: measure 5 authenticated navigations to WordPress ESC Visual Builder with real iframe, no saves. Preserve current Astro/PHP production version. Collect per-run full DOM-ready latency, preview document timing, section count, UI health and mean. Do not deploy or change customer data.

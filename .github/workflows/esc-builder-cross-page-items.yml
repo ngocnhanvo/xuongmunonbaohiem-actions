@@ -139,6 +139,66 @@ jobs:
                 }
               }
             }
+            // When no real secondary Page has an ESC Table, do an isolated
+            // DOM-only fixture on the real, authenticated non-home preview.
+            // This tests the deployed generic adapter without writing WP data.
+            if(!stats.tableId && candidates.length){
+              await page.goto(base+'&esc_vb_page='+encodeURIComponent(candidates[0].id),
+                {waitUntil:'domcontentloaded',timeout:65000});
+              const iframe=await page.waitForSelector('#esc-vb-frame',{timeout:14000});
+              const frame=await iframe.contentFrame();
+              if(!frame)throw Error('Cross-page fixture cannot access Builder iframe');
+              await frame.waitForSelector('body',{timeout:14000});
+              const available=await frame.evaluate(()=>document.documentElement.classList.contains('esc-builder-preview'));
+              if(!available){
+                stats.syntheticFixture='SKIP: Page preview is not authorized or not rendered';
+              }else{
+                const fixtureId='qa_portable_nonhome';
+                await frame.evaluate(id=>{
+                  const root=document.createElement('section');
+                  root.setAttribute('data-tablepress-preview',id);
+                  root.setAttribute('data-qa-only','true');
+                  const list=document.createElement('ul');
+                  for(let i=0;i<3;i++){
+                    const row=document.createElement('li');
+                    row.setAttribute('data-esc-builder-row',String(i));
+                    const img=document.createElement('img');
+                    img.setAttribute('data-esc-builder-image-row',String(i));
+                    img.setAttribute('data-esc-builder-image-field','image');
+                    img.alt='QA only';img.src='data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+                    const text=document.createElement('span');
+                    text.textContent=['A','B','C'][i];
+                    row.append(img,text);list.append(row);
+                  }
+                  root.append(list);document.body.append(root);
+                },fixtureId);
+                const send=async payload=>page.evaluate(({payload,origin})=>{
+                  document.getElementById('esc-vb-frame').contentWindow.postMessage(payload,origin);
+                },{payload,origin:new URL(frame.url()).origin});
+                const order=async()=>frame.evaluate(id=>[...document.querySelectorAll(
+                  '[data-tablepress-preview="'+id+'"] li'
+                )].map(n=>n.querySelector('span')?.textContent).join('|'),fixtureId);
+                await send({type:'esc-vb-item-sort-preview',tableId:fixtureId,from:0,to:2,
+                  items:[{title:'C'},{title:'B'},{title:'A'}],requestId:901});
+                await frame.waitForFunction(id=>[...document.querySelectorAll(
+                  '[data-tablepress-preview="'+id+'"] li span'
+                )].map(x=>x.textContent).join('|')==='C|B|A',{timeout:7000},fixtureId);
+                const bad=await frame.evaluate(id=>[...document.querySelectorAll(
+                  '[data-tablepress-preview="'+id+'"] li'
+                )].some((n,i)=>n.getAttribute('data-esc-builder-row')!==String(i)||
+                  n.querySelector('img')?.getAttribute('data-esc-builder-image-row')!==String(i)),fixtureId);
+                if(bad)throw Error('Generic swap left stale ESC Table row markers');
+                await send({type:'esc-vb-item-sort-cancel',tableId:fixtureId,
+                  items:[{title:'A'},{title:'B'},{title:'C'}],requestId:902});
+                await frame.waitForFunction(id=>[...document.querySelectorAll(
+                  '[data-tablepress-preview="'+id+'"] li span'
+                )].map(x=>x.textContent).join('|')==='A|B|C',{timeout:7000},fixtureId);
+                if(await order()!=='A|B|C')throw Error('Cancel did not restore generic rows');
+                stats.syntheticFixture='PASS: generic swap/retag/cancel on '+candidates[0].title;
+                await frame.evaluate(id=>document.querySelector(
+                  '[data-tablepress-preview="'+id+'"]')?.remove(),fixtureId);
+              }
+            }
             if(stats.writes)throw Error('Unexpected WordPress customer content mutation attempts');
             // If no eligible non-home Page was found, this is an evidence
             // gap, not proof of a broken generic adapter.

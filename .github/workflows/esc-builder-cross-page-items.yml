@@ -71,8 +71,10 @@ jobs:
                 excerpt:(document.body?.innerText||'').trim().slice(0,160),
               })).catch(error=>({error:String(error).slice(0,100)}));
               stats.samples.push({page:choice.title,...snapshot});
-              const tables=await frame.$eval('[data-tablepress-preview]',els=>
-                [...new Set(els.map(e=>e.getAttribute('data-tablepress-preview')).filter(Boolean))]);
+              const tables=await frame.evaluate(()=>[...new Set(
+                [...document.querySelectorAll('[data-tablepress-preview]')]
+                  .map(e=>e.getAttribute('data-tablepress-preview')).filter(Boolean)
+              )]);
               stats.sections+=tables.length;
               for(const id of tables.slice(0,5)){
                 stats.attemptedTables++;

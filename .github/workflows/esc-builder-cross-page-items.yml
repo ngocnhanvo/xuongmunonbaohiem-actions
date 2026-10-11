@@ -1,0 +1,125 @@
+name: Chrome QA - Generic ESC Table Items Across Pages
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-cross-page-items.txt']
+permissions: {contents: read}
+concurrency:
+  group: blue-sea-cross-page-item-qa
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Audit standard ESC Tables outside home Page and test read-only source picker
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const origin=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const stats={pages:0,sections:0,attemptedTables:0,eligible:0,
+            selectedPage:'',tableId:'',fallback:false,writes:0};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1450,height:960});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const url=new URL(req.url());
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(?:swap-items|insert-item|delete-item|save-section-order|save-text|save-image|save-page-text|save-page-image)\/?$/.test(url.pathname)){
+                stats.writes++;req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:65000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login unavailable; no Builder test run');
+            const base=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
+            await page.goto(base,{waitUntil:'domcontentloaded',timeout:65000});
+            const options=await page.$$eval('#esc-vb-page option',all=>
+              all.filter(e=>!e.selected).map(e=>({id:e.value,title:e.textContent.trim()})));
+            outer:for(const choice of options.slice(0,16)){
+              await page.goto(base+'&esc_vb_page='+encodeURIComponent(choice.id),
+                {waitUntil:'domcontentloaded',timeout:65000});
+              stats.pages++;
+              const el=await page.waitForSelector('#esc-vb-frame',{timeout:12000}).catch(()=>null);
+              const frame=el?await el.contentFrame():null;
+              if(!frame)continue;
+              await frame.waitForSelector('[data-tablepress-preview]',{timeout:20000}).catch(()=>null);
+              const tables=await frame.$$eval('[data-tablepress-preview]',els=>
+                [...new Set(els.map(e=>e.getAttribute('data-tablepress-preview')).filter(Boolean))]);
+              stats.sections+=tables.length;
+              for(const id of tables.slice(0,10)){
+                stats.attemptedTables++;
+                try{
+                  await frame.$eval('[data-tablepress-preview="'+id+'"]',node=>
+                    node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
+                  await page.waitForFunction(id=>(
+                    document.getElementById('esc-vb-item-context')?.textContent||''
+                  ).startsWith(id),{timeout:7000},id);
+                  const open=await page.$eval('#esc-vb-item-sort-open',
+                    node=>!node.hidden&&!node.disabled).catch(()=>false);
+                  if(!open)continue;
+                  const response=page.waitForResponse(res=>res.request().method()==='POST'&&
+                    /\/esc-builder\/v1\/item-schema\/?$/.test(new URL(res.url()).pathname),
+                    {timeout:14000});
+                  await page.click('#esc-vb-item-sort-open');
+                  const schemaResponse=await response;
+                  const schema=await schemaResponse.json().catch(()=>null);
+                  if(!schemaResponse.ok()||!Array.isArray(schema?.items)||schema.items.length<2){
+                    continue;
+                  }
+                  stats.eligible++;
+                  await page.waitForFunction(()=>document.querySelectorAll(
+                    '#esc-vb-item-sort-preview-list li button').length>=2,{timeout:14000});
+                  await page.click('#esc-vb-item-sort-preview-list li:first-child button');
+                  await page.waitForFunction(()=>(
+                    document.getElementById('esc-vb-item-sort-status')?.textContent||''
+                  ).includes('đích')||(
+                    document.getElementById('esc-vb-item-sort-status')?.textContent||''
+                  ).includes('Đã tô đỏ'),{timeout:12000});
+                  const fallback=await page.$$eval(
+                    '#esc-vb-item-sort-preview-list li button',els=>
+                    els.length>=2&&els[1].getBoundingClientRect().width>0);
+                  stats.fallback=fallback;
+                  if(fallback){
+                    await page.click('#esc-vb-item-sort-preview-list li:nth-child(2) button');
+                  }else{
+                    await frame.$eval('[data-tablepress-preview="'+id+'"] [data-esc-builder-row="1"],'+
+                      '[data-tablepress-preview="'+id+'"] [data-esc-builder-image-row="1"]',
+                      node=>node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
+                  }
+                  await page.waitForFunction(()=>document.getElementById(
+                    'esc-vb-item-sort-save')?.disabled===false,{timeout:12000});
+                  await page.click('#esc-vb-item-sort-cancel');
+                  stats.selectedPage=choice.title;stats.tableId=id;
+                  break outer;
+                }catch(e){
+                  const cancel=await page.$('#esc-vb-item-sort-cancel');
+                  if(cancel)await page.click('#esc-vb-item-sort-cancel').catch(()=>{});
+                }
+              }
+            }
+            if(stats.writes)throw Error('Unexpected WordPress customer content mutation attempts');
+            // If no eligible non-home Page was found, this is an evidence
+            // gap, not proof of a broken generic adapter.
+            console.log('ESC_CROSS_PAGE_ITEM_AUDIT='+JSON.stringify(stats));
+            if(!stats.tableId)console.log('SKIP: no qualifying static multi-row ESC Table found in scanned Pages');
+          }finally{await browser.close();}
+          JS

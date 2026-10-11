@@ -1,1 +1,1 @@
-Read-only production Chrome QA after fixing async iframe undo check: schema popup, clone, section visual reorder, actual DOM restored after postMessage cancel, no iframe URL changes or WP writes. Astro master 36f58c05 PHP 45667f12.
+Final read-only production Chrome QA for ESC Builder: dynamic ESC Table item form/duplicate, move decorated sections in iframe, then Cancel and verify DOM restored asynchronously. Corrected diagnostic uses $$eval for the restored node list. Validate iframe URL unchanged and zero customer data writes. Do not rebuild/deploy.

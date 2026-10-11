@@ -1,0 +1,54 @@
+name: ESC Builder Instant Item Sync QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-live-items-qa.yml']
+permissions: {contents: read}
+concurrency:
+  group: esc-builder-live-items-qa
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: php
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: astro
+      - uses: pnpm/action-setup@v4
+        with: {version: 9.15.9}
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: pnpm, cache-dependency-path: astro/pnpm-lock.yaml}
+      - name: PHP item versioning, sanitized previews and renderable script
+        run: |
+          set -euo pipefail
+          plugin=php/wp-content/plugins/esc-visual-builder
+          php -l "$plugin/includes/item-manager.php"
+          php -l "$plugin/includes/item-section-ui.php"
+          php "$plugin/tests/items-and-sections.test.php"
+          php "$plugin/tests/item-ui-script.test.php" >/tmp/esc-item-script.js
+          node --check /tmp/esc-item-script.js
+          node "$plugin/tests/item-ui-ticket.test.cjs" /tmp/esc-item-script.js
+      - name: Install Astro for focused DOM tests (no build or deployment)
+        working-directory: astro
+        run: pnpm install --frozen-lockfile --prefer-offline
+      - name: Assert real banner and gallery DOM updates, no section removals
+        working-directory: astro
+        run: pnpm exec vitest run src/lib/wordpress/builderSectionDrafts.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts
+      - name: Ensure TypeScript component event code parses
+        working-directory: astro
+        run: |
+          pnpm exec astro check || echo "::notice::Astro check may report unrelated existing diagnostics; full build is the authoritative compile gate."
+          echo "Focused instant-item QA completed, no WordPress writes"

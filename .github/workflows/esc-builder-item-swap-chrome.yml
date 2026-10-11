@@ -60,8 +60,8 @@ jobs:
             if(qa.sections!==14)throw Error('Expected 14 sections, got '+qa.sections);
             const firstImage=async tableId=>frame.evaluate(tableId=>{
               const root=document.querySelector('[data-tablepress-preview="'+tableId+'"]');
-              return root?.querySelector('[data-esc-builder-image-row="0"] img')?.getAttribute('src')||
-                root?.querySelector('[data-esc-builder-image-row="0"] picture source')?.getAttribute('srcset')||
+              return root?.querySelector('[data-esc-builder-image-row="0"] picture source')?.getAttribute('srcset')||
+                root?.querySelector('[data-esc-builder-image-row="0"] img')?.getAttribute('src')||
                 root?.querySelector('[data-esc-builder-image-row="0"]')?.getAttribute('src')||'';
             },tableId);
             for(const id of ['home_01','home_00']){
@@ -92,8 +92,8 @@ jobs:
               await page.click('#esc-vb-item-sort-cancel');
               await frame.waitForFunction(({tableId,source})=>{
                 const root=document.querySelector('[data-tablepress-preview="'+tableId+'"]');
-                const next=root?.querySelector('[data-esc-builder-image-row="0"] img')?.getAttribute('src')||
-                  root?.querySelector('[data-esc-builder-image-row="0"] picture source')?.getAttribute('srcset')||
+                const next=root?.querySelector('[data-esc-builder-image-row="0"] picture source')?.getAttribute('srcset')||
+                  root?.querySelector('[data-esc-builder-image-row="0"] img')?.getAttribute('src')||
                   root?.querySelector('[data-esc-builder-image-row="0"]')?.getAttribute('src')||'';
                 return source===next;
               },{timeout:13000},{tableId:id,source});

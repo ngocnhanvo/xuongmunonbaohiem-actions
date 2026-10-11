@@ -35,6 +35,7 @@ jobs:
           const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
             headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
           const audit={page:248,sectionCount:0,sourceRed:false,targetBlue:false,
+            existingBorderRecolored:false,normalBorderRestored:false,
             acceptEnabled:false,selectionDoesNotEdit:false,cancelRestores:true,
             swapRender:true,previewUndo:true,noReload:false,writeAttempts:0};
           try{
@@ -80,6 +81,12 @@ jobs:
               document.getElementById('esc-vb-item-context')?.textContent||'').startsWith('home_01'),
               {timeout:18000});
             const preservedContext=await page.$eval('#esc-vb-item-context',e=>e.textContent);
+            const before=await frame.$eval('[data-tablepress-preview="home_01"]',e=>({
+              selected:e.hasAttribute('data-esc-builder-selected'),
+              outline:getComputedStyle(e).outlineColor
+            }));
+            if(!before.selected||before.outline!=='rgb(37, 99, 235)')
+              throw Error('Expected existing blue selected section outline, saw '+JSON.stringify(before));
             await page.click('#esc-vb-section-order-open');
             await page.waitForFunction(()=>
               document.getElementById('esc-vb-section-order-body')?.hidden===false &&
@@ -89,7 +96,14 @@ jobs:
               document.querySelector('[data-esc-vb-swap-source]')?.querySelector('[data-tablepress-preview="home_01"]')||
               document.querySelector('[data-tablepress-preview="home_01"][data-esc-vb-swap-source]'),
               {timeout:14000});
-            audit.sourceRed=true;
+            const red=await frame.$eval('[data-tablepress-preview="home_01"]',e=>({
+              marked:e.hasAttribute('data-esc-vb-swap-source'),
+              selected:e.hasAttribute('data-esc-builder-selected'),
+              outline:getComputedStyle(e).outlineColor
+            }));
+            if(!red.marked||!red.selected||red.outline!=='rgb(220, 38, 38)')
+              throw Error('Selected visual frame did not become red: '+JSON.stringify(red));
+            audit.sourceRed=true;audit.existingBorderRecolored=true;
             if(!await page.$eval('#esc-vb-section-order-save',el=>el.disabled))
               throw Error('Accept enabled before choosing a target');
             await frame.$eval('[data-tablepress-preview="home_09"]',node=>{
@@ -99,6 +113,12 @@ jobs:
               document.querySelector('[data-esc-vb-swap-target]')?.querySelector('[data-tablepress-preview="home_09"]')||
               document.querySelector('[data-tablepress-preview="home_09"][data-esc-vb-swap-target]'),
               {timeout:16000});
+            const blue=await frame.$eval('[data-tablepress-preview="home_09"]',e=>({
+              marked:e.hasAttribute('data-esc-vb-swap-target'),
+              outline:getComputedStyle(e).outlineColor
+            }));
+            if(!blue.marked||blue.outline!=='rgb(37, 99, 235)')
+              throw Error('Destination visual frame did not become blue: '+JSON.stringify(blue));
             audit.targetBlue=true;
             await page.waitForFunction(()=>
               document.getElementById('esc-vb-section-order-save')?.disabled===false &&
@@ -117,6 +137,10 @@ jobs:
               {timeout:14000});
             audit.cancelRestores=JSON.stringify(await getOrder())===JSON.stringify(original);
             if(!audit.cancelRestores)throw Error('Cancel changed section order');
+            audit.normalBorderRestored=await frame.$eval('[data-tablepress-preview="home_01"]',
+              e=>getComputedStyle(e).outlineColor==='rgb(37, 99, 235)');
+            if(!audit.normalBorderRestored)
+              throw Error('Cancel did not restore normal blue editing outline');
             // Exercise only iframe preview/undo with trusted parent messages;
             // no WordPress save is allowed in this QA.
             await page.evaluate(({origin})=>{

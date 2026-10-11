@@ -1,3 +1,2 @@
-Focused repeat-swap regression QA for home_01 nested image row tags.
-Source Astro github c85ba42f67d131e57b7fb615e6ea3205541f33dc (test 7da6ef78155fda4ad03398bde48d581b70774e0f); PHP master unchanged.
-Run all existing ESC Builder item+section tests including new 2-consecutive-swaps JSDOM case; build Astro dev, PHP validation. Confirm home_00 no regression. READ-ONLY: Do not write WordPress content. Do not deploy from QA.
+Builder cross-page ESC Table standardization QA: source Astro github 4efbac89effe3302f2556a84331f860db8392e39; PHP master f13cdec3a7951773d1280ffede428043734408ca.
+Run complete PHP/JS/Vitest and full Astro dev build, no deploy. Regression: generic reusable DOM row swap/cancel/repeat/delete, unsafe DOM fallback, legacy home_00/home_01 unchanged and Page section order. Never write live WordPress content.

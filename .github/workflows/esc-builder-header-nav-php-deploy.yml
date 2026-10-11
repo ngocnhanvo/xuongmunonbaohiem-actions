@@ -28,6 +28,13 @@ jobs:
           php -l source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
           grep -Fq 'esc-vb-header-navigate' source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
           grep -Fq 'esc_vb_nav_routes' source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          grep -Fq 'id="esc-vb-device"' source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          grep -Fq '<details id="esc-vb-inspector-details">' source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          grep -Fq 'name="esc_vb_view"' source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          if grep -Fq 'class="button esc-vb-size"' source/wp-content/plugins/esc-visual-builder/esc-visual-builder.php; then
+            echo 'Old viewport buttons unexpectedly remain' >&2
+            exit 1
+          fi
       - name: Upload only Builder plugin entry and byte-verify
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}

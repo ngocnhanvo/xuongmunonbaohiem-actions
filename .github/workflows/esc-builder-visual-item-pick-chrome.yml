@@ -1,0 +1,137 @@
+name: Chrome QA - ESC Builder Visual Item Picker (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-visual-item-pick.txt']
+permissions: {contents: read}
+concurrency:
+  group: esc-builder-visual-item-pick-chrome
+  cancel-in-progress: true
+jobs:
+  chrome:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify source red, target blue and Cancel in the real iframe without writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const root=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const qa={page:248,home_00:false,home_01:false,red:true,blue:true,
+            sliderControls:true,acceptOnlyAfterTarget:true,cancelRestores:true,
+            locksOtherItemActions:true,sections:0,iframeStable:false,writeAttempts:0};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1510,height:950});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const pathname=new URL(req.url()).pathname;
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(?:swap-items|insert-item|delete-item|save-section-order|save-text|save-image|save-page-text|save-page-image)\/?$/.test(pathname)){
+                qa.writeAttempts++;req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(root+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:75000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login failed');
+            await page.goto(root+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:85000});
+            const el=await page.waitForSelector('#esc-vb-frame',{timeout:25000});
+            const frame=await el.contentFrame();
+            if(!frame)throw Error('No Builder preview iframe');
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:70000});
+            const initialUrl=frame.url();
+            qa.sections=await frame.evaluate(()=>new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+              .filter(node=>!node.parentElement?.closest('[data-tablepress-preview]'))
+              .map(node=>node.getAttribute('data-tablepress-preview'))).size);
+            if(qa.sections!==14)throw Error('Expected 14 unchanged sections');
+            const dispatch=async(selector)=>frame.$eval(selector,node=>{
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            for(const id of ['home_01','home_00']){
+              const source='[data-tablepress-preview="'+id+'"] [data-esc-builder-image-row="0"]';
+              const target='[data-tablepress-preview="'+id+'"] [data-esc-builder-image-row="1"]';
+              await frame.waitForSelector(source,{timeout:15000});
+              await frame.waitForSelector(target,{timeout:15000});
+              await dispatch(source);
+              await page.waitForFunction(id=>{
+                const text=document.getElementById('esc-vb-item-context')?.textContent||'';
+                return text.startsWith(id)&&text.includes('dòng 1')&&
+                  document.getElementById('esc-vb-item-sort-open')?.disabled===false;
+              },{timeout:19000},id);
+              await page.click('#esc-vb-item-sort-open');
+              await page.waitForFunction(()=>document.getElementById('esc-vb-item-sort-body')?.hidden===false,
+                {timeout:15000});
+              await frame.waitForFunction(id=>{
+                const root=document.querySelector('[data-tablepress-preview="'+id+'"]');
+                return root?.querySelector('[data-esc-builder-image-row="0"][data-esc-vb-item-source]');
+              },{timeout:25000},id);
+              const active=await frame.$eval(source,node=>({
+                red:node.hasAttribute('data-esc-vb-item-source'),
+                outline:getComputedStyle(node).outlineColor
+              }));
+              if(!active.red||active.outline!=='rgb(220, 38, 38)')
+                throw Error('Source item not red: '+id+' '+JSON.stringify(active));
+              if(!await page.$eval('#esc-vb-item-sort-save',el=>el.disabled))
+                throw Error('Accept enabled before target selected: '+id);
+              const locked=await page.evaluate(()=>
+                ['esc-vb-item-new','esc-vb-item-duplicate','esc-vb-item-delete']
+                .every(id=>document.getElementById(id)?.disabled===true));
+              if(!locked)throw Error('Other item edit actions were not disabled');
+              if(id==='home_00'){
+                const enabled=await frame.evaluate(()=>{
+                  const button=document.querySelector('#home-00-slider-vi-desktop [data-slider-next]');
+                  if(!button)return false;
+                  let notified=false;
+                  button.addEventListener('click',()=>{notified=true;},{once:true});
+                  button.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+                  return notified;
+                });
+                if(!enabled)throw Error('Slider navigation blocked by item picker');
+                qa.sliderControls=enabled;
+              }
+              await dispatch(target);
+              await frame.waitForFunction(id=>!!document.querySelector(
+                '[data-tablepress-preview="'+id+'"] [data-esc-builder-image-row="1"][data-esc-vb-item-target]'
+              ),{timeout:14000},id);
+              const picked=await frame.$eval(target,node=>({
+                blue:node.hasAttribute('data-esc-vb-item-target'),
+                outline:getComputedStyle(node).outlineColor,
+              }));
+              if(!picked.blue||picked.outline!=='rgb(37, 99, 235)')
+                throw Error('Destination item not blue: '+id+' '+JSON.stringify(picked));
+              await page.waitForFunction(()=>document.getElementById('esc-vb-item-sort-save')?.disabled===false,
+                {timeout:14000});
+              // Never press Accept: that would intentionally write WordPress.
+              await page.click('#esc-vb-item-sort-cancel');
+              await frame.waitForFunction(()=>document.querySelectorAll(
+                '[data-esc-vb-item-source],[data-esc-vb-item-target]').length===0 &&
+                !document.documentElement.hasAttribute('data-esc-vb-item-picking'),
+                {timeout:14000});
+              qa[id]=true;
+            }
+            qa.iframeStable=frame.url()===initialUrl;
+            if(!qa.iframeStable||qa.writeAttempts!==0)
+              throw Error('Unexpected iframe navigation or content write request');
+            console.log('ESC_BUILDER_VISUAL_ITEM_PICK_PASS='+JSON.stringify(qa));
+          }finally{await browser.close();}
+          JS

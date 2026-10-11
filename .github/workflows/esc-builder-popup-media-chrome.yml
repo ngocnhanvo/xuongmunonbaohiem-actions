@@ -1,0 +1,134 @@
+name: Chrome QA - ESC Builder Popup Loading and WP Media
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-popup-media-chrome.yml']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-popup-media-chrome
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify loading, Cancel during AJAX, Media selection and restoring popup (no WP writes)
+        shell: bash
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const key of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[key])throw Error('Missing '+key);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const audit={page:248,loadingImmediate:false,loadingCancelSafe:false,
+            mediaAboveBuilder:false,mediaSelection:false,formPreserved:false,
+            iframeStable:false,writeAttempts:0};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1510,height:940});
+            let delaySchema=true;
+            await page.setRequestInterception(true);
+            page.on('request',request=>{
+              const route=new URL(request.url()).pathname;
+              if(request.method()==='POST'&&
+                 /\/esc-builder\/v1\/(?:insert-item|save-section-order|save-text|save-image|save-page-text|save-page-image)\/?$/.test(route)){
+                audit.writeAttempts++;
+                request.abort('blockedbyclient');
+              }else if(request.method()==='POST' && delaySchema &&
+                /\/esc-builder\/v1\/item-schema\/?$/.test(route)){
+                delaySchema=false;
+                setTimeout(()=>request.continue().catch(()=>{}),1800);
+              }else request.continue();
+            });
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:60000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login failed');
+            await page.goto(wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:70000});
+            const element=await page.waitForSelector('#esc-vb-frame',{timeout:25000});
+            const frame=await element.contentFrame();
+            if(!frame)throw Error('Builder iframe missing');
+            await frame.waitForSelector('[data-tablepress-preview="home_01"]',{timeout:60000});
+            const originalUrl=frame.url();
+            await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
+              node.addEventListener('click',e=>e.preventDefault(),{capture:true,once:true});
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await page.waitForFunction(()=>
+              document.getElementById('esc-vb-item-panel')?.hidden===false &&
+              document.getElementById('esc-vb-item-context')?.textContent?.startsWith('home_01'),
+              {timeout:15000});
+            await page.click('#esc-vb-item-new');
+            await page.waitForFunction(()=>{
+              const modal=document.getElementById('esc-vb-item-dialog');
+              return modal?.open===true &&
+                !!modal.querySelector('.esc-vb-item-loading .esc-vb-item-spinner') &&
+                document.getElementById('esc-vb-item-confirm')?.disabled===true;
+            },{timeout:1500});
+            audit.loadingImmediate=true;
+            await page.click('#esc-vb-item-dismiss');
+            await page.waitForFunction(()=>!document.getElementById('esc-vb-item-dialog')?.open,
+              {timeout:4000});
+            await new Promise(r=>setTimeout(r,2300));
+            audit.loadingCancelSafe=await page.$eval('#esc-vb-item-dialog',e=>!e.open);
+            if(!audit.loadingCancelSafe)throw Error('Cancelled loading popup reopened by a stale AJAX response');
+            await page.click('#esc-vb-item-new');
+            await page.waitForFunction(()=>document.querySelector(
+              '#esc-vb-item-dialog[open] [data-esc-item-field="title"]')!==null &&
+              document.getElementById('esc-vb-item-confirm')?.disabled===false,
+              {timeout:30000});
+            const marker='ESC QA tạm thời - KHÔNG LƯU';
+            await page.$eval('#esc-vb-item-dialog [data-esc-item-field="title"]',
+              (el,value)=>{el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));},marker);
+            await page.click('#esc-vb-item-dialog .esc-vb-item-field button');
+            await page.waitForFunction(()=>{
+              const media=document.querySelector('.media-modal');
+              return document.getElementById('esc-vb-item-dialog')?.open===false &&
+                !!media && media.getBoundingClientRect().width>0;
+            },{timeout:25000});
+            audit.mediaAboveBuilder=true;
+            await page.waitForSelector('.media-modal .attachment',{timeout:45000});
+            await page.click('.media-modal .attachment');
+            await page.waitForFunction(()=>{
+              const button=document.querySelector('.media-modal .media-button-select');
+              return button && !button.disabled;
+            },{timeout:25000});
+            await page.click('.media-modal .media-button-select');
+            await page.waitForFunction(()=>{
+              const modal=document.getElementById('esc-vb-item-dialog');
+              return modal?.open===true && document.querySelector(
+                '#esc-vb-item-dialog .esc-vb-item-image-preview:not([hidden])');
+            },{timeout:20000});
+            audit.mediaSelection=true;
+            audit.formPreserved=await page.$eval(
+              '#esc-vb-item-dialog [data-esc-item-field="title"]',(el,value)=>el.value===value,marker);
+            if(!audit.formPreserved)throw Error('Form input was cleared when returning from Media');
+            await page.click('#esc-vb-item-dismiss');
+            await page.waitForFunction(()=>!document.getElementById('esc-vb-item-dialog')?.open,
+              {timeout:8000});
+            audit.iframeStable=frame.url()===originalUrl;
+            if(!audit.iframeStable||audit.writeAttempts!==0)
+              throw Error('Iframe was reloaded or WordPress content write attempted');
+            console.log('ESC_BUILDER_POPUP_MEDIA_QA_PASS='+JSON.stringify(audit));
+          }finally{await browser.close();}
+          JS

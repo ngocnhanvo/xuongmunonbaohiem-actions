@@ -34,7 +34,7 @@ jobs:
           const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
             headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
           const audit={page:248,source:'home_00',desktop:false,mobileMarked:false,
-            pixelRed:false,cancelRestores:true,
+            pixelRed:false,targetPixelBlue:false,cancelRestores:true,
             iframeStable:false,writeAttempts:0};
           try{
             const page=await browser.newPage();
@@ -149,6 +149,11 @@ jobs:
             console.log('HOME01_TARGET_DIAGNOSTIC='+JSON.stringify({
               ...targetDiag,visibleBlue,blueSamples,dimensions:[targetPNG.width,targetPNG.height]
             }));
+            audit.targetPixelBlue=visibleBlue &&
+              targetDiag.afterBorder==='rgb(37, 99, 235)'&&
+              targetDiag.afterWidth==='4px';
+            if(!audit.targetPixelBlue)throw Error('Target has no actual BLUE inset border: '+
+              JSON.stringify({targetDiag,visibleBlue,blueSamples}));
             await page.click('#esc-vb-section-order-cancel');
             await frame.waitForFunction(()=>document.querySelectorAll(
               '[data-esc-vb-swap-source],[data-esc-vb-swap-target],[data-esc-vb-home-slider]'

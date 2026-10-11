@@ -1,0 +1,43 @@
+name: ESC Builder Item-only Delete QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-delete-item-qa.yml']
+permissions:
+  contents: read
+concurrency:
+  group: esc-builder-delete-item-qa
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: php
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Assert delete-item route, PHP syntax, item-only tests and rendered JS
+        shell: bash
+        run: |
+          set -euo pipefail
+          root=php/wp-content/plugins/esc-visual-builder
+          php -l "$root/includes/item-manager.php"
+          php -l "$root/includes/item-section-ui.php"
+          php -l "$root/includes/section-order.php"
+          php "$root/tests/items-and-sections.test.php"
+          php "$root/tests/item-ui-script.test.php" >/tmp/esc-vb-item-ui.js
+          node --check /tmp/esc-vb-item-ui.js
+          node "$root/tests/item-ui-ticket.test.cjs" /tmp/esc-vb-item-ui.js
+          grep -Fq "/delete-item" "$root/includes/item-manager.php"
+          grep -Fq "id=\"esc-vb-item-delete\"" "$root/includes/item-section-ui.php"
+          if grep -q "delete-section" "$root/includes/item-manager.php"; then
+            echo "A forbidden delete-section route was found" >&2; exit 1
+          fi
+          echo "ESC Builder item-only delete QA PASS — WordPress content untouched"

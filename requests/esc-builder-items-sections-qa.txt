@@ -1,2 +1,2 @@
-Builder cross-page ESC Table standardization QA: source Astro github 4efbac89effe3302f2556a84331f860db8392e39; PHP master f13cdec3a7951773d1280ffede428043734408ca.
-Run complete PHP/JS/Vitest and full Astro dev build, no deploy. Regression: generic reusable DOM row swap/cancel/repeat/delete, unsafe DOM fallback, legacy home_00/home_01 unchanged and Page section order. Never write live WordPress content.
+FINAL source QA: Astro github 0cabb7a25dbb2c817ec0f92790a85f547cf109c2, PHP master dd921a6e3f93af79883317733173cdec2817468f.
+Validate stateless generic ESC Table renderer, cancellation and repeat swaps on non-home Page, skip dynamic button components, fallback list, PHP item schema/section ownership, home_00/home_01 regressions, full Astro build. Read-only tests, do not deploy here.

@@ -1,0 +1,180 @@
+name: Chrome QA - ESC Builder Instant Add Delete (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-live-items-chrome.txt']
+permissions:
+  contents: read
+concurrency:
+  group: esc-builder-live-items-chrome
+  cancel-in-progress: true
+jobs:
+  chrome:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Simulate trusted committed item events on live Builder without WordPress writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const key of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[key])throw Error('Missing '+key);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({
+            executablePath:process.env.CHROME_PATH,headless:true,
+            args:['--no-sandbox','--disable-dev-shm-usage']
+          });
+          const qa={page:248,sections:0,home_00:null,home_01:null,
+            add:true,delete:true,emptyAndRestore:true,writeAttempts:0,iframeStable:false};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1500,height:950});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const pathname=new URL(req.url()).pathname;
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(?:insert-item|delete-item|save-section-order|save-text|save-image|save-page-text|save-page-image)\/?$/.test(pathname)){
+                qa.writeAttempts++;
+                req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:75000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login failed');
+            await page.goto(wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:85000});
+            const element=await page.waitForSelector('#esc-vb-frame',{timeout:24000});
+            const frame=await element.contentFrame();
+            if(!frame)throw Error('Preview frame missing');
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:65000});
+            const previewUrl=frame.url(),previewOrigin=new URL(previewUrl).origin;
+            const getMetric=()=>frame.evaluate(()=>{
+              const ids=new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+                .filter(node=>!node.parentElement?.closest('[data-tablepress-preview]'))
+                .map(node=>node.getAttribute('data-tablepress-preview')).filter(Boolean));
+              const sliders=[...document.querySelectorAll('[data-home-slider]')]
+                .filter(node=>node.id.startsWith('home-00-slider-'));
+              return {sections:ids.size,
+                slideCounts:sliders.map(node=>({id:node.id,count:node.querySelectorAll('[data-home-slide]').length})),
+                figures:document.querySelectorAll('[data-tablepress-preview="home_01"] figure[data-esc-builder-image-row]').length,
+                galleryThumbs:document.querySelectorAll('[data-gallery-lightbox="home01-factory"] [data-gallery-thumb]').length,
+                galleryModalRows:(()=>{try{
+                  return JSON.parse(document.querySelector('[data-gallery-lightbox="home01-factory"] [data-gallery-items]')?.textContent||'[]').length;
+                }catch{return -1}})()
+              };
+            });
+            const initial=await getMetric();
+            if(initial.sections!==14)throw Error('Expected 14 unchanged sections, got '+initial.sections);
+            qa.sections=initial.sections;
+            await page.evaluate(()=>{
+              window.__escBuilderQAEvents=[];
+              window.addEventListener('message',event=>{
+                if(event.data?.type==='esc-vb-item-preview-ack')
+                  window.__escBuilderQAEvents.push(event.data);
+              });
+            });
+            async function readSchema(tableId){
+              await frame.$eval('[data-tablepress-preview="'+tableId+'"]',node=>{
+                node.addEventListener('click',e=>e.preventDefault(),{capture:true,once:true});
+                node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+              });
+              await page.waitForFunction(id=>
+                (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith(id),
+                {timeout:16000},tableId);
+              const responsePromise=page.waitForResponse(response=>
+                response.request().method()==='POST'&&
+                /\/esc-builder\/v1\/item-schema\/?$/.test(new URL(response.url()).pathname),
+                {timeout:30000});
+              await page.click('#esc-vb-item-new');
+              const response=await responsePromise;
+              const schema=await response.json().catch(()=>({}));
+              if(!response.ok()||schema.table_id!==tableId||!Array.isArray(schema.items))
+                throw Error('Invalid WordPress item schema '+tableId);
+              await page.click('#esc-vb-item-dismiss');
+              return schema;
+            }
+            async function simulate(tableId,items,type,requestId){
+              await page.evaluate(({tableId,items,type,requestId,previewOrigin})=>{
+                document.getElementById('esc-vb-frame').contentWindow.postMessage({
+                  type,tableId,row:0,items,requestId
+                },previewOrigin);
+              },{tableId,items,type,requestId,previewOrigin});
+              await page.waitForFunction(requestId=>
+                (window.__escBuilderQAEvents||[]).some(event=>
+                  event.requestId===requestId),{timeout:17000},requestId);
+              const ack=await page.evaluate(requestId=>
+                window.__escBuilderQAEvents.find(event=>event.requestId===requestId),requestId);
+              if(ack?.matched!==true)throw Error('Iframe refused synthetic canonical rows: '+tableId+
+                ' request '+requestId);
+            }
+            const first01=await readSchema('home_01');
+            const first00=await readSchema('home_00');
+            const firstPhoto=first01.items.find(item=>
+              typeof item?.img?.src==='string'&&item.img.src.startsWith('https://'));
+            const firstBanner=first00.items.find(item=>
+              typeof item?.image?.src==='string'&&item.image.src.startsWith('https://'));
+            if(!firstPhoto||!firstBanner)throw Error('No canonical media row to test with');
+            const newPhoto={...firstPhoto,title:'Preview QA - chưa lưu'};
+            const newBanner={...firstBanner,title:'Preview QA - chưa lưu',mobile:'2'};
+            const steps=[
+              {id:'home_01',original:first01.items,added:[...first01.items,newPhoto]},
+              {id:'home_00',original:first00.items,added:[...first00.items,newBanner]}
+            ];
+            let n=900;
+            for(const step of steps){
+              // No real server write. These are the same trusted parent->iframe
+              // messages PHP sends only AFTER real WordPress Save succeeds.
+              if(step.added.length>40)continue;
+              await simulate(step.id,step.added,'esc-vb-item-saved',++n);
+              const addedMetric=await getMetric();
+              if(step.id==='home_01'){
+                if(addedMetric.figures!==step.added.length||
+                   addedMetric.galleryThumbs!==step.added.length||
+                   addedMetric.galleryModalRows!==step.added.length)
+                  throw Error('home_01 did not update grid and lightbox together');
+              }else{
+                if(addedMetric.slideCounts.reduce((sum,x)=>sum+x.count,0)<=
+                   initial.slideCounts.reduce((sum,x)=>sum+x.count,0))
+                  throw Error('home_00 did not add a visible banner slide');
+              }
+              await simulate(step.id,[],'esc-vb-item-deleted',++n);
+              const emptied=await getMetric();
+              if(step.id==='home_01'&&
+                (emptied.figures!==0||emptied.galleryThumbs!==0||
+                 emptied.galleryModalRows!==0))
+                throw Error('Deleting final factory photo left stale gallery UI');
+              if(step.id==='home_00'&&
+                emptied.slideCounts.some(x=>x.count!==0))
+                throw Error('Deleting final banner left stale slides');
+              if(emptied.sections!==14)throw Error('A section was removed by a synthetic item delete!');
+              await simulate(step.id,step.original,'esc-vb-item-saved',++n);
+              const restored=await getMetric();
+              if(restored.sections!==14)throw Error('Section missing after add-back');
+              if(step.id==='home_01'&&restored.figures!==initial.figures)
+                throw Error('home_01 initial count not restored');
+              if(step.id==='home_00'&&JSON.stringify(restored.slideCounts)!==
+                JSON.stringify(initial.slideCounts))
+                throw Error('home_00 desktop/mobile initial counts not restored');
+              qa[step.id]={add:true,delete:true,emptyAndRestore:true,originalRows:step.original.length};
+            }
+            qa.iframeStable=frame.url()===previewUrl;
+            if(!qa.iframeStable||qa.writeAttempts!==0)
+              throw Error('Iframe navigation or unexpected WordPress content write');
+            console.log('ESC_BUILDER_LIVE_ITEMS_CHROME_PASS='+JSON.stringify(qa));
+          }finally{await browser.close();}
+          JS

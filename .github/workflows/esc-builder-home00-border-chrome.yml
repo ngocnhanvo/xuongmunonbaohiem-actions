@@ -135,56 +135,41 @@ jobs:
                 afterBorder:after.borderTopColor,afterWidth:after.borderTopWidth,
                 afterContent:after.content,box:node.getBoundingClientRect().toJSON()};
             });
+            await frame.$eval('[data-tablepress-preview="home_01"]',
+              node=>node.scrollIntoView({behavior:'instant',block:'start',inline:'nearest'}));
+            await frame.waitForFunction(()=>{
+              const node=document.querySelector('[data-tablepress-preview="home_01"]');
+              const rect=node?.getBoundingClientRect();
+              return !!rect && rect.top>-10 && rect.top<window.innerHeight-60;
+            },{timeout:15000});
+            const viewport=await frame.evaluate(()=>{
+              const rect=document.querySelector('[data-tablepress-preview="home_01"]').getBoundingClientRect();
+              return {top:rect.top,bottom:rect.bottom,frameHeight:innerHeight,
+                scrollTop:document.scrollingElement?.scrollTop||0};
+            });
             const target=await frame.$('[data-tablepress-preview="home_01"]');
             const targetPNG=PNG.sync.read(Buffer.from(await target.screenshot({type:'png'})));
             const blueSamples=[];
-            for(const fy of [0.12,0.35,0.58,0.8]){
-              for(const x of [1,2,3,4]){
-                const y=Math.min(targetPNG.height-2,Math.round(targetPNG.height*fy));
+            // Only inspect pixels in the visible part of the iframe. The
+            // gallery is taller than the iframe; capturing offscreen rows
+            // otherwise samples the gray clipping background, not its border.
+            for(const y of [8,24,55,100,190,300]){
+              if(y>=targetPNG.height||viewport.top+y>=viewport.frameHeight-5)continue;
+              for(const x of [1,2,3]){
                 const offset=(targetPNG.width*y+x)*4;
                 blueSamples.push([...targetPNG.data.subarray(offset,offset+3)]);
               }
             }
             const visibleBlue=blueSamples.some(rgb=>rgb[0]<100&&rgb[1]>=65&&rgb[1]<160&&rgb[2]>160);
-            console.log('HOME01_TARGET_DIAGNOSTIC='+JSON.stringify({
-              ...targetDiag,visibleBlue,blueSamples,dimensions:[targetPNG.width,targetPNG.height]
+            console.log('HOME01_TARGET_VISIBLE_PIXEL_QA='+JSON.stringify({
+              ...targetDiag,viewport,visibleBlue,blueSamples,
+              dimensions:[targetPNG.width,targetPNG.height]
             }));
-            const detailedCSS=await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
-              const a=getComputedStyle(node,'::after');
-              return {width:a.width,height:a.height,top:a.top,left:a.left,bottom:a.bottom,
-                right:a.right,zIndex:a.zIndex,display:a.display,visibility:a.visibility,
-                position:a.position,pointerEvents:a.pointerEvents,
-                transform:a.transform,opacity:a.opacity};
-            });
-            await frame.$eval('[data-tablepress-preview="home_01"]',root=>{
-              const overlay=document.createElement('div');
-              overlay.dataset.escQaDomOverlay='true';
-              Object.assign(overlay.style,{
-                position:'absolute',top:'0px',left:'0px',right:'0px',bottom:'0px',
-                border:'4px solid rgb(37, 99, 235)',boxSizing:'border-box',
-                zIndex:'2147483647',pointerEvents:'none',
-              });
-              root.appendChild(overlay);
-            });
-            const domPNG=PNG.sync.read(Buffer.from(await target.screenshot({type:'png'})));
-            const domSamples=[];
-            for(const fy of [0.12,0.35,0.58,0.8]){
-              const y=Math.min(domPNG.height-2,Math.round(domPNG.height*fy));
-              for(const x of [1,2,3,4]){
-                const offset=(domPNG.width*y+x)*4;
-                domSamples.push([...domPNG.data.subarray(offset,offset+3)]);
-              }
-            }
-            const domBlue=domSamples.some(rgb=>rgb[0]<100&&rgb[1]>=65&&rgb[1]<160&&rgb[2]>160);
-            console.log('HOME01_PHYSICAL_OVERLAY_DIAGNOSTIC='+JSON.stringify({
-              detailedCSS,computedBlue:visibleBlue,domBlue,domSamples
-            }));
-            await frame.$eval('[data-esc-qa-dom-overlay]',node=>node.remove());
-            audit.targetPixelBlue=visibleBlue &&
+            audit.targetPixelBlue=visibleBlue&&
               targetDiag.afterBorder==='rgb(37, 99, 235)'&&
               targetDiag.afterWidth==='4px';
-            if(!audit.targetPixelBlue)throw Error('Target has no actual BLUE inset border: '+
-              JSON.stringify({targetDiag,visibleBlue,domBlue,detailedCSS,blueSamples}));
+            if(!audit.targetPixelBlue)throw Error('Target visible border still not blue: '+
+              JSON.stringify({targetDiag,viewport,visibleBlue,blueSamples}));
             await page.click('#esc-vb-section-order-cancel');
             await frame.waitForFunction(()=>document.querySelectorAll(
               '[data-esc-vb-swap-source],[data-esc-vb-swap-target],[data-esc-vb-home-slider]'

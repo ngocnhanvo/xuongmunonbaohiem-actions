@@ -1,0 +1,121 @@
+name: Chrome QA - Home 00 Visible Swap Border
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-home00-border.txt']
+permissions: {contents: read}
+concurrency:
+  group: esc-builder-home00-border-chrome
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24 pngjs@7
+      - name: Inspect real banner frame source/target colors and screenshot pixels
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          import {PNG} from 'pngjs';
+          const base=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const audit={page:248,source:'home_00',desktop:false,mobileMarked:false,
+            pixelRed:false,targetBlue:false,cancelRestores:true,
+            iframeStable:false,writeAttempts:0};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1500,height:980,deviceScaleFactor:1});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const path=new URL(req.url()).pathname;
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(?:save-section-order|swap-items|insert-item|delete-item|save-text|save-image|save-page-text|save-page-image)\/?$/.test(path)){
+                audit.writeAttempts++;req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(base+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('wp-login.php'))throw Error('WP login failed');
+            await page.goto(base+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:80000});
+            const el=await page.waitForSelector('#esc-vb-frame',{timeout:30000});
+            const frame=await el.contentFrame();
+            if(!frame)throw Error('Iframe absent');
+            await frame.waitForSelector('[data-tablepress-preview="home_00"]',{timeout:70000});
+            const frameURL=frame.url();
+            await frame.$eval('[data-tablepress-preview="home_00"]',node=>{
+              node.addEventListener('click',e=>e.preventDefault(),{capture:true,once:true});
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await page.waitForFunction(()=>
+              (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith('home_00'),{timeout:20000});
+            await page.click('#esc-vb-section-order-open');
+            await page.waitForFunction(()=>
+              document.getElementById('esc-vb-section-order-body')?.hidden===false &&
+              document.getElementById('esc-vb-section-swap-source')?.textContent?.includes('home_00'),{timeout:25000});
+            await frame.waitForFunction(()=>document.querySelector(
+              '[data-tablepress-preview="home_00"][data-esc-vb-swap-source][data-esc-vb-home-slider]'
+            ),{timeout:14000});
+            const sourceStyle=await frame.$eval('[data-tablepress-preview="home_00"]',node=>{
+              const style=getComputedStyle(node,'::after');
+              return {border:style.borderTopColor,borderWidth:style.borderTopWidth,
+                position:style.position,zIndex:style.zIndex,pointerEvents:style.pointerEvents,
+                box:node.getBoundingClientRect().toJSON()};
+            });
+            audit.desktop=sourceStyle.border==='rgb(220, 38, 38)'&&sourceStyle.borderWidth==='4px'
+              &&sourceStyle.pointerEvents==='none';
+            if(!audit.desktop)throw Error('Banner pseudo border is not red: '+JSON.stringify(sourceStyle));
+            audit.mobileMarked=await frame.evaluate(()=>{
+              const section=document.querySelector('[data-home-slider][id$="-mobile"]')?.closest('section');
+              return !!section?.hasAttribute('data-esc-vb-home-slider')&&
+                section?.hasAttribute('data-esc-vb-swap-source')&&
+                getComputedStyle(section,'::after').borderTopColor==='rgb(220, 38, 38)';
+            });
+            if(!audit.mobileMarked)throw Error('Mobile variant not marked red');
+            // Screenshot the rendered banner and sample its CENTER LEFT BORDER.
+            // This catches an occluded pseudo-element despite correct CSS.
+            const banner=await frame.$('[data-tablepress-preview="home_00"]');
+            const pixels=PNG.sync.read(await banner.screenshot({type:'png'}));
+            const samples=[];
+            for(const fy of [0.15,0.35,0.55,0.75]){
+              const x=2,y=Math.round(pixels.height*fy);
+              const offset=(pixels.width*y+x)*4;
+              samples.push([...pixels.data.subarray(offset,offset+3)]);
+            }
+            audit.pixelRed=samples.some(rgb=>rgb[0]>170&&rgb[1]<95&&rgb[2]<95);
+            if(!audit.pixelRed)throw Error('No actual RED pixel on banner edge: '+
+              JSON.stringify({dimensions:[pixels.width,pixels.height],samples,sourceStyle}));
+            await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await frame.waitForFunction(()=>document.querySelector(
+              '[data-tablepress-preview="home_01"][data-esc-vb-swap-target]'
+            ),{timeout:13000});
+            audit.targetBlue=await frame.$eval(
+              '[data-tablepress-preview="home_01"]',node=>getComputedStyle(node).outlineColor==='rgb(37, 99, 235)');
+            if(!audit.targetBlue)throw Error('Target blue border missing');
+            await page.click('#esc-vb-section-order-cancel');
+            await frame.waitForFunction(()=>document.querySelectorAll(
+              '[data-esc-vb-swap-source],[data-esc-vb-swap-target],[data-esc-vb-home-slider]'
+            ).length===0,{timeout:15000});
+            audit.iframeStable=frame.url()===frameURL;
+            if(!audit.iframeStable||audit.writeAttempts!==0)throw Error('Unexpected content write or iframe reload');
+            console.log('ESC_BUILDER_HOME00_BORDER_CHROME_PASS='+JSON.stringify(audit));
+          }finally{await browser.close();}
+          JS

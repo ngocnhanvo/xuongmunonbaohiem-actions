@@ -180,6 +180,31 @@ jobs:
             await frame.waitForFunction(src=>document.querySelector(
               '[data-tablepress-preview="home_01"] .grid figure[data-esc-builder-image-row="0"] img'
             )?.src===src,{timeout:15000},originalFactory[0].img.src);
+            // Test the portable list-source picker even when a user clicks
+            // a whole section rather than an already tagged item.
+            await dispatch('[data-tablepress-preview="home_01"]');
+            await page.waitForFunction(()=>
+              (document.getElementById('esc-vb-item-context')?.textContent||'')
+                .startsWith('home_01 · chọn item'),{timeout:15000});
+            await page.waitForFunction(()=>
+              document.getElementById('esc-vb-item-sort-open')?.hidden===false &&
+              document.getElementById('esc-vb-item-sort-open')?.disabled===false,
+              {timeout:15000});
+            await page.click('#esc-vb-item-sort-open');
+            await page.waitForFunction(()=>document.querySelectorAll(
+              '#esc-vb-item-sort-preview-list li button').length>=2,
+              {timeout:25000});
+            await page.click('#esc-vb-item-sort-preview-list li:first-child button');
+            await frame.waitForFunction(()=>!!document.querySelector(
+              '[data-tablepress-preview="home_01"] [data-esc-builder-image-row="0"][data-esc-vb-item-source]'
+            ),{timeout:15000});
+            await dispatch('[data-tablepress-preview="home_01"] [data-esc-builder-image-row="1"]');
+            await page.waitForFunction(()=>document.getElementById('esc-vb-item-sort-save')
+              ?.disabled===false,{timeout:14000});
+            // Save is NEVER clicked by this QA: no customer row writes.
+            await page.click('#esc-vb-item-sort-cancel');
+            await frame.waitForFunction(()=>!document.documentElement.hasAttribute(
+              'data-esc-vb-item-picking'),{timeout:14000});
             qa.iframeStable=frame.url()===initialUrl;
             if(!qa.iframeStable||qa.writeAttempts!==0)
               throw Error('Unexpected iframe navigation or content write request');

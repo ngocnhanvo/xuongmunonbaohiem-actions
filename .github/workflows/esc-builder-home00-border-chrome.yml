@@ -78,6 +78,25 @@ jobs:
                 position:style.position,zIndex:style.zIndex,pointerEvents:style.pointerEvents,
                 box:node.getBoundingClientRect().toJSON()};
             });
+            const debug=await frame.evaluate(()=>{
+              const el=document.querySelector('[data-tablepress-preview="home_00"]');
+              const head=document.querySelector('style[data-esc-vb-section-pick-style]');
+              const selector='html.esc-builder-preview[data-esc-vb-picking] section[data-esc-vb-home-slider][data-esc-vb-swap-source]';
+              return {
+                rootClass:document.documentElement.className,
+                picking:document.documentElement.hasAttribute('data-esc-vb-picking'),
+                tag:el?.tagName,
+                attrs:el?.getAttributeNames(),
+                matching:!!document.querySelector(selector),
+                inlineStyle:el?.getAttribute('style'),
+                styleFound:!!head,
+                sheetRules:head?.sheet?.cssRules?.length,
+                styleText:head?.textContent?.slice(0,2200),
+                actualPosition:el?getComputedStyle(el).position:null,
+                actualOutline:el?getComputedStyle(el).outlineColor:null
+              };
+            });
+            console.log('HOME00_CSS_DIAGNOSTIC='+JSON.stringify(debug));
             audit.desktop=sourceStyle.border==='rgb(220, 38, 38)'&&sourceStyle.borderWidth==='4px'
               &&sourceStyle.pointerEvents==='none';
             if(!audit.desktop)throw Error('Banner pseudo border is not red: '+JSON.stringify(sourceStyle));

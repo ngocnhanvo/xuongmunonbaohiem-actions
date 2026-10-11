@@ -1,1 +1,1 @@
-Final read-only production Chrome QA for ESC Builder: dynamic ESC Table item form/duplicate, move decorated sections in iframe, then Cancel and verify DOM restored asynchronously. Corrected diagnostic uses $$eval for the restored node list. Validate iframe URL unchanged and zero customer data writes. Do not rebuild/deploy.
+Run production read-only Chrome QA once with verified workflow blob 38a5bba6bcc9d50f1fbe167d0091bafae0c5b31b. Test ESC Table popup, clone, section reorder and cancel restores DOM. No product or Page data writes, no deploy.

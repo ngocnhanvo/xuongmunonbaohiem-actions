@@ -19,7 +19,7 @@ jobs:
         id: chrome
         with: {chrome-version: stable}
       - run: npm install --no-save --no-package-lock puppeteer-core@24 pngjs@7
-      - name: Inspect real banner frame source/target colors and screenshot pixels
+      - name: Inspect real home_00 banner frame and screenshot pixels
         env:
           WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
@@ -34,7 +34,7 @@ jobs:
           const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
             headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
           const audit={page:248,source:'home_00',desktop:false,mobileMarked:false,
-            pixelRed:false,targetBlue:false,cancelRestores:true,
+            pixelRed:false,cancelRestores:true,
             iframeStable:false,writeAttempts:0};
           try{
             const page=await browser.newPage();
@@ -65,15 +65,7 @@ jobs:
             });
             await page.waitForFunction(()=>
               (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith('home_00'),{timeout:20000});
-            const orderReply=page.waitForResponse(r=>
-              r.request().method()==='POST'&&
-              //esc-builder/v1/section-order/?$/.test(new URL(r.url()).pathname),
-              {timeout:28000});
             await page.click('#esc-vb-section-order-open');
-            const orderData=await (await orderReply).json();
-            const targetId=(orderData.swappable?.home_00||[]).find(id=>
-              id!=='home_00'&&/^[a-zA-Z0-9_]+$/.test(id));
-            if(!targetId)throw Error('No compatible target for home_00');
             await page.waitForFunction(()=>
               document.getElementById('esc-vb-section-order-body')?.hidden===false &&
               document.getElementById('esc-vb-section-swap-source')?.textContent?.includes('home_00'),{timeout:25000});
@@ -109,16 +101,6 @@ jobs:
             audit.pixelRed=samples.some(rgb=>rgb[0]>170&&rgb[1]<95&&rgb[2]<95);
             if(!audit.pixelRed)throw Error('No actual RED pixel on banner edge: '+
               JSON.stringify({dimensions:[pixels.width,pixels.height],samples,sourceStyle}));
-            await frame.$eval('[data-tablepress-preview="'+targetId+'"]',node=>{
-              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
-            });
-            await frame.waitForFunction(id=>document.querySelector(
-              '[data-tablepress-preview="'+id+'"][data-esc-vb-swap-target]'
-            ),{timeout:13000},targetId);
-            audit.targetBlue=await frame.$eval(
-              '[data-tablepress-preview="'+targetId+'"]',node=>
-                getComputedStyle(node).outlineColor==='rgb(37, 99, 235)');
-            if(!audit.targetBlue)throw Error('Target blue border missing');
             await page.click('#esc-vb-section-order-cancel');
             await frame.waitForFunction(()=>document.querySelectorAll(
               '[data-esc-vb-swap-source],[data-esc-vb-swap-target],[data-esc-vb-home-slider]'

@@ -52,8 +52,8 @@ jobs:
             if(page.url().includes('wp-login.php'))throw Error('WordPress login unavailable; no Builder test run');
             const base=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
             await page.goto(base,{waitUntil:'domcontentloaded',timeout:65000});
-            const options=await page.$eval('#esc-vb-page option',all=>
-              all.filter(e=>!e.selected).map(e=>({id:e.value,title:e.textContent.trim()})));
+            const options=await page.evaluate(()=>[...document.querySelectorAll('#esc-vb-page option')]
+              .filter(e=>!e.selected).map(e=>({id:e.value,title:e.textContent.trim()})));
             // The old alphabetical first-five scan hit only cart/password
             // utility pages. Prioritize content Pages where ESC Table
             // sections may actually occur, then sample other non-utility Pages.

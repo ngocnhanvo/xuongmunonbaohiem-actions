@@ -1,0 +1,152 @@
+name: Chrome QA - ESC Builder Visual Section Picker (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-visual-section-pick.txt']
+permissions: {contents: read}
+concurrency:
+  group: esc-builder-visual-section-pick-chrome
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Check visual click selection, blue/red markers, cancel and isolated preview
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const key of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[key])throw Error('Missing '+key);
+          const root=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const audit={page:248,sectionCount:0,sourceRed:false,targetBlue:false,
+            acceptEnabled:false,selectionDoesNotEdit:false,cancelRestores:true,
+            swapRender:true,previewUndo:true,noReload:false,writeAttempts:0};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1510,height:975});
+            await page.setRequestInterception(true);
+            page.on('request',request=>{
+              const path=new URL(request.url()).pathname;
+              if(request.method()==='POST'&&
+                /\/esc-builder\/v1\/(?:save-section-order|swap-items|insert-item|delete-item|save-text|save-image|save-page-text|save-page-image)\/?$/.test(path)){
+                audit.writeAttempts++;request.abort('blockedbyclient');
+              }else request.continue();
+            });
+            await page.goto(root+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login failed');
+            await page.goto(root+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:80000});
+            const element=await page.waitForSelector('#esc-vb-frame',{timeout:25000});
+            const frame=await element.contentFrame();
+            if(!frame)throw Error('Builder iframe not attached');
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:65000});
+            const iframeUrl=frame.url(),origin=new URL(iframeUrl).origin;
+            const getOrder=()=>frame.evaluate(()=>[...new Set(
+              [...document.querySelectorAll('[data-tablepress-preview]')]
+                .filter(n=>!n.parentElement?.closest('[data-tablepress-preview]'))
+                .map(n=>n.getAttribute('data-tablepress-preview')).filter(Boolean)
+            )]);
+            const original=await getOrder();
+            audit.sectionCount=original.length;
+            if(original.length!==14)throw Error('Expected 14 ESC Tables; got '+original.length);
+            // Select an arbitrary source on the actual rendered page.
+            await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
+              node.addEventListener('click',e=>e.preventDefault(),{capture:true,once:true});
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await page.waitForFunction(()=>(
+              document.getElementById('esc-vb-item-context')?.textContent||'').startsWith('home_01'),
+              {timeout:18000});
+            const preservedContext=await page.$eval('#esc-vb-item-context',e=>e.textContent);
+            await page.click('#esc-vb-section-order-open');
+            await page.waitForFunction(()=>
+              document.getElementById('esc-vb-section-order-body')?.hidden===false &&
+              document.getElementById('esc-vb-section-swap-source')?.textContent?.includes('home_01'),
+              {timeout:25000});
+            await frame.waitForFunction(()=>
+              document.querySelector('[data-esc-vb-swap-source]')?.querySelector('[data-tablepress-preview="home_01"]')||
+              document.querySelector('[data-tablepress-preview="home_01"][data-esc-vb-swap-source]'),
+              {timeout:14000});
+            audit.sourceRed=true;
+            if(!await page.$eval('#esc-vb-section-order-save',el=>el.disabled))
+              throw Error('Accept enabled before choosing a target');
+            await frame.$eval('[data-tablepress-preview="home_09"]',node=>{
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await frame.waitForFunction(()=>
+              document.querySelector('[data-esc-vb-swap-target]')?.querySelector('[data-tablepress-preview="home_09"]')||
+              document.querySelector('[data-tablepress-preview="home_09"][data-esc-vb-swap-target]'),
+              {timeout:16000});
+            audit.targetBlue=true;
+            await page.waitForFunction(()=>
+              document.getElementById('esc-vb-section-order-save')?.disabled===false &&
+              document.getElementById('esc-vb-section-swap-target')?.textContent?.includes('home_09'),
+              {timeout:14000});
+            audit.acceptEnabled=true;
+            audit.selectionDoesNotEdit=await page.$eval('#esc-vb-item-context',e=>
+              (e.textContent||'').startsWith('home_01'));
+            if(!audit.selectionDoesNotEdit)throw Error('Selecting destination opened another editor');
+            // The production test MUST NOT press Accept: that performs a real
+            // WordPress mutation. Confirm Cancel before an actual swap.
+            await page.click('#esc-vb-section-order-cancel');
+            await frame.waitForFunction(()=>
+              document.querySelectorAll('[data-esc-vb-swap-source],[data-esc-vb-swap-target]').length===0 &&
+              !document.documentElement.hasAttribute('data-esc-vb-picking'),
+              {timeout:14000});
+            audit.cancelRestores=JSON.stringify(await getOrder())===JSON.stringify(original);
+            if(!audit.cancelRestores)throw Error('Cancel changed section order');
+            // Exercise only iframe preview/undo with trusted parent messages;
+            // no WordPress save is allowed in this QA.
+            await page.evaluate(({origin})=>{
+              document.getElementById('esc-vb-frame').contentWindow.postMessage({
+                type:'esc-vb-sections-swap-preview',first:'home_01',
+                second:'home_09',requestId:979
+              },origin);
+            },{origin});
+            const expected=[...original];
+            const ai=expected.indexOf('home_01'),bi=expected.indexOf('home_09');
+            [expected[ai],expected[bi]]=[expected[bi],expected[ai]];
+            await frame.waitForFunction(expected=>JSON.stringify([...new Set(
+              [...document.querySelectorAll('[data-tablepress-preview]')]
+                .filter(n=>!n.parentElement?.closest('[data-tablepress-preview]'))
+                .map(n=>n.getAttribute('data-tablepress-preview')).filter(Boolean)
+            )])===JSON.stringify(expected),{timeout:14000},expected);
+            audit.swapRender=true;
+            await page.evaluate(({origin})=>{
+              document.getElementById('esc-vb-frame').contentWindow.postMessage({
+                type:'esc-vb-sections-cancel'
+              },origin);
+            },{origin});
+            await frame.waitForFunction(expected=>JSON.stringify([...new Set(
+              [...document.querySelectorAll('[data-tablepress-preview]')]
+                .filter(n=>!n.parentElement?.closest('[data-tablepress-preview]'))
+                .map(n=>n.getAttribute('data-tablepress-preview')).filter(Boolean)
+            )])===JSON.stringify(expected),{timeout:14000},original);
+            audit.previewUndo=true;
+            audit.noReload=frame.url()===iframeUrl;
+            if(!audit.noReload||audit.writeAttempts!==0)throw Error('Iframe navigated or content write attempted');
+            console.log('ESC_BUILDER_VISUAL_SECTION_PICK_PASS='+JSON.stringify(audit));
+          }finally{await browser.close();}
+          JS

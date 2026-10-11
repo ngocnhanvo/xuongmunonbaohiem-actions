@@ -1,0 +1,140 @@
+name: Chrome QA - Compact ESC Builder UI
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-compact-ui-chrome.txt']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-compact-builder-qa
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: stable
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify compact toolbar, viewport select and JSON disclosure without writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const required=['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'];
+          for(const key of required)if(!process.env[key])throw Error('Missing '+key);
+          const origin=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const report={controlsInline:false,oldButtonsAbsent:false,desktopWidth:0,
+            mobileWidth:0,formPersists:false,jsonClosedByDefault:false,
+            sectionSummary:false,disclosureToggles:false,customerWrites:0};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1480,height:930});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const url=new URL(req.url());
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(?:swap-items|insert-item|delete-item|save-section-order|save-text|save-image|save-page-text|save-page-image)/.test(url.pathname)){
+                report.customerWrites++;req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:65000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login unavailable');
+            const base=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
+            await page.goto(base,{waitUntil:'domcontentloaded',timeout:65000});
+            if(page.url().includes('wp-login.php'))throw Error('WordPress admin session expired');
+            await page.waitForSelector('#esc-vb-device',{timeout:14000});
+            const structure=await page.evaluate(()=>{
+              const form=document.querySelector('#esc-vb-app .esc-vb-page-form');
+              const select=document.getElementById('esc-vb-device');
+              const button=form?.querySelector('button[type=submit]');
+              const details=document.getElementById('esc-vb-inspector-details');
+              const top=select?.getBoundingClientRect().top||0;
+              const buttonTop=button?.getBoundingClientRect().top||0;
+              return {
+                inline:!!form&&!!select&&!!button&&form.contains(select)&&
+                  Math.abs(top-buttonTop)<22,
+                oldButtons:document.querySelectorAll('.esc-vb-size,.esc-vb-toolbar').length,
+                options:[...(select?.options||[])].map(o=>o.value),
+                current:select?.value,
+                detailsClosed:details?.open===false,
+                inspectorInside:details?.contains(document.getElementById('esc-vb-inspector')),
+                selectedSummary:!!document.getElementById('esc-vb-section-summary')
+              };
+            });
+            if(!structure.inline||structure.oldButtons||structure.options.join(',')!=='desktop,mobile'
+              ||!structure.detailsClosed||!structure.inspectorInside||!structure.selectedSummary)
+              throw Error('Compact Builder markup invalid: '+JSON.stringify(structure));
+            report.controlsInline=true;report.oldButtonsAbsent=true;report.jsonClosedByDefault=true;
+            const frameEl=await page.$('#esc-vb-frame');
+            report.desktopWidth=await frameEl.evaluate(el=>Math.round(el.getBoundingClientRect().width));
+            await page.select('#esc-vb-device','mobile');
+            report.mobileWidth=await frameEl.evaluate(el=>Math.round(el.getBoundingClientRect().width));
+            if(Math.abs(report.mobileWidth-390)>2)
+              throw Error('Mobile iframe width incorrect: '+report.mobileWidth);
+            await page.select('#esc-vb-device','desktop');
+            const desktopAgain=await frameEl.evaluate(el=>Math.round(el.getBoundingClientRect().width));
+            if(Math.abs(desktopAgain-report.desktopWidth)>3||desktopAgain<=390)
+              throw Error('Desktop viewport not restored');
+            await page.select('#esc-vb-device','mobile');
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:65000}),
+              page.click('.esc-vb-page-form button[type=submit]')
+            ]);
+            await page.waitForSelector('#esc-vb-device',{timeout:16000});
+            const persisted=await page.evaluate(()=>({
+              mode:document.getElementById('esc-vb-device')?.value,
+              width:Math.round(document.getElementById('esc-vb-frame')?.getBoundingClientRect().width||0),
+              query:new URL(location.href).searchParams.get('esc_vb_view')
+            }));
+            if(persisted.mode!=='mobile'||Math.abs(persisted.width-390)>2||
+               persisted.query!=='mobile')throw Error('Page-open view mode not preserved: '+JSON.stringify(persisted));
+            report.formPersists=true;
+            const frame=(await page.$('#esc-vb-frame'))?.contentFrame();
+            const iframe=await frame;
+            if(!iframe)throw Error('Astro iframe missing');
+            const target=await iframe.waitForSelector('[data-tablepress-preview],main section',
+              {timeout:45000});
+            if(!target)throw Error('No section available for inspector test');
+            await target.evaluate(el=>el.dispatchEvent(new MouseEvent('click',{
+              bubbles:true,cancelable:true
+            })));
+            await page.waitForFunction(()=>{
+              const inspector=document.getElementById('esc-vb-inspector');
+              return inspector?.textContent?.includes('"source"');
+            },{timeout:15000});
+            const detailsClosed=await page.$eval('#esc-vb-inspector-details',el=>!el.open);
+            const summary=await page.$eval('#esc-vb-section-summary',el=>el.textContent.trim());
+            if(!detailsClosed||!summary||summary==='Chưa chọn section.')
+              throw Error('Section summary or JSON closed state lost on selection');
+            report.sectionSummary=true;
+            await page.click('#esc-vb-inspector-details summary');
+            const open=await page.$eval('#esc-vb-inspector-details',el=>el.open);
+            const json=await page.$eval('#esc-vb-inspector',el=>JSON.parse(el.textContent));
+            if(!open||!json.source)throw Error('Section JSON disclosure cannot be opened');
+            await page.click('#esc-vb-inspector-details summary');
+            report.disclosureToggles=await page.$eval('#esc-vb-inspector-details',el=>!el.open);
+            if(!report.disclosureToggles||report.customerWrites)
+              throw Error('UI toggle or no-write assertion failed');
+            console.log('ESC_COMPACT_BUILDER_UI_PASS='+JSON.stringify(report));
+          }finally{await browser.close();}
+          JS

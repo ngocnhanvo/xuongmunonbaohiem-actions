@@ -1,0 +1,130 @@
+name: Chrome QA - ESC Builder Schema Matrix
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-items-schema-matrix.yml']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-schema-matrix
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify each Page 248 ESC Table item schema with no content writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const key of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[key])throw Error('Missing '+key);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const result={page:248,total:0,editable:[],blocked:[],writeAttempts:0,iframeStable:false};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1510,height:960});
+            await page.setRequestInterception(true);
+            page.on('request',r=>{
+              const route=new URL(r.url()).pathname;
+              if(r.method()==='POST'&&/\/esc-builder\/v1\/(?:insert-item|save-section-order|save-text|save-image|save-page-text|save-page-image)\/?$/.test(route)){
+                result.writeAttempts++;
+                r.abort('blockedbyclient');
+              }else r.continue();
+            });
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:60000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('/wp-login.php'))throw Error('WordPress login failed');
+            await page.goto(wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:70000});
+            const element=await page.waitForSelector('#esc-vb-frame',{timeout:25000});
+            const frame=await element.contentFrame();
+            if(!frame)throw Error('Missing iframe');
+            await frame.waitForSelector('[data-tablepress-preview="home_00"]',{timeout:60000});
+            const originalUrl=frame.url();
+            const ids=await frame.$$eval('[data-tablepress-preview]',nodes=>[
+              ...new Set(nodes.map(n=>n.getAttribute('data-tablepress-preview')).filter(Boolean))
+            ]);
+            if(ids.length!==14)throw Error('Homepage ESC Table count changed: '+ids.length);
+            result.total=ids.length;
+            for(const id of ids){
+              await frame.$eval('[data-tablepress-preview="'+id+'"]',node=>node.click());
+              await page.waitForFunction(id=>
+                document.getElementById('esc-vb-item-panel')?.hidden===false &&
+                (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith(id),
+                {timeout:12000},id);
+              const schemaPromise=page.waitForResponse(r=>
+                r.request().method()==='POST'&&
+                /\/esc-builder\/v1\/item-schema\/?$/.test(new URL(r.url()).pathname),
+                {timeout:25000});
+              await page.click('#esc-vb-item-new');
+              const response=await schemaPromise;
+              const schema=await response.json().catch(()=>({}));
+              if(!response.ok||schema?.code||schema?.can_add===false){
+                await page.waitForFunction(()=>Boolean(
+                  document.getElementById('esc-vb-item-status')?.textContent?.trim()),
+                  {timeout:10000});
+                if(await page.$eval('#esc-vb-item-dialog',e=>e.open))
+                  throw Error(id+': blocked source unexpectedly editable');
+                result.blocked.push({table:id,code:String(schema?.code||'limit_or_unsupported')});
+                continue;
+              }
+              if(schema.table_id!==id||!Array.isArray(schema.fields)||
+                 !Array.isArray(schema.items)||schema.count!==schema.items.length)
+                throw Error(id+': invalid REST schema');
+              await page.waitForFunction(()=>
+                document.getElementById('esc-vb-item-dialog')?.open===true,{timeout:15000});
+              const controls=await page.evaluate(()=>[
+                ...document.querySelectorAll('#esc-vb-item-fields > .esc-vb-item-field')
+              ].map(el=>({
+                field:el.querySelector('[data-esc-item-field]')?.dataset.escItemField||null,
+                media:!![...el.querySelectorAll('button')].find(b=>
+                  b.textContent.includes('Media Library')),
+                alt:!!el.querySelector('input[placeholder="Alt hình ảnh"]'),
+                readonly:!!el.querySelector('input[readonly]')
+              })));
+              if(controls.length!==schema.fields.length)
+                throw Error(id+': mismatched UI field count');
+              for(let i=0;i<schema.fields.length;i++){
+                const f=schema.fields[i],ctrl=controls[i];
+                if(f.type==='image'&&(!ctrl.media||!ctrl.alt))
+                  throw Error(id+': missing Media + Alt for '+f.name);
+                if(f.type!=='image'&&ctrl.field!==f.name)
+                  throw Error(id+': missing input '+f.name);
+                if(f.type==='readonly'&&!ctrl.readonly)
+                  throw Error(id+': unprotected HTML '+f.name);
+              }
+              result.editable.push({table:id,count:schema.count,fields:schema.fields.map(f=>f.name+':'+f.type)});
+              await page.click('#esc-vb-item-dismiss');
+              await page.waitForFunction(()=>!document.getElementById('esc-vb-item-dialog')?.open,
+                {timeout:8000});
+            }
+            result.iframeStable=frame.url()===originalUrl;
+            if(!result.iframeStable||result.writeAttempts)
+              throw Error('Iframe reloaded or content-write attempted');
+            for(const id of ['home_00','home_01'])
+              if(!result.editable.some(x=>x.table===id))throw Error('Required popup unavailable: '+id);
+            if(!result.blocked.some(x=>x.table==='home_02'))
+              throw Error('Non-repeater home_02 not blocked');
+            console.log('ESC_BUILDER_SCHEMA_MATRIX_PASS='+JSON.stringify(result));
+          }finally{await browser.close();}
+          JS

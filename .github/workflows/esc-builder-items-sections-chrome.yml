@@ -119,8 +119,10 @@ jobs:
                 .map(el=>el.getAttribute('data-tablepress-preview')))];
               return JSON.stringify(order)===JSON.stringify(expected);
             },{timeout:9000},original).catch(()=>{});
-            const restored=await frame.$eval('[data-tablepress-preview]',nodes=>[
-              ...new Set(nodes.map(el=>el.getAttribute('data-tablepress-preview')))]);
+            // Read the entire DOM collection; a single-element selector loses the order.
+            const restored=await frame.evaluate(()=>[
+              ...new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+                .map(el=>el.getAttribute('data-tablepress-preview')))]);
             result.undo=JSON.stringify(original)===JSON.stringify(restored);
             result.iframeStable=frame.url()===url;
             if(!result.undo||!result.iframeStable){

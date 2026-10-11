@@ -1,0 +1,37 @@
+name: ESC Builder Renewable Ticket Source QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-ticket-ci.yml']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-ticket-ci
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: php
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate PHP Builder and its real rendered popup request helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l php/wp-content/plugins/esc-visual-builder/esc-visual-builder.php
+          php -l php/wp-content/plugins/esc-visual-builder/includes/item-section-ui.php
+          php php/wp-content/plugins/esc-visual-builder/tests/item-ui-script.test.php >/tmp/esc-item-ui.js
+          node --check /tmp/esc-item-ui.js
+          node php/wp-content/plugins/esc-visual-builder/tests/item-ui-ticket.test.cjs /tmp/esc-item-ui.js
+          php php/wp-content/plugins/esc-visual-builder/tests/items-and-sections.test.php
+          echo "Renewable popup ticket source QA: PASS; no WordPress content writes"

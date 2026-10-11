@@ -149,11 +149,42 @@ jobs:
             console.log('HOME01_TARGET_DIAGNOSTIC='+JSON.stringify({
               ...targetDiag,visibleBlue,blueSamples,dimensions:[targetPNG.width,targetPNG.height]
             }));
+            const detailedCSS=await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
+              const a=getComputedStyle(node,'::after');
+              return {width:a.width,height:a.height,top:a.top,left:a.left,bottom:a.bottom,
+                right:a.right,zIndex:a.zIndex,display:a.display,visibility:a.visibility,
+                position:a.position,pointerEvents:a.pointerEvents,
+                transform:a.transform,opacity:a.opacity};
+            });
+            await frame.$eval('[data-tablepress-preview="home_01"]',root=>{
+              const overlay=document.createElement('div');
+              overlay.dataset.escQaDomOverlay='true';
+              Object.assign(overlay.style,{
+                position:'absolute',top:'0px',left:'0px',right:'0px',bottom:'0px',
+                border:'4px solid rgb(37, 99, 235)',boxSizing:'border-box',
+                zIndex:'2147483647',pointerEvents:'none',
+              });
+              root.appendChild(overlay);
+            });
+            const domPNG=PNG.sync.read(Buffer.from(await target.screenshot({type:'png'})));
+            const domSamples=[];
+            for(const fy of [0.12,0.35,0.58,0.8]){
+              const y=Math.min(domPNG.height-2,Math.round(domPNG.height*fy));
+              for(const x of [1,2,3,4]){
+                const offset=(domPNG.width*y+x)*4;
+                domSamples.push([...domPNG.data.subarray(offset,offset+3)]);
+              }
+            }
+            const domBlue=domSamples.some(rgb=>rgb[0]<100&&rgb[1]>=65&&rgb[1]<160&&rgb[2]>160);
+            console.log('HOME01_PHYSICAL_OVERLAY_DIAGNOSTIC='+JSON.stringify({
+              detailedCSS,computedBlue:visibleBlue,domBlue,domSamples
+            }));
+            await frame.$eval('[data-esc-qa-dom-overlay]',node=>node.remove());
             audit.targetPixelBlue=visibleBlue &&
               targetDiag.afterBorder==='rgb(37, 99, 235)'&&
               targetDiag.afterWidth==='4px';
             if(!audit.targetPixelBlue)throw Error('Target has no actual BLUE inset border: '+
-              JSON.stringify({targetDiag,visibleBlue,blueSamples}));
+              JSON.stringify({targetDiag,visibleBlue,domBlue,detailedCSS,blueSamples}));
             await page.click('#esc-vb-section-order-cancel');
             await frame.waitForFunction(()=>document.querySelectorAll(
               '[data-esc-vb-swap-source],[data-esc-vb-swap-target],[data-esc-vb-home-slider]'

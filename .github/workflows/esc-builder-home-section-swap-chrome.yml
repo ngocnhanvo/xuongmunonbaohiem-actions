@@ -1,0 +1,122 @@
+name: Chrome QA - ESC Builder Home Section Swap (no writes)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-home-section-swap-chrome.yml']
+permissions:
+  contents: read
+concurrency:
+  group: esc-builder-home-section-swap-chrome
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify home_01 ↔ home_09 preview and Cancel on production (no writes)
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          for(const key of ['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD','CHROME_PATH'])
+            if(!process.env[key])throw Error('Missing '+key);
+          const wp=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const result={page:248,source:'',target:'',sectionCount:0,preview:false,
+            restore:false,saveGated:false,iframeStable:false,writeAttempts:0};
+          try {
+            const page=await browser.newPage();
+            await page.setViewport({width:1500,height:960});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const route=new URL(req.url()).pathname;
+              if(req.method()==='POST'&&
+                /\/esc-builder\/v1\/(?:save-section-order|insert-item|save-text|save-image|save-page-text|save-page-image)\/?$/.test(route)){
+                result.writeAttempts++;
+                req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(wp+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login failed');
+            await page.goto(wp+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:70000});
+            const el=await page.waitForSelector('#esc-vb-frame',{timeout:20000});
+            const frame=await el.contentFrame();
+            if(!frame)throw Error('Missing Builder iframe');
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:65000});
+            const frameUrl=frame.url();
+            const getOrder=async()=>frame.evaluate(()=>[
+              ...new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+                .filter(n=>!n.parentElement?.closest('[data-tablepress-preview]'))
+                .map(n=>n.getAttribute('data-tablepress-preview')).filter(Boolean))
+            ]);
+            const before=await getOrder();
+            if(before.length!==14)throw Error('Expected 14 distinct homepage ESC Tables, received '+before.length);
+            result.sectionCount=before.length;
+            await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
+              node.addEventListener('click',event=>event.preventDefault(),{capture:true,once:true});
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await page.waitForFunction(()=>
+              document.getElementById('esc-vb-item-panel')?.hidden===false&&
+              (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith('home_01'),
+              {timeout:15000});
+            await page.click('#esc-vb-section-order-open');
+            await page.waitForFunction(()=>document.getElementById('esc-vb-section-order-body')?.hidden===false &&
+              document.getElementById('esc-vb-section-swap-source')?.options?.length===14,
+              {timeout:22000});
+            result.source=await page.$eval('#esc-vb-section-swap-source',e=>e.value);
+            result.target=await page.$eval('#esc-vb-section-swap-target',e=>e.value);
+            if(result.source!=='home_01'||result.target!=='home_09')
+              throw Error('Wrong source/target default: '+JSON.stringify({source:result.source,target:result.target}));
+            if(!await page.$eval('#esc-vb-section-order-save',e=>e.disabled))
+              throw Error('Save enabled before iframe safety acknowledgment');
+            await page.click('#esc-vb-section-swap-preview');
+            await frame.waitForFunction(expected=>{
+              const ids=[...new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+                .filter(n=>!n.parentElement?.closest('[data-tablepress-preview]'))
+                .map(n=>n.getAttribute('data-tablepress-preview')).filter(Boolean))];
+              return JSON.stringify(ids)===JSON.stringify(expected);
+            },{timeout:15000},(()=>{
+              const out=[...before],a=out.indexOf('home_01'),b=out.indexOf('home_09');
+              [out[a],out[b]]=[out[b],out[a]];return out;
+            })());
+            await page.waitForFunction(()=>
+              document.getElementById('esc-vb-section-order-save')?.disabled===false &&
+              (document.getElementById('esc-vb-section-order-status')?.textContent||'').includes('Đã hoán đổi'),
+              {timeout:13000});
+            result.preview=true;result.saveGated=true;
+            await page.click('#esc-vb-section-order-cancel');
+            await frame.waitForFunction(expected=>{
+              const ids=[...new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+                .filter(n=>!n.parentElement?.closest('[data-tablepress-preview]'))
+                .map(n=>n.getAttribute('data-tablepress-preview')).filter(Boolean))];
+              return JSON.stringify(ids)===JSON.stringify(expected);
+            },{timeout:13000},before);
+            const after=await getOrder();
+            result.restore=JSON.stringify(after)===JSON.stringify(before);
+            result.iframeStable=frame.url()===frameUrl;
+            if(!result.restore||!result.iframeStable||result.writeAttempts!==0)
+              throw Error('Undo, iframe continuity or write guard failed '+JSON.stringify(result));
+            console.log('ESC_BUILDER_HOME_SWAP_CHROME_PASS='+JSON.stringify(result));
+          } finally {await browser.close();}
+          JS

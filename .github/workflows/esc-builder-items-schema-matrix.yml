@@ -67,7 +67,12 @@ jobs:
             if(ids.length!==14)throw Error('Homepage ESC Table count changed: '+ids.length);
             result.total=ids.length;
             for(const id of ids){
-              await frame.$eval('[data-tablepress-preview="'+id+'"]',node=>node.click());
+              // Select the ESC Table without following links inside visual sections.
+              await frame.$eval('[data-tablepress-preview="'+id+'"]',node=>{
+                node.addEventListener('click',event=>event.preventDefault(),
+                  {capture:true,once:true});
+                node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+              });
               await page.waitForFunction(id=>
                 document.getElementById('esc-vb-item-panel')?.hidden===false &&
                 (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith(id),
@@ -119,6 +124,13 @@ jobs:
                 {timeout:8000});
             }
             result.iframeStable=frame.url()===originalUrl;
+            console.log('SCHEMA_MATRIX_END='+JSON.stringify({
+              total:result.total,editable:result.editable.map(x=>x.table),
+              blocked:result.blocked,writeAttempts:result.writeAttempts,
+              iframeStable:result.iframeStable,
+              originalPath:new URL(originalUrl).pathname,
+              currentPath:new URL(frame.url()).pathname
+            }));
             if(!result.iframeStable||result.writeAttempts)
               throw Error('Iframe reloaded or content-write attempted');
             for(const id of ['home_00','home_01'])

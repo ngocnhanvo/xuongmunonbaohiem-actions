@@ -120,6 +120,35 @@ jobs:
             audit.pixelRed=samples.some(rgb=>rgb[0]>170&&rgb[1]<95&&rgb[2]<95);
             if(!audit.pixelRed)throw Error('No actual RED pixel on banner edge: '+
               JSON.stringify({dimensions:[pixels.width,pixels.height],samples,sourceStyle}));
+            await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
+              node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));
+            });
+            await frame.waitForFunction(()=>
+              document.querySelector('[data-tablepress-preview="home_01"][data-esc-vb-swap-target]'),
+              {timeout:14000});
+            const targetDiag=await frame.$eval('[data-tablepress-preview="home_01"]',node=>{
+              const css=getComputedStyle(node);
+              const after=getComputedStyle(node,'::after');
+              return {tag:node.tagName,attrs:node.getAttributeNames(),
+                outline:css.outlineColor,outlineWidth:css.outlineWidth,
+                position:css.position,overflow:css.overflow,
+                afterBorder:after.borderTopColor,afterWidth:after.borderTopWidth,
+                afterContent:after.content,box:node.getBoundingClientRect().toJSON()};
+            });
+            const target=await frame.$('[data-tablepress-preview="home_01"]');
+            const targetPNG=PNG.sync.read(Buffer.from(await target.screenshot({type:'png'})));
+            const blueSamples=[];
+            for(const fy of [0.12,0.35,0.58,0.8]){
+              for(const x of [1,2,3,4]){
+                const y=Math.min(targetPNG.height-2,Math.round(targetPNG.height*fy));
+                const offset=(targetPNG.width*y+x)*4;
+                blueSamples.push([...targetPNG.data.subarray(offset,offset+3)]);
+              }
+            }
+            const visibleBlue=blueSamples.some(rgb=>rgb[0]<100&&rgb[1]>=65&&rgb[1]<160&&rgb[2]>160);
+            console.log('HOME01_TARGET_DIAGNOSTIC='+JSON.stringify({
+              ...targetDiag,visibleBlue,blueSamples,dimensions:[targetPNG.width,targetPNG.height]
+            }));
             await page.click('#esc-vb-section-order-cancel');
             await frame.waitForFunction(()=>document.querySelectorAll(
               '[data-esc-vb-swap-source],[data-esc-vb-swap-target],[data-esc-vb-home-slider]'

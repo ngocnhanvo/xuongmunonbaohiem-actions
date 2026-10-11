@@ -1,1 +1,1 @@
-QA for corrected preview complete decorated <div> root vs inner <span>, nested group safety, schema item popup, PHP/JS lint and full Astro build. No WordPress writes or FTP.
+ESC Visual Builder modal UX QA (PHP master 0ca35b8331f612c7c207ee72e9dc85ae22fa22bc): immediate loading dialog, cancel AJAX guard, WP Media Library layering; PHP syntax, JS syntax, integration tests and Astro build. Do not deploy or write customer content.

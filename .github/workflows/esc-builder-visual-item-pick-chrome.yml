@@ -52,7 +52,11 @@ jobs:
               page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
               page.click('#wp-submit')
             ]);
-            if(page.url().includes('wp-login.php'))throw Error('WordPress login failed');
+            if(page.url().includes('wp-login.php')){
+              const reason=await page.$eval('#login_error',node=>node.textContent.trim().slice(0,220))
+                .catch(()=>'(no WordPress login_error element)');
+              throw Error('WordPress login not authenticated: '+reason);
+            }
             await page.goto(root+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
               {waitUntil:'domcontentloaded',timeout:85000});
             const el=await page.waitForSelector('#esc-vb-frame',{timeout:25000});

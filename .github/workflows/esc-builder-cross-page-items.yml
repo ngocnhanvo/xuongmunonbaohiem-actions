@@ -33,7 +33,7 @@ jobs:
           const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
             headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
           const stats={pages:0,sections:0,attemptedTables:0,eligible:0,
-            selectedPage:'',tableId:'',fallback:false,writes:0};
+            selectedPage:'',tableId:'',fallback:false,writes:0,samples:[]};
           try{
             const page=await browser.newPage();
             await page.setViewport({width:1450,height:960});
@@ -54,15 +54,24 @@ jobs:
             await page.goto(base,{waitUntil:'domcontentloaded',timeout:65000});
             const options=await page.$$eval('#esc-vb-page option',all=>
               all.filter(e=>!e.selected).map(e=>({id:e.value,title:e.textContent.trim()})));
-            outer:for(const choice of options.slice(0,10)){
+            outer:for(const choice of options.slice(0,5)){
               await page.goto(base+'&esc_vb_page='+encodeURIComponent(choice.id),
                 {waitUntil:'domcontentloaded',timeout:65000});
               stats.pages++;
               const el=await page.waitForSelector('#esc-vb-frame',{timeout:12000}).catch(()=>null);
               const frame=el?await el.contentFrame():null;
               if(!frame)continue;
-              await frame.waitForSelector('[data-tablepress-preview]',{timeout:20000}).catch(()=>null);
-              const tables=await frame.$$eval('[data-tablepress-preview]',els=>
+              await frame.waitForSelector('body',{timeout:9000}).catch(()=>null);
+              const snapshot=await frame.evaluate(()=>({
+                url:location.pathname,
+                title:document.title,
+                htmlParts:document.querySelectorAll('[data-esc-builder-html-part]').length,
+                rawTables:document.querySelectorAll('[data-tablepress-preview]').length,
+                imageCount:document.querySelectorAll('main img').length,
+                excerpt:(document.body?.innerText||'').trim().slice(0,160),
+              })).catch(error=>({error:String(error).slice(0,100)}));
+              stats.samples.push({page:choice.title,...snapshot});
+              const tables=await frame.$eval('[data-tablepress-preview]',els=>
                 [...new Set(els.map(e=>e.getAttribute('data-tablepress-preview')).filter(Boolean))]);
               stats.sections+=tables.length;
               for(const id of tables.slice(0,5)){

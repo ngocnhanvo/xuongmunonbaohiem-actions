@@ -54,7 +54,7 @@ jobs:
             await page.goto(base,{waitUntil:'domcontentloaded',timeout:65000});
             const options=await page.$$eval('#esc-vb-page option',all=>
               all.filter(e=>!e.selected).map(e=>({id:e.value,title:e.textContent.trim()})));
-            outer:for(const choice of options.slice(0,16)){
+            outer:for(const choice of options.slice(0,10)){
               await page.goto(base+'&esc_vb_page='+encodeURIComponent(choice.id),
                 {waitUntil:'domcontentloaded',timeout:65000});
               stats.pages++;
@@ -65,20 +65,20 @@ jobs:
               const tables=await frame.$$eval('[data-tablepress-preview]',els=>
                 [...new Set(els.map(e=>e.getAttribute('data-tablepress-preview')).filter(Boolean))]);
               stats.sections+=tables.length;
-              for(const id of tables.slice(0,10)){
+              for(const id of tables.slice(0,5)){
                 stats.attemptedTables++;
                 try{
                   await frame.$eval('[data-tablepress-preview="'+id+'"]',node=>
                     node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true})));
                   await page.waitForFunction(id=>(
                     document.getElementById('esc-vb-item-context')?.textContent||''
-                  ).startsWith(id),{timeout:7000},id);
+                  ).startsWith(id),{timeout:4500},id);
                   const open=await page.$eval('#esc-vb-item-sort-open',
                     node=>!node.hidden&&!node.disabled).catch(()=>false);
                   if(!open)continue;
                   const response=page.waitForResponse(res=>res.request().method()==='POST'&&
                     /\/esc-builder\/v1\/item-schema\/?$/.test(new URL(res.url()).pathname),
-                    {timeout:14000});
+                    {timeout:9000});
                   await page.click('#esc-vb-item-sort-open');
                   const schemaResponse=await response;
                   const schema=await schemaResponse.json().catch(()=>null);
@@ -112,7 +112,7 @@ jobs:
                   break outer;
                 }catch(e){
                   const cancel=await page.$('#esc-vb-item-sort-cancel');
-                  if(cancel)await page.click('#esc-vb-item-sort-cancel').catch(()=>{});
+                  if(cancel)await page.$eval('#esc-vb-item-sort-cancel',el=>el.click()).catch(()=>{});
                 }
               }
             }

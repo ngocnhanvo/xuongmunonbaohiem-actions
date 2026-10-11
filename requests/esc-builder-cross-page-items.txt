@@ -1,0 +1,3 @@
+Read-only audit of non-home WordPress Page ESC Table item editing on deployed Blue Sea Builder.
+PHP FTP 38150968601, Astro FTP 38151073007, production smoke 38151172838, isolated home Chrome visual+list-source PASS 38151528609.
+Previous cross-page IMAGE-specific QA 38151229527 did not find editable image on first 12 pages (not a feature failure). This audit scans multi-row static ESC Tables with any schema, selects source from list, target safely, cancels without saving; reports skipped if no qualifying table. Must never write customer content.

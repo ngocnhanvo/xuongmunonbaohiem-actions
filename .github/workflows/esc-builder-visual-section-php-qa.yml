@@ -1,0 +1,37 @@
+name: ESC Builder Visual Section Picker PHP QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-visual-section-php-qa.yml']
+permissions: {contents: read}
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - name: Validate real Builder PHP, JavaScript and section safety
+        shell: bash
+        run: |
+          set -euo pipefail
+          plugin=wp-content/plugins/esc-visual-builder
+          php -l "$plugin/includes/item-section-ui.php"
+          php -l "$plugin/includes/section-order.php"
+          php "$plugin/tests/items-and-sections.test.php"
+          php "$plugin/tests/item-ui-script.test.php" >/tmp/esc-vb-ui.js
+          node --check /tmp/esc-vb-ui.js
+          node "$plugin/tests/item-ui-ticket.test.cjs" /tmp/esc-vb-ui.js
+          grep -Fq 'esc-vb-section-target-picked' "$plugin/includes/item-section-ui.php"
+          grep -Fq 'Chấp nhận hoán đổi' "$plugin/includes/item-section-ui.php"
+          if grep -Fq 'id="esc-vb-section-swap-target" aria-label=' "$plugin/includes/item-section-ui.php"; then
+            echo "Old dropdown remains" >&2; exit 1
+          fi
+          echo "Visual section picker PHP and rendered JS QA: PASS, no WordPress content writes"

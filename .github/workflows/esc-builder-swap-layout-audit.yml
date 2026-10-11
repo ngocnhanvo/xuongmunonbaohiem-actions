@@ -1,0 +1,70 @@
+name: ESC Builder swap layout audit (read only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-swap-layout-audit.yml']
+permissions:
+  contents: read
+concurrency:
+  group: esc-builder-swap-layout-audit
+  cancel-in-progress: true
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Inspect home_01 and home_09 PHP groups and iframe ancestor layout
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          try{
+            const page=await browser.newPage();
+            await page.goto(new URL(process.env.WP_ADMIN_URL).origin+'/wp-login.php',{waitUntil:'domcontentloaded'});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded'}).catch(()=>{}),page.click('#wp-submit')]);
+            const base=new URL(process.env.WP_ADMIN_URL).origin;
+            await page.goto(base+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',{waitUntil:'domcontentloaded'});
+            const frame=await (await page.waitForSelector('#esc-vb-frame')).contentFrame();
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:60000});
+            const data=await page.evaluate(async()=>{
+              const ticket=await window.escVBGetTicket(false);
+              const r=await fetch('/wp-json/esc-builder/v1/section-order',{
+                method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json',
+                'X-WP-Nonce':window.wpApiSettings?.nonce||document.querySelector('#_wpnonce')?.value||''},
+                body:JSON.stringify({page_id:248,ticket})
+              });
+              return {status:r.status,body:await r.json()};
+            });
+            const dom=await frame.evaluate(()=>{
+              const ids=['home_01','home_09'];
+              return ids.map(id=>{
+                const node=document.querySelector('[data-tablepress-preview="'+id+'"]');
+                if(!node)return {id,missing:true};
+                const parents=[];let el=node;
+                for(let i=0;i<8&&el;i++,el=el.parentElement){
+                  parents.push({tag:el.tagName,id:el.id,className:String(el.className).slice(0,120),
+                    children:el.children.length,previewCount:el.querySelectorAll('[data-tablepress-preview]').length,
+                    directChildren:[...el.children].slice(0,4).map(x=>x.tagName.toLowerCase()+'.'+String(x.className).slice(0,40))});
+                }
+                return {id,parents};
+              });
+            });
+            const results={page:248,status:data.status,items:data.body?.items,reason:data.body?.reason,dom};
+            console.log('ESC_BUILDER_LAYOUT_AUDIT='+JSON.stringify(results));
+            if(data.status!==200)throw Error('Read-only order API unavailable: '+JSON.stringify(data.body).slice(0,250));
+          }finally{await browser.close();}
+          JS

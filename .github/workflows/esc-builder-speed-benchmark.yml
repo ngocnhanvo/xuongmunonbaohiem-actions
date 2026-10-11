@@ -1,0 +1,102 @@
+name: ESC Builder Load Benchmark
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-speed-benchmark.txt']
+permissions:
+  contents: read
+concurrency:
+  group: esc-builder-load-benchmark
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: stable
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Measure real Builder latency without WordPress writes
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const origin=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({headless:true,
+            executablePath:process.env.CHROME_PATH,
+            args:['--no-sandbox','--disable-dev-shm-usage']});
+          const results=[];let deniedWrites=0;
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1440,height:920});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              let path='';try{path=new URL(req.url()).pathname;}catch{}
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(save|swap|insert|delete|reorder|set|update)/.test(path)){
+                deniedWrites++;req.abort('blockedbyclient');
+              } else req.continue();
+            });
+            await page.goto(origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:65000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),page.click('#wp-submit')]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress login not authenticated');
+            const base=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
+            for(let run=1;run<=5;run++){
+              if(run>1)await new Promise(ok=>setTimeout(ok,6500));
+              const elapsed=Date.now();
+              let previewResponse=null;
+              const handleResponse=res=>{
+                if(res.request().resourceType()==='document'&&res.url().includes('/esc-builder/preview/')){
+                  previewResponse={status:res.status(),ttfbMs:Date.now()-elapsed,path:new URL(res.url()).pathname};
+                }
+              };
+              page.on('response',handleResponse);
+              let adminStatus=null,readyMs=null,sections=0,imageCount=0,stageError='';
+              try{
+                const response=await page.goto(base,{waitUntil:'domcontentloaded',timeout:65000});
+                adminStatus=response?.status()||null;
+                await page.waitForSelector('#esc-vb-frame',{timeout:20000});
+                const handle=await page.$('#esc-vb-frame');
+                const frame=await handle.contentFrame();
+                if(!frame)throw Error('No iframe');
+                await frame.waitForSelector('[data-esc-builder-refresh-status]',{timeout:65000});
+                await frame.waitForFunction(()=>document.readyState==='complete',{timeout:30000}).catch(()=>{});
+                readyMs=Date.now()-elapsed;
+                const state=await frame.evaluate(()=>({
+                  sections:document.querySelectorAll('[data-tablepress-preview]').length,
+                  images:[...document.images].filter(img=>img.complete&&img.naturalWidth>0).length,
+                  info:document.querySelector('[data-esc-builder-refresh-status]')?.textContent?.trim().slice(0,150)
+                }));
+                sections=state.sections;imageCount=state.images;
+                if(state.info?.includes('Một số nguồn chưa đồng bộ'))stageError=state.info;
+                if(!sections)stageError+=' No ESC Table sections';
+              }catch(e){stageError=String(e?.message||e).slice(0,240);}
+              page.off('response',handleResponse);
+              const entry={run,adminStatus,readyMs,previewResponse,sections,imageCount,stageError};
+              results.push(entry);
+              console.log('BUILDER_LOAD_RUN='+JSON.stringify(entry));
+            }
+            const successful=results.filter(x=>x.readyMs!==null&&!x.stageError&&x.previewResponse?.status===200);
+            const mean=xs=>xs.length?Math.round(xs.reduce((s,x)=>s+x,0)/xs.length):null;
+            const summary={runs:results.length,valid:successful.length,
+              meanReadyMs:mean(successful.map(x=>x.readyMs)),
+              minReadyMs:successful.length?Math.min(...successful.map(x=>x.readyMs)):null,
+              maxReadyMs:successful.length?Math.max(...successful.map(x=>x.readyMs)):null,
+              meanPreviewTTFBMs:mean(successful.map(x=>x.previewResponse.ttfbMs)),
+              customerWrites:deniedWrites};
+            console.log('BUILDER_LOAD_SUMMARY='+JSON.stringify(summary));
+            if(deniedWrites||successful.length<3)throw Error('Benchmark incomplete: '+JSON.stringify(summary));
+          }finally{await browser.close();}
+          JS

@@ -91,7 +91,7 @@ jobs:
             // Screenshot the rendered banner and sample its CENTER LEFT BORDER.
             // This catches an occluded pseudo-element despite correct CSS.
             const banner=await frame.$('[data-tablepress-preview="home_00"]');
-            const pixels=PNG.sync.read(await banner.screenshot({type:'png'}));
+            const pixels=PNG.sync.read(Buffer.from(await banner.screenshot({type:'png'})));
             const samples=[];
             for(const fy of [0.15,0.35,0.55,0.75]){
               const x=2,y=Math.round(pixels.height*fy);

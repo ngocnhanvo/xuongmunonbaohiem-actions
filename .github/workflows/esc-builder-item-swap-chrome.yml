@@ -1,0 +1,107 @@
+name: Chrome QA - ESC Builder Item Swap (read-only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-item-swap-chrome.txt']
+permissions: {contents: read}
+concurrency:
+  group: esc-builder-item-swap-chrome
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/setup-node@v4
+        with: {node-version: '24'}
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with: {chrome-version: stable}
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Preview and cancel home_00/home_01 swaps without any write
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const base=new URL(process.env.WP_ADMIN_URL).origin;
+          const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,
+            headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+          const qa={page:248,home_00:false,home_01:false,cancel:true,sections:0,writeAttempts:0,iframeStable:false};
+          try{
+            const page=await browser.newPage();
+            await page.setViewport({width:1510,height:980});
+            await page.setRequestInterception(true);
+            page.on('request',req=>{
+              const pathname=new URL(req.url()).pathname;
+              if(req.method()==='POST'&&/\/esc-builder\/v1\/(?:swap-items|insert-item|delete-item|save-section-order|save-text|save-image|save-page-text|save-page-image)\/?$/.test(pathname)){
+                qa.writeAttempts++;req.abort('blockedbyclient');
+              }else req.continue();
+            });
+            await page.goto(base+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')]);
+            if(page.url().includes('wp-login.php'))throw Error('WP login failed');
+            await page.goto(base+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',
+              {waitUntil:'domcontentloaded',timeout:80000});
+            const frame=await (await page.waitForSelector('#esc-vb-frame')).contentFrame();
+            if(!frame)throw Error('Missing iframe');
+            await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:70000});
+            const iframeURL=frame.url();
+            qa.sections=await frame.evaluate(()=>new Set([...document.querySelectorAll('[data-tablepress-preview]')]
+              .filter(e=>!e.parentElement?.closest('[data-tablepress-preview]'))
+              .map(e=>e.getAttribute('data-tablepress-preview'))).size);
+            if(qa.sections!==14)throw Error('Expected 14 sections, got '+qa.sections);
+            const firstImage=async tableId=>frame.evaluate(tableId=>{
+              const root=document.querySelector('[data-tablepress-preview="'+tableId+'"]');
+              return root?.querySelector('[data-esc-builder-image-row="0"] img')?.getAttribute('src')||
+                root?.querySelector('[data-esc-builder-image-row="0"] picture source')?.getAttribute('srcset')||
+                root?.querySelector('[data-esc-builder-image-row="0"]')?.getAttribute('src')||'';
+            },tableId);
+            for(const id of ['home_01','home_00']){
+              await frame.$eval('[data-tablepress-preview="'+id+'"] [data-esc-builder-image-row="0"]',
+                node=>{node.addEventListener('click',e=>e.preventDefault(),{capture:true,once:true});
+                  node.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true}));});
+              await page.waitForFunction(id=>{
+                const e=document.getElementById('esc-vb-item-sort-open');
+                return e&&!e.hidden&&!e.disabled&&
+                  (document.getElementById('esc-vb-item-context')?.textContent||'').startsWith(id);
+              },{timeout:14000},id);
+              const source=await firstImage(id);
+              if(!source)throw Error('Missing initial image '+id);
+              const response=page.waitForResponse(res=>res.request().method()==='POST'&&
+                /\/esc-builder\/v1\/item-schema\/?$/.test(new URL(res.url()).pathname),{timeout:30000});
+              await page.click('#esc-vb-item-sort-open');
+              const schema=await (await response).json();
+              if(schema.table_id!==id||schema.count<2)throw Error('Missing two rows '+id);
+              await page.waitForFunction(()=>document.getElementById('esc-vb-item-sort-source')?.options.length>=2,
+                {timeout:12000});
+              if(!await page.$eval('#esc-vb-item-sort-save',e=>e.disabled))
+                throw Error('Save enabled before safe preview '+id);
+              await page.click('#esc-vb-item-sort-preview');
+              await page.waitForFunction(()=>document.getElementById('esc-vb-item-sort-save')?.disabled===false,
+                {timeout:12000});
+              const changed=await firstImage(id);
+              if(changed===source)throw Error('No visible image swap '+id);
+              await page.click('#esc-vb-item-sort-cancel');
+              await frame.waitForFunction(({tableId,source})=>{
+                const root=document.querySelector('[data-tablepress-preview="'+tableId+'"]');
+                const next=root?.querySelector('[data-esc-builder-image-row="0"] img')?.getAttribute('src')||
+                  root?.querySelector('[data-esc-builder-image-row="0"] picture source')?.getAttribute('srcset')||
+                  root?.querySelector('[data-esc-builder-image-row="0"]')?.getAttribute('src')||'';
+                return source===next;
+              },{timeout:13000},{tableId:id,source});
+              qa[id]=true;
+            }
+            qa.iframeStable=frame.url()===iframeURL;
+            if(!qa.iframeStable||qa.writeAttempts!==0)
+              throw Error('Iframe reload or unexpected WordPress content write');
+            console.log('ESC_BUILDER_ITEM_SWAP_CHROME_PASS='+JSON.stringify(qa));
+          }finally{await browser.close();}
+          JS

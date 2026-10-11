@@ -129,6 +129,57 @@ jobs:
                 {timeout:14000});
               qa[id]=true;
             }
+            // Consecutive gallery preview reconstruction is READ-ONLY. Simulate
+            // two order updates through the existing iframe protocol, then
+            // click the real IMG (not the outer FIGURE) to catch stale row tags.
+            const originalFactory=await frame.evaluate(()=>[...document.querySelectorAll(
+              '[data-tablepress-preview="home_01"] .grid figure[data-esc-builder-image-row]'
+            )].map(fig=>({
+              row:Number(fig.getAttribute('data-esc-builder-image-row')),
+              title:fig.querySelector('figcaption')?.textContent?.trim()||'Nhà xưởng',
+              img:{src:fig.querySelector('img')?.src||'',alt:fig.querySelector('img')?.alt||''}
+            })).sort((a,b)=>a.row-b.row));
+            if(originalFactory.length<2||originalFactory.length>40||
+              originalFactory.some((item,i)=>item.row!==i||!item.img.src.startsWith('https://'))){
+              throw Error('Could not safely reconstruct factory gallery for read-only repeat QA');
+            }
+            const sendGalleryPreview=async(type,items,requestId)=>page.evaluate(
+              ({type,items,requestId,origin})=>{
+                const iframe=document.getElementById('esc-vb-frame');
+                iframe.contentWindow.postMessage({type,tableId:'home_01',items,requestId},origin);
+              },{type,items,requestId,origin:new URL(frame.url()).origin}
+            );
+            let factoryItems=originalFactory.map(({title,img})=>({title,img}));
+            for(let pass=0;pass<2;pass++){
+              const swapped=[...factoryItems];
+              [swapped[0],swapped[1]]=[swapped[1],swapped[0]];
+              await sendGalleryPreview('esc-vb-item-sort-preview',swapped,900+pass);
+              await frame.waitForFunction(src=>{
+                const img=document.querySelector(
+                  '[data-tablepress-preview="home_01"] .grid figure[data-esc-builder-image-row="0"] img'
+                );
+                return img?.src===src;
+              },{timeout:15000},swapped[0].img.src);
+              const wrong=await frame.evaluate(()=>[...document.querySelectorAll(
+                '[data-tablepress-preview="home_01"] .grid figure[data-esc-builder-image-row]'
+              )].filter(fig=>{
+                const row=fig.getAttribute('data-esc-builder-image-row');
+                return [...fig.querySelectorAll('[data-esc-builder-image-row],[data-esc-builder-row]')]
+                  .some(el=>(el.getAttribute('data-esc-builder-image-row')||
+                    el.getAttribute('data-esc-builder-row'))!==row);
+              }).length);
+              if(wrong)throw Error('home_01 cloned nested image points to stale row after preview '+(pass+1));
+              await dispatch('[data-tablepress-preview="home_01"] .grid figure[data-esc-builder-image-row="1"] img');
+              await page.waitForFunction(()=>(
+                document.getElementById('esc-vb-item-context')?.textContent||''
+              ).startsWith('home_01 · dòng 2'),{timeout:15000});
+              factoryItems=swapped;
+            }
+            await sendGalleryPreview('esc-vb-item-sort-cancel',
+              originalFactory.map(({title,img})=>({title,img})),905);
+            await frame.waitForFunction(src=>document.querySelector(
+              '[data-tablepress-preview="home_01"] .grid figure[data-esc-builder-image-row="0"] img'
+            )?.src===src,{timeout:15000},originalFactory[0].img.src);
             qa.iframeStable=frame.url()===initialUrl;
             if(!qa.iframeStable||qa.writeAttempts!==0)
               throw Error('Unexpected iframe navigation or content write request');

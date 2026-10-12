@@ -1,0 +1,1 @@
+Independent original vs Astro desktop Lighthouse audit on 2026-10-12; no production modifications.

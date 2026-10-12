@@ -2,3 +2,5 @@ Validate permanent SSR WordPress Action cache reconciliation on Astro github 5ef
 
 Test PostsPage fix at xuongmunonbaohiem-astro github 8fcbf0bd8fb0ff03a2b72b059f1818c10d3600a8
 Rerun focused PostsPage contract tests and full dev build.
+
+2026-10-13: Verify SEO listingTitle fix on Astro github branch ef8f93e926714cdd26fe8173d3413bbbbc99046d. Run 8 category + product landing + Tin tức title tests, legacy H1 tests, and full Astro build; no deploy.

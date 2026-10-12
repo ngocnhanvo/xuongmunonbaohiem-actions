@@ -1,0 +1,6 @@
+Deploy ESC Visual Builder shortcut on WordPress Page edit screens.
+PHP source: ngocnhanvo/xuongmunonbaohiem-php@master (shortcut introduced in e7163eea09f3705db105499e0b6541d049efb138).
+Scope: ONLY wp-content/mu-plugins/esc-visual-builder-page-shortcut.php
+Target: WordPress FTP; byte-verify remote content; PHP syntax check and WordPress REST smoke test.
+No Astro changes, no data writes, no builder plugin file resync.
+Requested: 2026-10-12

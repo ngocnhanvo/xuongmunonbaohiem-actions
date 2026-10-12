@@ -1,0 +1,1 @@
+Run post-deploy read-only HTTP 301 and Location validation for all 22 legacy Blue Sea URLs. WordPress seed run 38319771319 and Astro deploy run 38319909668 both succeeded.

@@ -1,0 +1,100 @@
+name: Blue Sea Legacy Category H1 Comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/category-h1-comparison.yml'
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Inspect exact H1 in the source and production HTML (read-only)
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, urllib.request, urllib.error, concurrent.futures, html, os
+          from html.parser import HTMLParser
+
+          routes = [
+              'san-pham',
+              'san-pham/non-bao-hiem-nua-dau',
+              'san-pham/non-bao-hiem-boc-da',
+              'san-pham/non-bao-hiem-co-kinh',
+              'san-pham/non-bao-hiem-3-4',
+              'san-pham/mau-non-khac',
+              'mau-non-khac/non-bao-hiem-2-ban-chan',
+              'mau-non-khac/non-bao-hiem-f1',
+              'mau-non-khac/non-bao-hiem-6-lo-8-lo',
+              'mau-non-khac/non-bao-hiem-tre-em',
+          ]
+
+          class H1Parser(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.depth = 0
+                  self.buf = []
+                  self.found = []
+              def handle_starttag(self, tag, attrs):
+                  if self.depth:
+                      self.depth += 1
+                  elif tag == 'h1':
+                      self.depth = 1
+                      self.buf = []
+              def handle_endtag(self, tag):
+                  if self.depth:
+                      self.depth -= 1
+                      if not self.depth:
+                          self.found.append(' '.join(html.unescape(''.join(self.buf)).split()))
+              def handle_data(self, value):
+                  if self.depth:
+                      self.buf.append(value)
+
+          def fetch(base, route):
+              url = 'https://' + base + '/' + route
+              try:
+                  req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 ESC-SEO-Category-H1-Audit/1.0'})
+                  with urllib.request.urlopen(req, timeout=22) as response:
+                      status = response.status
+                      final_url = response.url
+                      content = response.read().decode('utf8', 'replace')
+                  parser = H1Parser()
+                  parser.feed(content)
+                  return {'status': status, 'url': final_url, 'h1': parser.found}
+              except Exception as exc:
+                  return {'error': str(exc)[:200], 'url': url}
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+              jobs = {(base, route): pool.submit(fetch, base, route)
+                      for route in routes for base in ('xuongmunonbaohiem.com', 'xuongmunonbaohiem.io.vn')}
+              report = []
+              for route in routes:
+                  original = jobs[('xuongmunonbaohiem.com', route)].result()
+                  production = jobs[('xuongmunonbaohiem.io.vn', route)].result()
+                  matched = original.get('status') == 200 and production.get('status') == 200 and len(original.get('h1', [])) == 1 and original.get('h1') == production.get('h1')
+                  entry = {'route': route, 'matched': matched, 'original': original, 'production': production}
+                  report.append(entry)
+                  print(json.dumps(entry, ensure_ascii=False), flush=True)
+          with open('category-h1-comparison.json', 'w', encoding='utf8') as f:
+              json.dump(report, f, ensure_ascii=False, indent=2)
+          count = sum(x['matched'] for x in report)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as f:
+              f.write('### Blue Sea category H1 read-only audit\n\n')
+              f.write('Exactly matched: ' + str(count) + '/10\n\n')
+              f.write('| Route | Original H1 | Production H1 | Match |\n|---|---|---|---|\n')
+              for x in report:
+                  original = ', '.join(x['original'].get('h1', [])) or x['original'].get('error','No H1')
+                  prod = ', '.join(x['production'].get('h1', [])) or x['production'].get('error','No H1')
+                  f.write('| /' + x['route'] + ' | ' + original.replace('|','\\|') + ' | ' + prod.replace('|','\\|') + ' | ' + ('YES' if x['matched'] else 'NO') + ' |\n')
+          if not any(x['original'].get('status') == 200 for x in report):
+              raise SystemExit('Legacy source unavailable; no comparison can be trusted.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blue-sea-category-h1-comparison
+          path: category-h1-comparison.json
+          retention-days: 14

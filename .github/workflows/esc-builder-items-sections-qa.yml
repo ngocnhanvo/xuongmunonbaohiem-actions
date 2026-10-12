@@ -51,7 +51,7 @@ jobs:
         run: pnpm install --frozen-lockfile --prefer-offline
       - name: Verify no iframe reload, safe section order, old Builder features
         working-directory: astro
-        run: pnpm exec vitest run src/lib/wordpress/builderSectionDrafts.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts src/lib/wordpress/builderProductListing.test.ts
+        run: pnpm exec vitest run src/lib/wordpress/builderSectionDrafts.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts src/lib/wordpress/builderProductListing.test.ts src/lib/wordpress/builderLivePage.test.ts
       - name: Compile full Astro development branch (no deploy)
         working-directory: astro
         env:

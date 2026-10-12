@@ -1,6 +1,9 @@
 name: Blue Sea Legacy Category H1 Comparison
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: [Deploy Blue Sea Astro Production]
+    types: [completed]
   push:
     branches: [main]
     paths:
@@ -9,6 +12,7 @@ permissions:
   contents: read
 jobs:
   compare:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:

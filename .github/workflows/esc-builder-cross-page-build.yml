@@ -46,9 +46,9 @@ jobs:
           set -euo pipefail
           test -n "$ENV_FILE"
           printf '%s\n' "$ENV_FILE" > .env
-      - name: Verify Product Page SSR renderer and banner regression
+      - name: Verify Product and PostsPage Builder render contracts
         working-directory: source
-        run: pnpm exec vitest run src/lib/wordpress/builderProductListing.test.ts src/lib/wordpress/pages/ssrActionAudit.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts
+        run: pnpm exec vitest run src/lib/wordpress/builderProductListing.test.ts src/lib/wordpress/builderPostsPreview.test.ts src/lib/wordpress/pages/ssrActionAudit.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts
       - name: Compile development Builder and public pages without deploy
         working-directory: source
         run: pnpm run build-git

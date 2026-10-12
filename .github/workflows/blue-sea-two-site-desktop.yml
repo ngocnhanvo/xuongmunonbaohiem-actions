@@ -1,0 +1,70 @@
+name: Blue Sea Original vs Astro Desktop Lighthouse
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/blue-sea-two-site-desktop.txt']
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: stable
+      - name: Install Lighthouse
+        run: npm install --global lighthouse@13.5.0
+      - name: Matched-site Lighthouse desktop using proper desktop preset
+        shell: bash
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          for site in original astro; do
+            if [ "$site" = original ]; then root=https://xuongmunonbaohiem.com; else root=https://xuongmunonbaohiem.io.vn; fi
+            for page in home products; do
+              if [ "$page" = home ]; then path=/; samples="1 2"; else path=/san-pham; samples=1; fi
+              for n in $samples; do
+                outfile="reports/${site}-${page}-desktop-${n}.json"
+                echo "AUDIT_START ${site} ${page} desktop ${n}"
+                lighthouse "$root$path" \
+                  --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" \
+                  --preset=desktop \
+                  --only-categories=performance,accessibility,best-practices,seo \
+                  --throttling-method=simulate --output=json --output-path="$outfile" --quiet
+              done
+            done
+          done
+          node --input-type=module <<'JS'
+          import {readFileSync,readdirSync,appendFileSync} from 'node:fs';
+          const records=[];
+          for(const file of readdirSync('reports').filter(s=>s.endsWith('.json'))){
+            const data=JSON.parse(readFileSync('reports/'+file));
+            const [site,page,device,run]=file.replace('.json','').split('-');
+            const round=id=>Math.round(data.audits[id]?.numericValue||0);
+            records.push({site,page,device,run,performance:Math.round(data.categories.performance.score*100),
+              accessibility:Math.round(data.categories.accessibility.score*100),
+              bestPractices:Math.round(data.categories['best-practices'].score*100),
+              seo:Math.round(data.categories.seo.score*100),
+              lcpMs:round('largest-contentful-paint'),tbtMs:round('total-blocking-time'),
+              cls:data.audits['cumulative-layout-shift']?.numericValue||0,finalUrl:data.finalUrl});
+          }
+          console.log('DESKTOP_AUDIT='+JSON.stringify(records));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,'| Site | Page | Device | Perf | A11y | Best practices | SEO | LCP ms | TBT ms | CLS |\n|---|---|---|---:|---:|---:|---:|---:|---:|---:|\n');
+          for(const r of records) appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            '|'+[r.site,r.page,r.device,r.performance,r.accessibility,r.bestPractices,r.seo,r.lcpMs,r.tbtMs,r.cls.toFixed(3)].join('|')+'|\n');
+          JS
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blue-sea-two-site-desktop-${{ github.run_id }}
+          path: reports
+          retention-days: 10
+          if-no-files-found: warn

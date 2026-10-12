@@ -1,0 +1,160 @@
+{
+  "version": "2026-10-13-blue-sea-legacy-22",
+  "purpose": "Repair 22 verified historical 404 URLs without modifying public page content or the seeded structural routing rules.",
+  "rules": [
+    {
+      "from": "/dat-san-xuat-non-bao-hiem-so-luong-lon-gia-re/",
+      "to": "/gia-cong-non-bao-hiem-so-luong-lon-cho-doanh-nghiep",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "closest matching active legacy service/product page"
+    },
+    {
+      "from": "/non-bao-hiem-3-4-cj.html",
+      "to": "/san-pham/non-bao-hiem-3-4-cj",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-3-4-dau-dammtrax.html",
+      "to": "/san-pham/non-bao-hiem-3-4-dau-dammtrax",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-3-4-dau-dammtrax-2.html",
+      "to": "/san-pham/non-bao-hiem-3-4-dau-dammtrax-2",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-3-4-dreamgames.html",
+      "to": "/san-pham/non-bao-hiem-3-4-dreamgames",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-6-lo-8-lo-bimix.html",
+      "to": "/san-pham/non-bao-hiem-6-lo-8-lo-bimix",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-co-kieng-rft.html",
+      "to": "/san-pham/non-bao-hiem-co-kieng-rft",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-co-kieng-sai-gon-moto-tour.html",
+      "to": "/san-pham/non-bao-hiem-co-kieng-sai-gon-moto-tour",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-co-kinh-bestapples.html",
+      "to": "/san-pham/non-bao-hiem-co-kinh-bestapples",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-f1-homeland.html",
+      "to": "/san-pham/non-bao-hiem-f1-homeland",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-ngan-hang-abbank.html",
+      "to": "/san-pham/non-bao-hiem-ngan-hang-abbank",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-nua-dau-alo.html",
+      "to": "/san-pham/non-bao-hiem-nua-dau-alo",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-nua-dau-bon-nuoc-inox-viet-my.html",
+      "to": "/san-pham/non-bao-hiem-nua-dau-bon-nuoc-inox-viet-my",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-nua-dau-gia-vespa-gumac-mau-2.html",
+      "to": "/san-pham/non-bao-hiem-nua-dau-gia-vespa-gumac-mau-2",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-nua-dau-in-logo-ahamove.html",
+      "to": "/san-pham/non-bao-hiem-nua-dau-in-logo-ahamove",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-nua-dau-in-logo-gas-anh-duong.html",
+      "to": "/san-pham/non-bao-hiem-nua-dau-in-logo-gas-anh-duong",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-nua-dau-vietcombank.html",
+      "to": "/san-pham/non-bao-hiem-nua-dau-vietcombank",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/non-bao-hiem-qua-tang-gia-re-tai-tphcm/",
+      "to": "/xuong-san-xuat-mu-bao-hiem-gia-re-tai-tphcm",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "closest matching active legacy service/product page"
+    },
+    {
+      "from": "/non-bao-hiem-vespa-yves-rocher.html",
+      "to": "/san-pham/non-bao-hiem-vespa-yves-rocher",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "same named product detail"
+    },
+    {
+      "from": "/san-pham/non-bao-hiem-vespa-2/",
+      "to": "/san-pham/non-bao-hiem-vespa",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "closest matching active legacy service/product page"
+    },
+    {
+      "from": "/san-pham/non-bao-hiem-vespa-special-2/",
+      "to": "/san-pham/non-bao-hiem-vespa-special",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "closest matching active legacy service/product page"
+    },
+    {
+      "from": "/xuong-san-xuat-mu-bao-hiem-tai-hcm.html",
+      "to": "/xuong-san-xuat-mu-bao-hiem-gia-re-tai-tphcm",
+      "type": 301,
+      "matchType": "Exact",
+      "reason": "closest matching active legacy service/product page"
+    }
+  ]
+}

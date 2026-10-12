@@ -1,0 +1,77 @@
+name: Blue Sea Ten Listing SEO Titles Smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/blue-sea-ten-listing-titles.txt
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify ten public SEO titles, social titles, and live H1 without modifying content
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import concurrent.futures,html,json,time,urllib.request
+          from html.parser import HTMLParser
+          expected={
+            '/san-pham':'Mũ Bảo Hiểm In Logo Theo Yêu Cầu | Blue Sea',
+            '/san-pham/non-bao-hiem-nua-dau':'Nón Bảo Hiểm Nửa Đầu | Xưởng Sản Xuất Blue Sea',
+            '/san-pham/non-bao-hiem-co-kinh':'Nón Bảo Hiểm Có Kính | Blue Sea',
+            '/san-pham/non-bao-hiem-3-4':'Nón Bảo Hiểm 3/4 | Blue Sea',
+            '/san-pham/mau-non-khac':'Các Mẫu Nón Bảo Hiểm Khác | Blue Sea',
+            '/san-pham/non-bao-hiem-2-ban-chan':'Nón Bảo Hiểm 2 Bàn Chân | Blue Sea',
+            '/san-pham/non-bao-hiem-f1':'Nón Bảo Hiểm F1 | Blue Sea',
+            '/san-pham/non-bao-hiem-6-lo-8-lo':'Nón Bảo Hiểm 6 Lỗ, 8 Lỗ | Blue Sea',
+            '/san-pham/non-bao-hiem-tre-em':'Nón Bảo Hiểm Trẻ Em | Blue Sea',
+            '/tin-tuc':'Tin Tức Sản Xuất Mũ Bảo Hiểm | Blue Sea',
+          }
+          class Head(HTMLParser):
+            def __init__(self):
+              super().__init__();self.tag='';self.title=[];self.h1=[];self.h1_count=0;self.meta={}
+            def handle_starttag(self,tag,attrs):
+              d=dict(attrs)
+              if tag in ('title','h1'):
+                self.tag=tag
+                if tag=='h1':self.h1_count+=1
+              if tag=='meta':
+                key=d.get('name') or d.get('property')
+                if key:self.meta[key]=d.get('content','')
+            def handle_endtag(self,tag):
+              if tag==self.tag:self.tag=''
+            def handle_data(self,data):
+              if self.tag=='title':self.title.append(data)
+              if self.tag=='h1':self.h1.append(data)
+          def check(pair):
+            path,title=pair
+            started=time.monotonic()
+            record={'path':path,'expected':title}
+            for attempt in range(3):
+              try:
+                req=urllib.request.Request('https://xuongmunonbaohiem.io.vn'+path,headers={'User-Agent':'Mozilla/5.0 BlueSea-SEO-QA/1.0'})
+                with urllib.request.urlopen(req,timeout=35) as resp:
+                  record['status']=resp.status
+                  parser=Head();parser.feed(resp.read(1200000).decode('utf8','replace'))
+                record['title']=html.unescape(''.join(parser.title).strip())
+                record['h1']=' '.join(''.join(parser.h1).split())[:160]
+                record['h1Count']=parser.h1_count
+                record['og_title']=parser.meta.get('og:title','')
+                record['twitter_title']=parser.meta.get('twitter:title','')
+                record['ok']=record['status']==200 and record['title']==title and record['og_title']==title and record['twitter_title']==title and record['h1Count']==1 and bool(record['h1'])
+                break
+              except Exception as error:
+                record['error']=type(error).__name__+': '+str(error)[:75]
+                time.sleep(attempt+1)
+            record['elapsedSeconds']=round(time.monotonic()-started,2)
+            return record
+          with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            results=list(pool.map(check,expected.items()))
+          for result in results:print('SEO_TITLE_QA='+json.dumps(result,ensure_ascii=False),flush=True)
+          print('SEO_TITLE_SUMMARY='+json.dumps({'checked':len(results),'passed':sum(r.get('ok',False) for r in results),'failed':[r['path'] for r in results if not r.get('ok')]},ensure_ascii=False),flush=True)
+          assert all(result.get('ok') for result in results),'Live title QA failed'
+          PY

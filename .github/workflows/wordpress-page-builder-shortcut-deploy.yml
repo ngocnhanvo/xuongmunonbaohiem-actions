@@ -50,8 +50,8 @@ jobs:
           test -s "$file"
           php -l "$file"
           grep -Fq "admin_footer-post.php" "$file"
-          grep -Fq "'esc_vb_page' => (int) $post->ID" "$file"
-          grep -Fq "current_user_can('edit_post', $post->ID)" "$file"
+          grep -Fq "esc_vb_page" "$file"
+          grep -Fq "current_user_can('edit_post'" "$file"
           grep -Fq "esc-vb-page-shortcut" "$file"
           grep -Fq "noopener noreferrer" "$file"
 

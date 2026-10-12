@@ -75,3 +75,5 @@ jobs:
               pending=next_pending
               time.sleep(5)
           PY
+
+# One-time verification after isolated Astro master H1 whitespace hotfix c5890120a42f90d92472428667d55583fa1ac334

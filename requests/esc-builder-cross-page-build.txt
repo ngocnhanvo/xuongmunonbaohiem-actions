@@ -1,1 +1,3 @@
 Validate permanent SSR WordPress Action cache reconciliation on Astro github 5ef018e69b72c304fa9fa512c5960e7c8a003afc. Tests: builder Product listing exact Action, SSR Action metadata drift and fail-closed; full Astro build. QA only, no FTP.
+
+Test PostsPage fix at xuongmunonbaohiem-astro github 8fcbf0bd8fb0ff03a2b72b059f1818c10d3600a8

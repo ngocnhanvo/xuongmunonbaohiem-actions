@@ -1,0 +1,93 @@
+name: Blue Sea Final Legacy Product H1 Classification
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/product-h1-final-classification.yml'
+permissions:
+  contents: write
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: astro
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify exact original title H1 on just the 20 remaining direct URLs
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {extractH1s,slugFromUrl,safeLegacyUrl,normalizeH1,rowsToCsv} from './astro/scripts/audit-legacy-product-h1.mjs';
+          const base='https://xuongmunonbaohiem.com';
+          const prior=JSON.parse(readFileSync('reports/product-h1-supplement.json','utf8'));
+          const audit=JSON.parse(readFileSync('reports/product-h1-audit.json','utf8'));
+          const remaining=prior.rows.filter(x=>x.status==='unmatched_url');
+          if(remaining.length!==20)throw Error('Expected precisely 20 outstanding slugs');
+          const ambiguous=audit.rows.find(x=>x.status==='ambiguous_urls'&&x.wp_slug==='non-bao-hiem-vespa');
+          if(!ambiguous)throw Error('Original duplicate Vespa slug is missing');
+          const batch=[...remaining,ambiguous],results=[];
+          async function probe(url,row){
+            const ctrl=new AbortController(), timer=setTimeout(()=>ctrl.abort(),12000);
+            try{
+              const resp=await fetch(url,{redirect:'follow',signal:ctrl.signal,headers:{'User-Agent':'ESC-H1-ReadOnly-Audit/1.0'}});
+              if(!resp.ok)return {valid:false,url,reason:'HTTP '+resp.status};
+              if(!safeLegacyUrl(resp.url,base)||slugFromUrl(resp.url)!==row.wp_slug.toLocaleLowerCase('vi-VN'))return {valid:false,url,reason:'redirect'};
+              const h1s=extractH1s(await resp.text());
+              if(h1s.length!==1)return {valid:false,url,reason:'H1_count_'+h1s.length};
+              const title=normalizeH1(row.wp_title),h1=h1s[0];
+              return {valid:true,url:resp.url,h1,status:h1===title?'equivalent_title':h1.startsWith(title+' - ')?'recovered_needs_h1':'title_mismatch'};
+            }catch(e){return {valid:false,url,reason:String(e?.message||e).slice(0,100)}}
+            finally{clearTimeout(timer)}
+          }
+          for(const row of batch){
+            const slug=encodeURIComponent(row.wp_slug);
+            const guesses=[base+'/san-pham/'+slug+'/',base+'/'+slug+'.html'];
+            const found=[];
+            for(const url of guesses){
+              const p=await probe(url,row);
+              if(p.valid&&!found.some(x=>x.url===p.url))found.push(p);
+            }
+            const same=found.length>0&&found.every(p=>p.h1===found[0].h1);
+            const chosen=same?found[0]:null;
+            const status=chosen?chosen.status:found.length>1?'ambiguous_urls':'unresolved';
+            results.push({...row,status,legacy_url:chosen?.url||'',legacy_h1:chosen?.h1||'',checks:found});
+            console.log(row.wp_slug+': '+status);
+          }
+          const summary={};
+          for(const row of results)summary[row.status]=(summary[row.status]||0)+1;
+          writeFileSync('reports/product-h1-final-remainder.json',JSON.stringify({generated_at:new Date().toISOString(),summary,rows:results},null,2)+'\n');
+          writeFileSync('reports/product-h1-final-remainder.csv',rowsToCsv(results));
+          console.log('Final read-only classification:',summary);
+          JS
+      - name: Publish read-only final remainder audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os
+          j=json.load(open('reports/product-h1-final-remainder.json',encoding='utf8'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('Final 20 direct-URL H1 and duplicate Vespa comparison; no WordPress writes.\n')
+              f.write('Status: '+str(j['summary'])+'\n')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/product-h1-final-remainder.json reports/product-h1-final-remainder.csv
+          git commit -m "reports(seo): distinguish exact-title H1 from missing URL"
+          git push origin HEAD:main
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blue-sea-product-h1-final-remainder-${{ github.run_id }}
+          path: reports/product-h1-final-remainder.*
+          retention-days: 30

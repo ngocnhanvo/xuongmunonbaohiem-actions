@@ -90,7 +90,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          base="${WP_ADMIN_URL%/}"
+          base="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          value=os.environ['WP_ADMIN_URL']
+          p=urlparse(value if '://' in value else 'https://'+value)
+          print(p.scheme+'://'+p.netloc)
+          PY
+          )"
           for attempt in 1 2 3; do
             if curl -fsS --connect-timeout 10 --max-time 30 "$base/wp-json/" >/dev/null; then
               echo "WordPress REST healthy"

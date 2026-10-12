@@ -59,7 +59,8 @@ jobs:
               let previewResponse=null;
               const handleResponse=res=>{
                 if(res.request().resourceType()==='document'&&res.url().includes('/esc-builder/preview/')){
-                  previewResponse={status:res.status(),ttfbMs:Date.now()-elapsed,path:new URL(res.url()).pathname};
+                  previewResponse={status:res.status(),ttfbMs:Date.now()-elapsed,path:new URL(res.url()).pathname,
+                    serverTiming:res.headers()['server-timing']||null};
                 }
               };
               page.on('response',handleResponse);

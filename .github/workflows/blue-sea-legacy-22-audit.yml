@@ -1,0 +1,73 @@
+name: Blue Sea Legacy 22 Redirect Target Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/blue-sea-legacy-22-audit.txt']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit 22 legacy 404 paths and potential destinations (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,urllib.parse,urllib.error,xml.etree.ElementTree as ET,json,os,concurrent.futures,difflib,re,html
+          from html.parser import HTMLParser
+          sources=json.load(open('reports/legacy-22-redirect-sources.json'))['paths']
+          assert len(sources)==22 and len(set(sources))==22
+          root='https://xuongmunonbaohiem.io.vn'
+          xml=ET.fromstring(urllib.request.urlopen(root+'/sitemap.xml',timeout=30).read())
+          urls=[x.text for x in xml.iter() if x.tag.split('}')[-1]=='loc' and x.text]
+          paths=sorted(set((urllib.parse.urlsplit(u).path.rstrip('/') or '/') for u in urls))
+          class Title(HTMLParser):
+              def __init__(self):super().__init__();self.on=False;self.parts=[]
+              def handle_starttag(self,tag,attrs):
+                  if tag=='title':self.on=True
+              def handle_endtag(self,tag):
+                  if tag=='title':self.on=False
+              def handle_data(self,x):
+                  if self.on:self.parts.append(x)
+          def probe(host,path):
+              url='https://'+host+path
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 ESC-Redirect-Audit/1.0'})
+                  with urllib.request.urlopen(req,timeout=28) as response:
+                      data=response.read(150_000)
+                      title=Title();title.feed(data.decode('utf-8','replace'))
+                      return {'code':response.status,'final':urllib.parse.urlsplit(response.url).path,
+                        'title':html.unescape(' '.join(''.join(title.parts).split()))[:145]}
+              except urllib.error.HTTPError as error:
+                  return {'code':error.code,'final':urllib.parse.urlsplit(url).path}
+              except Exception as e:return {'error':type(e).__name__+': '+str(e)[:85]}
+          def audit(old):
+              raw=old.rstrip('/')
+              suffix=raw[:-5] if raw.endswith('.html') else raw
+              stem=suffix.split('/')[-1]
+              candidates=[('/san-pham/'+stem),suffix]
+              # No fallback to category/home unless exact content is present.
+              candidates=list(dict.fromkeys((x.rstrip('/') or '/') for x in candidates))
+              choices=difflib.get_close_matches('/san-pham/'+stem,paths,n=6,cutoff=.48)
+              others=difflib.get_close_matches('/'+stem,paths,n=6,cutoff=.50)
+              matches=list(dict.fromkeys(candidates+choices+others))
+              selected=[(p,probe('xuongmunonbaohiem.io.vn',p)) for p in matches[:9]]
+              original=probe('xuongmunonbaohiem.com',old)
+              current=probe('xuongmunonbaohiem.io.vn',old)
+              exact=next(({'path':p,**result} for p,result in selected if p=='/san-pham/'+stem and result.get('code')==200 and result.get('final')==p),None)
+              return {'legacy':old,'original':original,'current':current,'recommendedExactProduct':exact,
+                     'candidateResults':[{'path':p,**result} for p,result in selected]}
+          with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+              rows=list(pool.map(audit,sources))
+          for row in rows:print('TARGET_AUDIT='+json.dumps(row,ensure_ascii=False),flush=True)
+          matched=[r for r in rows if r['recommendedExactProduct']]
+          print('TARGET_AUDIT_SUMMARY='+json.dumps({
+              'total':len(rows),'exactProductFound':len(matched),'unresolvedLegacy':[r['legacy'] for r in rows if not r['recommendedExactProduct']],
+              'old200':sum(r['original'].get('code')==200 for r in rows),
+              'old404InAstro':sum(r['current'].get('code')==404 for r in rows)
+          },ensure_ascii=False),flush=True)
+          PY

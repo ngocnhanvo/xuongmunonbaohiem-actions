@@ -1,0 +1,31 @@
+name: Blue Sea Full Title Parity Read-only Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'requests/blue-sea-title-audit.txt'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-full-title-audit
+  cancel-in-progress: false
+jobs:
+  titles:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check script syntax before running
+        run: python3 -m py_compile scripts/audit-blue-sea-titles.py
+      - name: Compare source and Astro live HTML titles
+        shell: bash
+        run: python3 scripts/audit-blue-sea-titles.py
+      - name: Upload full source-to-target SEO comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blue-sea-title-parity-${{ github.run_id }}
+          path: reports/blue-sea-title-parity/
+          retention-days: 14
+          if-no-files-found: warn

@@ -1,0 +1,20 @@
+name: Blue Sea Legacy Unpaired Title Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/blue-sea-unmatched-title-audit.txt']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit remaining historical URL matches and HTML titles
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/audit-blue-sea-unmatched-titles.py
+          python3 scripts/audit-blue-sea-unmatched-titles.py

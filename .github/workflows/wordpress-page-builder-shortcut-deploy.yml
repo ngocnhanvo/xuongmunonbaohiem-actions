@@ -1,0 +1,116 @@
+name: Deploy Page Editor Visual Builder Shortcut
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/wordpress-page-builder-shortcut-deploy.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blue-sea-page-builder-shortcut-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate deployment secrets
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for key in SOURCE_REPO_PAT FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do
+            test -n "${!key:-}"
+          done
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: source
+
+      - name: Validate shortcut contract and PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "PHP source: $(git -C source rev-parse HEAD)"
+          file="source/wp-content/mu-plugins/esc-visual-builder-page-shortcut.php"
+          test -s "$file"
+          php -l "$file"
+          grep -Fq "admin_footer-post.php" "$file"
+          grep -Fq "'esc_vb_page' => (int) $post->ID" "$file"
+          grep -Fq "current_user_can('edit_post', $post->ID)" "$file"
+          grep -Fq "esc-vb-page-shortcut" "$file"
+          grep -Fq "noopener noreferrer" "$file"
+
+      - name: Deploy only the shortcut via FTP and byte-verify
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -qq -y lftp
+          export REMOTE_DIR="$(python3 - <<'PY'
+          from urllib.parse import urlparse
+          import os
+          raw=os.environ['WP_ADMIN_URL']
+          host=urlparse(raw if '://' in raw else 'https://'+raw).hostname
+          if not host: raise SystemExit('Invalid WP_ADMIN_URL')
+          print('/domains/'+host+'/public_html/wp-content/mu-plugins')
+          PY
+          )"
+          ftp_url="$(python3 - <<'PY'
+          from urllib.parse import quote
+          import os
+          protocol=os.getenv('FTP_PROTOCOL') or 'ftp'
+          if protocol not in ('ftp','ftps','sftp'): raise SystemExit('Unsupported FTP protocol')
+          print(protocol+'://'+quote(os.environ['FTP_USERNAME'],safe='')+':'+quote(os.environ['FTP_PASSWORD'],safe='')+'@'+os.environ['FTP_SERVER'])
+          PY
+          )"
+          lftp "$ftp_url" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set ssl:verify-certificate no
+          cd "$REMOTE_DIR"
+          put source/wp-content/mu-plugins/esc-visual-builder-page-shortcut.php -o esc-visual-builder-page-shortcut.php
+          get esc-visual-builder-page-shortcut.php -o /tmp/esc-page-builder-shortcut-remote.php
+          bye
+          LFTP
+          cmp source/wp-content/mu-plugins/esc-visual-builder-page-shortcut.php /tmp/esc-page-builder-shortcut-remote.php
+          php -l /tmp/esc-page-builder-shortcut-remote.php
+          echo "Shortcut uploaded and byte-verified successfully."
+
+      - name: WordPress backend smoke test
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          wp_host="$(python3 - <<'PY'
+          from urllib.parse import urlparse
+          import os
+          raw=os.environ['WP_ADMIN_URL']
+          print(urlparse(raw if '://' in raw else 'https://'+raw).hostname)
+          PY
+          )"
+          curl -fsS --connect-timeout 10 --max-time 30 "https://$wp_host/wp-json/" >/tmp/esc-page-shortcut-wp-json
+          test -s /tmp/esc-page-shortcut-wp-json
+          echo "WordPress backend remains healthy."

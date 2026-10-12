@@ -1,0 +1,65 @@
+name: ESC Builder Two Pages Read-only QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-two-pages-qa.txt']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Diagnose both selected pages without edits
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, requests, html, json
+          from urllib.parse import urlparse
+          from html.parser import HTMLParser
+          from urllib.parse import urljoin
+          class FrameParser(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.src=None
+              def handle_starttag(self,tag,attrs):
+                  d=dict(attrs)
+                  if tag=="iframe" and d.get("id")=="esc-vb-frame": self.src=d.get("src")
+          wp=(os.getenv("WP_ADMIN_URL") or "").strip()
+          root=wp if wp.startswith(("http://","https://")) else "https://"+wp
+          origin=urlparse(root).scheme+"://"+urlparse(root).netloc
+          sess=requests.Session()
+          sess.headers.update({"User-Agent":"ESC-Builder-ReadOnly-Page-QA/1.0"})
+          sess.get(origin+"/wp-login.php",timeout=30)
+          sess.post(origin+"/wp-login.php",data={
+              "log":os.environ["WP_ADMIN_USERNAME"],"pwd":os.environ["WP_ADMIN_PASSWORD"],
+              "wp-submit":"Log In","redirect_to":origin+"/wp-admin/","testcookie":"1"
+          },timeout=45)
+          me=sess.get(origin+"/wp-admin/",timeout=40)
+          assert "wp-login.php" not in me.url, "WP admin login failed"
+          for id in (53420,53415):
+              print("START "+str(id),flush=True)
+              pub=sess.get(origin+"/wp-json/wp/v2/pages/"+str(id),timeout=40)
+              info={}
+              if pub.ok:
+                  j=pub.json()
+                  info={"slug":j.get("slug"),"status":j.get("status"),"action":(j.get("acf") or {}).get("action")}
+              editor=sess.get(origin+"/wp-admin/edit.php",params={"post_type":"page","page":"esc-visual-builder","esc_vb_page":str(id),"esc_vb_view":"desktop"},timeout=50)
+              parser=FrameParser();parser.feed(editor.text)
+              if not parser.src: 
+                  print(json.dumps({"id":id,"editor_status":editor.status_code,"has_frame":False,"info":info},ensure_ascii=False),flush=True)
+                  continue
+              preview=sess.get(urljoin(origin,html.unescape(parser.src)),timeout=(15,85))
+              body=preview.text
+              result={"id":id,"info":info,"admin_http":editor.status_code,"preview_http":preview.status_code,
+                  "preview_bytes":len(preview.content),"server_timing":preview.headers.get("Server-Timing"),
+                  "builder_source":preview.headers.get("X-ESC-Builder-Source"),
+                  "has_layout":("<main " in body or '<main>' in body),"has_error":("Không thể mở bản xem trước" in body),
+                  "robots":preview.headers.get("X-Robots-Tag")}
+              print("PAGE_QA="+json.dumps(result,ensure_ascii=False),flush=True)
+          PY

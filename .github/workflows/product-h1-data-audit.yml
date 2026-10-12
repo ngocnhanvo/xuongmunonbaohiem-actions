@@ -1,0 +1,105 @@
+name: Blue Sea Legacy Product H1 Data Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/product-h1-data-audit.yml'
+      - 'requests/product-h1-data-audit.txt'
+permissions:
+  contents: write
+concurrency:
+  group: blue-sea-product-h1-data-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Actions Hub for reports
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Checkout approved Astro development auditor (read-only)
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: astro
+          persist-credentials: false
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify audit tests and source version
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Astro audit source: $(git -C astro rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          node --test astro/scripts/audit-legacy-product-h1.test.mjs
+      - name: Audit published product titles against live legacy H1
+        shell: bash
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$WP_ADMIN_URL"
+          wp_base="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          raw=os.environ["WP_ADMIN_URL"]
+          host=urlparse(raw if '://' in raw else 'https://'+raw).hostname
+          if not host: raise SystemExit('Missing WordPress host')
+          print('https://'+host)
+          PY
+          )"
+          mkdir -p reports
+          timeout 38m node astro/scripts/audit-legacy-product-h1.mjs \
+            --wp "$wp_base" \
+            --legacy "https://xuongmunonbaohiem.com" \
+            --out reports/product-h1-audit
+      - name: Review status and publish diagnostic summary
+        if: always()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, os
+          f=pathlib.Path('reports/product-h1-audit.json')
+          if not f.exists():
+              with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as h:
+                  h.write('Audit failed before producing a full report; WordPress was not modified.\n')
+              raise SystemExit(0)
+          j=json.loads(f.read_text(encoding='utf8'))
+          lines=[
+              '## Legacy product H1 audit (read-only)',
+              f"WordPress products: {j['wp_products']}; legacy sitemap URLs: {j['legacy_urls']}",
+              'Status counts:',
+              *[f"- {k}: {v}" for k,v in sorted(j['summary'].items())],
+              '',
+              'Nothing was updated in WordPress. See product-h1-audit.json and product-h1-audit.csv for source URL review.',
+          ]
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as h:
+              h.write('\n'.join(lines)+'\n')
+          print('\n'.join(lines))
+          PY
+      - name: Upload report artifact (without editing WordPress)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blue-sea-product-h1-audit-${{ github.run_id }}
+          path: reports/product-h1-audit.*
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Publish completed public H1 audit report in Actions Hub
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/product-h1-audit.json reports/product-h1-audit.csv
+          if ! git diff --cached --quiet; then
+            git commit -m "reports(seo): read-only legacy product H1 audit"
+            git push origin HEAD:main
+          fi

@@ -289,11 +289,12 @@ jobs:
           printf '%s\n' "$response" | tee /tmp/url-routing-seed.json
 
           jq -e '.ok == true' /tmp/url-routing-seed.json >/dev/null
-          jq -e '.version == "2026-10-data-routing-v4"' /tmp/url-routing-seed.json >/dev/null
-          jq -e '.system_route_count == 14' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.version == "2026-10-data-routing-v5-legacy22"' /tmp/url-routing-seed.json >/dev/null
+          jq -e '.system_route_count == 36' /tmp/url-routing-seed.json >/dev/null
           jq -e '.rewrite_count == 11' /tmp/url-routing-seed.json >/dev/null
 
           echo "Seeded $(jq -r '.system_route_count' /tmp/url-routing-seed.json) system URL routes ($(jq -r '.rewrite_count' /tmp/url-routing-seed.json) rewrites)."
+          jq -e '(.summary.definitions == 36) and (.summary.ok == true)' /tmp/url-routing-seed.json >/dev/null
 
       - name: Smoke test routing REST contracts
         shell: bash

@@ -1,0 +1,27 @@
+{
+  "purpose": "Only 22 legacy URLs confirmed 404 in the 2026-10-12 read-only audit. Do not redirect without validating a semantically appropriate live destination.",
+  "paths": [
+    "/dat-san-xuat-non-bao-hiem-so-luong-lon-gia-re/",
+    "/non-bao-hiem-3-4-cj.html",
+    "/non-bao-hiem-3-4-dau-dammtrax.html",
+    "/non-bao-hiem-3-4-dau-dammtrax-2.html",
+    "/non-bao-hiem-3-4-dreamgames.html",
+    "/non-bao-hiem-6-lo-8-lo-bimix.html",
+    "/non-bao-hiem-co-kieng-rft.html",
+    "/non-bao-hiem-co-kieng-sai-gon-moto-tour.html",
+    "/non-bao-hiem-co-kinh-bestapples.html",
+    "/non-bao-hiem-f1-homeland.html",
+    "/non-bao-hiem-ngan-hang-abbank.html",
+    "/non-bao-hiem-nua-dau-alo.html",
+    "/non-bao-hiem-nua-dau-bon-nuoc-inox-viet-my.html",
+    "/non-bao-hiem-nua-dau-gia-vespa-gumac-mau-2.html",
+    "/non-bao-hiem-nua-dau-in-logo-ahamove.html",
+    "/non-bao-hiem-nua-dau-in-logo-gas-anh-duong.html",
+    "/non-bao-hiem-nua-dau-vietcombank.html",
+    "/non-bao-hiem-qua-tang-gia-re-tai-tphcm/",
+    "/non-bao-hiem-vespa-yves-rocher.html",
+    "/san-pham/non-bao-hiem-vespa-2/",
+    "/san-pham/non-bao-hiem-vespa-special-2/",
+    "/xuong-san-xuat-mu-bao-hiem-tai-hcm.html"
+  ]
+}

@@ -1,6 +1,15 @@
 name: Blue Sea Verified Legacy H1 Sync
 on:
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Preview first (no data changes), or apply 160 verified H1 values
+        type: choice
+        required: true
+        default: preview
+        options:
+          - preview
+          - apply
   push:
     branches: [main]
     paths:
@@ -21,13 +30,14 @@ jobs:
         shell: bash
         env:
           WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          REQUEST_MODE: ${{ inputs.mode || '' }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json, pathlib, os, html
           from urllib.parse import urlparse, unquote
           p=pathlib.Path('requests/product-h1-sync-once.txt')
-          mode=p.read_text().strip() if p.exists() else 'preview'
+          mode=os.environ.get('REQUEST_MODE') or (p.read_text().strip() if p.exists() else 'preview')
           if mode not in ('preview','apply'): raise SystemExit('Invalid request mode')
           report=json.loads(pathlib.Path('reports/product-h1-audit.json').read_text(encoding='utf8'))
           manifest=json.loads(pathlib.Path('reports/product-h1-verified-candidates.json').read_text(encoding='utf8'))

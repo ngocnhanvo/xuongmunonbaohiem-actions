@@ -1,0 +1,70 @@
+name: Blue Sea Legacy 22 Exact 301 Smoke
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/blue-sea-legacy-22-smoke.txt']
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate all 22 live HTTP 301 destinations without writing data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,urllib.request,urllib.parse,urllib.error,concurrent.futures,time
+          rows=json.load(open('reports/legacy-22-redirect-mapping.json'))['rules']
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,hdrs,newurl):return None
+          direct=urllib.request.build_opener(NoRedirect)
+          headers={'User-Agent':'Mozilla/5.0 (compatible; ESC-SEO-301-QA/1.0)'}
+          def check(item):
+              source='https://xuongmunonbaohiem.io.vn'+item['from']
+              result={'from':item['from'],'expected':item['to']}
+              for attempt in range(1,4):
+                  try:
+                      req=urllib.request.Request(source,headers=headers)
+                      try:
+                          resp=direct.open(req,timeout=30)
+                          code=resp.status;loc=resp.headers.get('Location','')
+                          resp.close()
+                      except urllib.error.HTTPError as error:
+                          code=error.code;loc=error.headers.get('Location','')
+                          error.close()
+                      destination=urllib.parse.urljoin(source,loc) if loc else ''
+                      parsed=urllib.parse.urlsplit(destination)
+                      result.update({'code':code,'location':loc,'ok':code==301 and
+                          parsed.hostname=='xuongmunonbaohiem.io.vn' and
+                          parsed.path.rstrip('/')==item['to'].rstrip('/')})
+                      return result
+                  except Exception as e:
+                      result['error']=type(e).__name__+': '+str(e)[:85]
+                      time.sleep(attempt)
+              result['ok']=False
+              return result
+          assert len(rows)==22
+          with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+              results=list(pool.map(check,rows))
+          for entry in results:
+              print('LEGACY_301_SMOKE='+json.dumps(entry,ensure_ascii=False),flush=True)
+          ok=sum(1 for r in results if r.get('ok'))
+          print('LEGACY_301_SUMMARY='+json.dumps({
+              'checked':len(results),'passed':ok,'failed':len(results)-ok,
+              'failedPaths':[r['from'] for r in results if not r.get('ok')]
+          },ensure_ascii=False),flush=True)
+          with open('legacy-22-smoke-results.json','w',encoding='utf8') as f:
+              json.dump(results,f,ensure_ascii=False,indent=2)
+          if ok != 22:raise SystemExit('Not all 22 verified 301 routes are active')
+          PY
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blue-sea-legacy22-http301-${{ github.run_id }}
+          path: legacy-22-smoke-results.json
+          retention-days: 14
+          if-no-files-found: warn

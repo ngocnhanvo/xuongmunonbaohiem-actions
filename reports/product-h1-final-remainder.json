@@ -1,0 +1,444 @@
+{
+  "generated_at": "2026-10-12T09:05:23.489Z",
+  "summary": {
+    "equivalent_title": 14,
+    "title_mismatch": 5,
+    "unresolved": 1,
+    "recovered_needs_h1": 1
+  },
+  "rows": [
+    {
+      "wp_id": 55649,
+      "wp_slug": "non-bao-hiem-hces-mau-03",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-hces-mau-03/",
+      "wp_title": "Nón Bảo Hiểm HCES (Mẫu 03)",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-hces-mau-03.html",
+      "legacy_h1": "Nón Bảo Hiểm HCES (Mẫu 03)",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-hces-mau-03.html",
+          "h1": "Nón Bảo Hiểm HCES (Mẫu 03)",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55643,
+      "wp_slug": "non-bao-hiem-exness",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-exness/",
+      "wp_title": "Nón Bảo Hiểm Exness",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-exness.html",
+      "legacy_h1": "Nón Bảo Hiểm Exness",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-exness.html",
+          "h1": "Nón Bảo Hiểm Exness",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 54417,
+      "wp_slug": "non-bao-hiem-nua-dau-ttp",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-nua-dau-ttp/",
+      "wp_title": "Nón Bảo Hiểm Nửa Đầu TTP",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-ttp.html",
+      "legacy_h1": "Nhận Sản Xuất Mũ Bảo Hiểm Quảng cáo Chất Lượng in logo",
+      "status": "title_mismatch",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-ttp.html",
+          "h1": "Nhận Sản Xuất Mũ Bảo Hiểm Quảng cáo Chất Lượng in logo",
+          "status": "title_mismatch"
+        }
+      ]
+    },
+    {
+      "wp_id": 54426,
+      "wp_slug": "non-bao-hiem-nua-dau-bia-ha-noi",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-nua-dau-bia-ha-noi/",
+      "wp_title": "Nón Bảo Hiểm Nửa Đầu Bia Hà Nội",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-bia-ha-noi.html",
+      "legacy_h1": "Xưởng Sản Xuất Nón Bảo Hiểm, Mũ Bảo Hiểm Theo Yêu Cầu - Blue Sea",
+      "status": "title_mismatch",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-bia-ha-noi.html",
+          "h1": "Xưởng Sản Xuất Nón Bảo Hiểm, Mũ Bảo Hiểm Theo Yêu Cầu - Blue Sea",
+          "status": "title_mismatch"
+        }
+      ]
+    },
+    {
+      "wp_id": 54413,
+      "wp_slug": "non-bao-hiem-nua-dau-mama-kids",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-nua-dau-mama-kids/",
+      "wp_title": "Nón Bảo Hiểm Nửa Đầu Mama Kids",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-mama-kids.html",
+      "legacy_h1": "Tin tức nổi bật - Xưởng/công ty/cơ sở in sản xuất mũ bảo hiểm",
+      "status": "title_mismatch",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-mama-kids.html",
+          "h1": "Tin tức nổi bật - Xưởng/công ty/cơ sở in sản xuất mũ bảo hiểm",
+          "status": "title_mismatch"
+        }
+      ]
+    },
+    {
+      "wp_id": 54422,
+      "wp_slug": "non-bao-hiem-nua-dau-tan-a-dai-thanh",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-nua-dau-tan-a-dai-thanh/",
+      "wp_title": "Nón Bảo Hiểm Nửa Đầu Tân Á Đại Thành",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-tan-a-dai-thanh.html",
+      "legacy_h1": "Sản Xuất Mũ Bảo Hiểm Quảng Cáo - Nhà máy sản xuất nón bảo hiểm",
+      "status": "title_mismatch",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-nua-dau-tan-a-dai-thanh.html",
+          "h1": "Sản Xuất Mũ Bảo Hiểm Quảng Cáo - Nhà máy sản xuất nón bảo hiểm",
+          "status": "title_mismatch"
+        }
+      ]
+    },
+    {
+      "wp_id": 54757,
+      "wp_slug": "non-bao-hiem-hces-mau-01",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-hces-mau-01/",
+      "wp_title": "Nón Bảo Hiểm HCES (Mẫu 01)",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-hces-mau-01.html",
+      "legacy_h1": "Nón Bảo Hiểm HCES",
+      "status": "title_mismatch",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-hces-mau-01.html",
+          "h1": "Nón Bảo Hiểm HCES",
+          "status": "title_mismatch"
+        }
+      ]
+    },
+    {
+      "wp_id": 54745,
+      "wp_slug": "non-bao-hiem-thien-duyen",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-thien-duyen/",
+      "wp_title": "Nón Bảo Hiểm Thiện Duyên",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-thien-duyen.html",
+      "legacy_h1": "Nón Bảo Hiểm Thiện Duyên",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-thien-duyen.html",
+          "h1": "Nón Bảo Hiểm Thiện Duyên",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 54770,
+      "wp_slug": "non-bao-hiem-hces-mau-02",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-hces-mau-02/",
+      "wp_title": "Nón Bảo Hiểm HCES (Mẫu 02)",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-hces-mau-02.html",
+      "legacy_h1": "Nón Bảo Hiểm HCES (Mẫu 02)",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-hces-mau-02.html",
+          "h1": "Nón Bảo Hiểm HCES (Mẫu 02)",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 54939,
+      "wp_slug": "non-bao-hiem-2-ban-chan-bao_hiem_aaa",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-2-ban-chan-bao_hiem_aaa/",
+      "wp_title": "Nón Bảo Hiểm 2 Bàn Chân Bảo_Hiểm_AAA",
+      "existing_h1": "",
+      "legacy_url": "",
+      "legacy_h1": "",
+      "status": "unresolved",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": []
+    },
+    {
+      "wp_id": 55093,
+      "wp_slug": "non-bao-hiem-f1-richy",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-f1-richy/",
+      "wp_title": "Nón Bảo Hiểm F1 RICHY",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-f1-richy.html",
+      "legacy_h1": "Nón Bảo Hiểm F1 RICHY",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-f1-richy.html",
+          "h1": "Nón Bảo Hiểm F1 RICHY",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55155,
+      "wp_slug": "non-bao-hiem-vilaza",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-vilaza/",
+      "wp_title": "Nón Bảo Hiểm VILAZA",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-vilaza.html",
+      "legacy_h1": "Nón Bảo Hiểm VILAZA",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-vilaza.html",
+          "h1": "Nón Bảo Hiểm VILAZA",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55169,
+      "wp_slug": "non-bao-hiem-sentosa",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-sentosa/",
+      "wp_title": "Nón Bảo Hiểm Sentosa",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-sentosa.html",
+      "legacy_h1": "Nón Bảo Hiểm Sentosa",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-sentosa.html",
+          "h1": "Nón Bảo Hiểm Sentosa",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55523,
+      "wp_slug": "non-bao-hiem-boc-da-hang-xom",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-boc-da-hang-xom/",
+      "wp_title": "Nón Bảo Hiểm Bọc Da Hàng Xóm",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-boc-da-hang-xom.html",
+      "legacy_h1": "Nón Bảo Hiểm Bọc Da Hàng Xóm",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-boc-da-hang-xom.html",
+          "h1": "Nón Bảo Hiểm Bọc Da Hàng Xóm",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55545,
+      "wp_slug": "non-bao-hiem-blanc",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-blanc/",
+      "wp_title": "Nón Bảo Hiểm BlanC",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-blanc.html",
+      "legacy_h1": "Nón Bảo Hiểm BlanC",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-blanc.html",
+          "h1": "Nón Bảo Hiểm BlanC",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55573,
+      "wp_slug": "non-bao-hiem-dazzle",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-dazzle/",
+      "wp_title": "Nón Bảo Hiểm Dazzle",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-dazzle.html",
+      "legacy_h1": "Nón Bảo Hiểm Dazzle",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-dazzle.html",
+          "h1": "Nón Bảo Hiểm Dazzle",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55587,
+      "wp_slug": "non-bao-hiem-jabil",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-jabil/",
+      "wp_title": "Nón Bảo Hiểm Jabil",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-jabil.html",
+      "legacy_h1": "Nón Bảo Hiểm Jabil",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-jabil.html",
+          "h1": "Nón Bảo Hiểm Jabil",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 55622,
+      "wp_slug": "non-bao-hiem-nongshim",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-nongshim/",
+      "wp_title": "Nón Bảo Hiểm NONGSHIM",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-nongshim.html",
+      "legacy_h1": "Nón Bảo Hiểm NONGSHIM",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-nongshim.html",
+          "h1": "Nón Bảo Hiểm NONGSHIM",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 53237,
+      "wp_slug": "non-bao-hiem-sakos",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-sakos/",
+      "wp_title": "Nón Bảo Hiểm Sakos",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-sakos.html",
+      "legacy_h1": "Nón Bảo Hiểm Sakos",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-sakos.html",
+          "h1": "Nón Bảo Hiểm Sakos",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 53217,
+      "wp_slug": "non-bao-hiem-tran-phu",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-tran-phu/",
+      "wp_title": "Nón Bảo Hiểm Trần Phú",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/non-bao-hiem-tran-phu.html",
+      "legacy_h1": "Nón Bảo Hiểm Trần Phú",
+      "status": "equivalent_title",
+      "method": "unmatched_url",
+      "note": "",
+      "candidates": [],
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/non-bao-hiem-tran-phu.html",
+          "h1": "Nón Bảo Hiểm Trần Phú",
+          "status": "equivalent_title"
+        }
+      ]
+    },
+    {
+      "wp_id": 54516,
+      "wp_slug": "non-bao-hiem-vespa",
+      "wp_url": "https://admin.xuongmunonbaohiem.io.vn/san-pham/non-bao-hiem-vespa/",
+      "wp_title": "Nón Bảo Hiểm Vespa",
+      "existing_h1": "",
+      "legacy_url": "https://xuongmunonbaohiem.com/san-pham/non-bao-hiem-vespa/",
+      "legacy_h1": "Nón Bảo Hiểm Vespa - Xưởng Sản Xuất Mũ Bảo Hiểm Giá Rẻ | Blue Sea",
+      "status": "recovered_needs_h1",
+      "method": "ambiguous_urls",
+      "note": "",
+      "checks": [
+        {
+          "valid": true,
+          "url": "https://xuongmunonbaohiem.com/san-pham/non-bao-hiem-vespa/",
+          "h1": "Nón Bảo Hiểm Vespa - Xưởng Sản Xuất Mũ Bảo Hiểm Giá Rẻ | Blue Sea",
+          "status": "recovered_needs_h1"
+        }
+      ]
+    }
+  ]
+}

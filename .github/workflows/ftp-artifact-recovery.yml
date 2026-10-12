@@ -46,6 +46,23 @@ jobs:
           test -s source/upload/escvn.zip
           unzip -tq source/upload/escvn.zip
           echo "Using preserved ZIP from Actions run $SOURCE_RUN; Astro build will NOT run again."
+      - name: Prepare lftp without unnecessary apt index refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          started=$SECONDS
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp; then
+              echo "::warning::lftp install needed an apt index refresh; retrying."
+              sudo apt-get update -y -qq
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp
+            fi
+          fi
+          lftp --version | head -n 1
+          elapsed=$((SECONDS - started))
+          echo "lftp setup completed in ${elapsed}s"
+          echo "- lftp setup: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Resume FTP upload from archived ZIP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
@@ -54,8 +71,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq -y
-          sudo apt-get install -qq -y lftp
+          started=$SECONDS
           lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<'LFTP'
           set cmd:fail-exit yes
           set net:max-retries 10
@@ -71,15 +87,22 @@ jobs:
           mv .escvn.zip.uploading escvn.zip
           bye
           LFTP
+          elapsed=$((SECONDS - started))
+          echo "FTP recovery transfer completed in ${elapsed}s"
+          echo "- FTP recovery transfer: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
       - name: Trigger production unpack
         env:
           ENV_FILE: ${{ secrets.ENV_FILE }}
         shell: bash
         run: |
           set -euo pipefail
+          started=$SECONDS
           printf '%s\n' "$ENV_FILE" > /tmp/blue-sea-ftp.env
           set -a
           source /tmp/blue-sea-ftp.env
           set +a
           test -n "${WC_URL:-}"
           curl --max-time 60 -fsS "$WC_URL/unzip.php"
+          elapsed=$((SECONDS - started))
+          echo "Remote unpack completed in ${elapsed}s"
+          echo "- Remote unpack: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"

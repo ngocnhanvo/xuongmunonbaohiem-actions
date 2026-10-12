@@ -35,6 +35,7 @@ jobs:
           for module in esc-visual-builder.php includes/item-manager.php includes/section-order.php includes/item-section-ui.php; do
             php -l "php/wp-content/plugins/esc-visual-builder/$module"
           done
+          php -l php/wp-content/plugins/esc-visual-builder/includes/change-index.php
           php php/wp-content/plugins/esc-visual-builder/tests/items-and-sections.test.php
           php php/wp-content/plugins/esc-visual-builder/tests/item-ui-script.test.php > /tmp/esc-vb-item-ui.js
           node --check /tmp/esc-vb-item-ui.js

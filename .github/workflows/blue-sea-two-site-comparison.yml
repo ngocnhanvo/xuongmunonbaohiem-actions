@@ -1,0 +1,200 @@
+name: Blue Sea Original vs Astro Read-only Comparison
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - requests/blue-sea-two-site-comparison.txt
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-two-site-comparison
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 28
+    steps:
+      - name: Setup Node and Chrome
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: stable
+      - name: Install Lighthouse
+        run: npm install --global lighthouse@13.5.0
+      - name: HTTP, SEO, and HTML coverage comparison (no writes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p reports
+          python3 - <<'PY'
+          import json, re, html, time, os, urllib.request, urllib.parse, concurrent.futures
+          from html.parser import HTMLParser
+
+          pages=[
+              ('Trang chủ','/','/'),
+              ('Sản phẩm','/san-pham','/san-pham'),
+              ('Nón nửa đầu','/san-pham/non-bao-hiem-nua-dau','/san-pham/non-bao-hiem-nua-dau'),
+              ('Tin tức','/tin-tuc','/tin-tuc'),
+              ('Liên hệ','/lien-he','/lien-he'),
+              ('Chính sách đổi trả','/thong-tin-chinh-sach/chinh-sach-doi-tra','/chinh-sach-doi-tra'),
+              ('Bảo mật thông tin','/thong-tin-chinh-sach/chinh-sach-bao-mat-thong-tin','/chinh-sach-bao-mat-thong-tin'),
+          ]
+          class Parser(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.headings=[];self.title=[];self.title_active=False
+                  self.heading_active=False;self.heading_buf=[];self.image_count=0
+                  self.image_missing_alt=0;self.image_lazy=0;self.links=0;self.meta={}
+                  self.anchors=[];self.canonical=[];self.description=[];self.robots=[]
+                  self.main_count=0
+              def handle_starttag(self,tag,attrs):
+                  d=dict(attrs)
+                  if tag=='title':self.title_active=True
+                  if tag=='h1':self.heading_active=True;self.heading_buf=[]
+                  if tag=='main':self.main_count+=1
+                  if tag=='img':
+                      self.image_count+=1
+                      if not (d.get('alt') or '').strip(): self.image_missing_alt+=1
+                      if d.get('loading')=='lazy':self.image_lazy+=1
+                  if tag=='a':
+                      self.links+=1
+                      if d.get('href'): self.anchors.append(d['href'])
+                  if tag=='link' and d.get('rel')=='canonical':self.canonical.append(d.get('href'))
+                  if tag=='meta':
+                      if d.get('name','').lower()=='description':self.description.append(d.get('content'))
+                      if d.get('name','').lower()=='robots':self.robots.append(d.get('content'))
+                      if d.get('property','').lower()=='og:title': self.meta['og:title']=d.get('content')
+              def handle_endtag(self,tag):
+                  if tag=='title':self.title_active=False
+                  if tag=='h1':
+                      self.heading_active=False
+                      self.headings.append(' '.join(''.join(self.heading_buf).split()))
+              def handle_data(self,data):
+                  if self.title_active:self.title.append(data)
+                  if self.heading_active:self.heading_buf.append(data)
+          def fetch(host,path):
+              url='https://'+host+path
+              start=time.monotonic()
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; ESC-Two-Site-ReadOnlyAudit/1.0)'})
+                  with urllib.request.urlopen(req,timeout=30) as r:
+                      status=r.status;dest=r.url
+                      body=r.read(5_000_000)
+                      server=r.headers.get('server','')
+                      typ=r.headers.get('content-type','')
+                  parsed=Parser();parsed.feed(body.decode('utf-8','replace'))
+                  return {'status':status,'finalUrl':dest,'seconds':round(time.monotonic()-start,2),
+                      'htmlBytes':len(body),'title':' '.join(''.join(parsed.title).split()),
+                      'h1':parsed.headings,'h1Count':len(parsed.headings),
+                      'description':parsed.description[0] if parsed.description else '',
+                      'canonical':parsed.canonical[0] if parsed.canonical else '',
+                      'robots':parsed.robots[0] if parsed.robots else '',
+                      'images':parsed.image_count,'imagesNoAlt':parsed.image_missing_alt,'lazyImages':parsed.image_lazy,
+                      'links':parsed.links,'mainElements':parsed.main_count, 'contentType':typ}
+              except Exception as e:
+                  return {'error':type(e).__name__+': '+str(e)[:160], 'seconds':round(time.monotonic()-start,2)}
+          hosts=['xuongmunonbaohiem.com','xuongmunonbaohiem.io.vn']
+          jobs=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+              for label,original,new in pages:
+                  futures=[pool.submit(fetch,host,path) for host,path in [(hosts[0],original),(hosts[1],new)]]
+                  jobs.append((label,original,new,futures))
+              rows=[]
+              for label,orig,new,futures in jobs:
+                  a,b=[x.result() for x in futures]
+                  row={'page':label,'sourcePath':orig,'astroPath':new,'original':a,'astro':b,
+                    'h1Match':a.get('status')==200 and b.get('status')==200 and a.get('h1')==b.get('h1')}
+                  rows.append(row)
+                  print('SITE_COMPARE='+json.dumps(row,ensure_ascii=False),flush=True)
+              for special in ['/robots.txt','/sitemap.xml']:
+                  for host in hosts:
+                      row={'url':'https://'+host+special,**fetch(host,special)}
+                      print('SEO_DISCOVERY='+json.dumps(row,ensure_ascii=False),flush=True)
+              with open('reports/seo-comparison.json','w',encoding='utf8') as f:
+                  json.dump(rows,f,ensure_ascii=False,indent=2)
+              with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
+                  matched=sum(r['h1Match'] for r in rows)
+                  f.write(f'### Live SEO metadata / H1 (read-only): {matched}/{len(rows)} sampled routes match H1\n\n')
+                  f.write('| Route | Original HTTP | Astro HTTP | H1 match | Original title | Astro title |\n|---|---:|---:|---|---|---|\n')
+                  for r in rows:
+                      a,b=r['original'],r['astro']
+                      f.write('| '+r['page']+' | '+str(a.get('status',a.get('error','?')))[:40]+' | '+str(b.get('status',b.get('error','?')))[:40]+' | '+str(r['h1Match'])+' | '+a.get('title','').replace('|','/')[:65]+' | '+b.get('title','').replace('|','/')[:65]+' |\n')
+          PY
+      - name: Lighthouse matched URLs on identical runner
+        shell: bash
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          set -euo pipefail
+          mkdir -p reports/lighthouse
+          # 3 mobile home repeats per site, one desktop home per site,
+          # plus one product-list mobile run per site: 10 samples total.
+          for site in original astro; do
+            if [ "$site" = original ]; then root=https://xuongmunonbaohiem.com; else root=https://xuongmunonbaohiem.io.vn; fi
+            for device in mobile desktop; do
+              if [ "$device" = mobile ]; then samples="1 2 3"; else samples="1"; fi
+              for n in $samples; do
+                file="reports/lighthouse/${site}-home-${device}-${n}.json"
+                echo "LIGHTHOUSE_START ${site} home ${device} run ${n}"
+                if ! lighthouse "$root/" --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" \
+                  --only-categories=performance,accessibility,best-practices,seo \
+                  --form-factor="$device" --throttling-method=simulate --output=json --output-path="$file" --quiet; then
+                  echo "LIGHTHOUSE_ERROR site=$site page=home device=$device sample=$n"
+                  rm -f "$file"
+                fi
+              done
+            done
+            file="reports/lighthouse/${site}-products-mobile-1.json"
+            echo "LIGHTHOUSE_START ${site} products mobile run 1"
+            if ! lighthouse "$root/san-pham" --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" \
+              --only-categories=performance,accessibility,best-practices,seo \
+              --form-factor=mobile --throttling-method=simulate --output=json --output-path="$file" --quiet; then
+              echo "LIGHTHOUSE_ERROR site=$site page=products device=mobile"
+              rm -f "$file"
+            fi
+          done
+          node --input-type=module <<'JS'
+          import {readdirSync,readFileSync,writeFileSync,appendFileSync} from 'node:fs';
+          const root='reports/lighthouse';
+          const records=[];
+          for(const filename of readdirSync(root).filter(f=>f.endsWith('.json'))){
+            try{
+              const r=JSON.parse(readFileSync(root+'/'+filename,'utf8'));
+              const [site,page,device,n]=filename.replace('.json','').split('-');
+              const metric=id=>Math.round(r.audits[id]?.numericValue||0);
+              records.push({site,page,device,n:Number(n),score:Math.round((r.categories.performance?.score||0)*100),
+                accessibility:Math.round((r.categories.accessibility?.score||0)*100),
+                bestPractices:Math.round((r.categories['best-practices']?.score||0)*100),
+                seo:Math.round((r.categories.seo?.score||0)*100),
+                lcpMs:metric('largest-contentful-paint'),fcpMs:metric('first-contentful-paint'),
+                tbtMs:metric('total-blocking-time'),cls:r.audits['cumulative-layout-shift']?.numericValue||0,
+                finalUrl:r.finalUrl || '',fetchTime:r.fetchTime});
+            }catch(e){console.log('PARSE_ERROR '+filename+' '+e.message)}
+          }
+          records.sort((a,b)=>a.site.localeCompare(b.site)||a.page.localeCompare(b.page)||a.device.localeCompare(b.device)||a.n-b.n);
+          const median=xs=>xs.length?[...xs].sort((a,b)=>a-b)[Math.floor(xs.length/2)]:null;
+          const summary={samples:records.length,rows:records,homeMobile:{}};
+          for(const site of ['original','astro']){
+            const group=records.filter(r=>r.site===site&&r.page==='home'&&r.device==='mobile');
+            summary.homeMobile[site]={count:group.length,scoreMedian:median(group.map(r=>r.score)),lcpMedianMs:median(group.map(r=>r.lcpMs)),tbtMedianMs:median(group.map(r=>r.tbtMs))};
+          }
+          writeFileSync('reports/lighthouse-summary.json',JSON.stringify(summary,null,2));
+          console.log('SITE_LIGHTHOUSE_SUMMARY='+JSON.stringify(summary));
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,'\n### Lighthouse side-by-side (identical Chrome runner and simulated throttling)\n\n');
+          appendFileSync(process.env.GITHUB_STEP_SUMMARY,'| Site | Page | Device | Run | Perf | A11y | Best practices | SEO | LCP | TBT | CLS |\n|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|\n');
+          for(const r of records) appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+            '|'+[r.site,r.page,r.device,r.n,r.score,r.accessibility,r.bestPractices,r.seo,r.lcpMs,r.tbtMs,r.cls.toFixed(3)].join('|')+'|\n');
+          if(records.length<8) process.exitCode=1;
+          JS
+      - name: Upload audit data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: blue-sea-two-site-comparison-${{ github.run_id }}
+          path: reports/
+          retention-days: 10
+          if-no-files-found: warn

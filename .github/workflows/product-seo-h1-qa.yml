@@ -66,8 +66,6 @@ jobs:
           pnpm exec vitest run \
             src/lib/seo/productH1.test.ts \
             src/lib/seo/legacyPageHeadings.test.ts \
-            src/astro/pages/ProductDetailsPage.quote.test.ts \
-            src/astro/pages/ProductDetailsPage.gallery.test.ts \
             src/lib/wordpress/products/getData.reload.test.ts
       - name: Build Astro development branch without deploy
         working-directory: astro

@@ -1,0 +1,60 @@
+name: Blue Sea Sitemap URL Coverage Read-only QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/blue-sea-sitemap-coverage.txt']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Compare published sitemap URLs between original and new
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,urllib.parse,xml.etree.ElementTree as ET,collections,json,re
+          def fetch(url):
+              req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 ESC-Sitemap-Audit/1.0'})
+              with urllib.request.urlopen(req,timeout=28) as r:return r.read(4_000_000)
+          def urls(root,max_sitemaps=25):
+              todo=[root]; seen=set(); values=[]; failures=[]
+              while todo and len(seen)<max_sitemaps:
+                  url=todo.pop(0)
+                  if url in seen:continue
+                  seen.add(url)
+                  try:
+                      data=ET.fromstring(fetch(url))
+                  except Exception as e:
+                      failures.append((url,type(e).__name__));continue
+                  tag=data.tag.split('}')[-1]
+                  locs=[x.text.strip() for x in data.iter() if x.tag.split('}')[-1]=='loc' and x.text]
+                  if tag=='sitemapindex':todo.extend(locs[:max_sitemaps])
+                  elif tag=='urlset':values.extend(locs)
+                  else:failures.append((url,'Unexpected root '+tag))
+              return values,seen,failures
+          o,om,oe=urls('https://xuongmunonbaohiem.com/sitemap.xml')
+          a,am,ae=urls('https://xuongmunonbaohiem.io.vn/sitemap.xml')
+          def clean(paths):
+              return set(urllib.parse.urlsplit(x).path.rstrip('/') or '/' for x in paths)
+          def normalize(path):
+              p=path.rstrip('/') or '/'
+              if p.endswith('.html'):p=p[:-5]
+              p=re.sub(r'^/thong-tin-chinh-sach(?=/)', '',p)
+              return p
+          original=clean(o);astro=clean(a)
+          mapped=set(map(normalize,original))
+          matches=mapped&astro
+          missing=sorted(mapped-astro)
+          extra=sorted(astro-mapped)
+          summary={'source':{'urls':len(o),'uniquePaths':len(original),'sitemaps':len(om),'errors':oe},
+             'astro':{'urls':len(a),'uniquePaths':len(astro),'sitemaps':len(am),'errors':ae},
+             'approximatePathMatchCount':len(matches),'approximateOriginalOnlyCount':len(missing),
+             'approximateAstroOnlyCount':len(extra),
+             'sourceOnlyExamples':missing[:28],'astroOnlyExamples':extra[:18]}
+          print('SITEMAP_COVERAGE='+json.dumps(summary,ensure_ascii=False),flush=True)
+          if not o or not a:raise SystemExit('Could not obtain both sitemaps')
+          PY

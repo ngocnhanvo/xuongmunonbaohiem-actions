@@ -1,0 +1,116 @@
+name: Blue Sea Policy Pages H1 Read Only Audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/policy-pages-h1-audit.yml
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-policy-pages-h1-audit
+  cancel-in-progress: false
+jobs:
+  compare:
+    name: Compare exact live policy H1 between original and production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Fetch policy HTML from both sites without writing any data
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, html, urllib.request, urllib.parse, time, os
+          from html.parser import HTMLParser
+          from concurrent.futures import ThreadPoolExecutor
+
+          pages=[
+              ('Chính sách đổi trả','chinh-sach-doi-tra'),
+              ('Giao hàng & thanh toán','giao-hang-thanh-toan'),
+              ('Chính sách bảo mật thông tin','chinh-sach-bao-mat-thong-tin'),
+              ('Chính Sách Giao Hàng, Vận Chuyển','chinh-sach-giao-hang-van-chuyen'),
+          ]
+
+          class H1Parser(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.depth=0
+                  self.buf=[]
+                  self.h1=[]
+              def handle_starttag(self,tag,attrs):
+                  if self.depth:self.depth+=1
+                  elif tag.lower()=='h1':
+                      self.depth=1
+                      self.buf=[]
+              def handle_endtag(self,tag):
+                  if self.depth:
+                      self.depth-=1
+                      if not self.depth:
+                          self.h1.append(' '.join(html.unescape(''.join(self.buf)).split()))
+              def handle_data(self,data):
+                  if self.depth:self.buf.append(data)
+
+          def fetch(host,path):
+              url='https://'+host+path
+              err=''
+              for attempt in range(1,4):
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; ESC-H1-Policy-Audit/1.0)'})
+                      with urllib.request.urlopen(req,timeout=22) as r:
+                          data=r.read(3_000_000)
+                          final=r.url
+                          status=r.status
+                      final_url=urllib.parse.urlsplit(final)
+                      if final_url.hostname!=host:
+                          return {'url':url,'final_url':final,'error':'Unexpected cross-domain redirect'}
+                      if urllib.parse.urlsplit(final).path.rstrip('/')!=path.rstrip('/'):
+                          return {'url':url,'final_url':final,'error':'Redirected to different page'}
+                      parser=H1Parser()
+                      parser.feed(data.decode('utf-8','replace'))
+                      return {'status':status,'url':url,'final_url':final,'h1':parser.h1,'count':len(parser.h1)}
+                  except Exception as ex:
+                      err=type(ex).__name__+': '+str(ex)[:140]
+                      if attempt<3:time.sleep(attempt)
+              return {'url':url,'error':err}
+
+          with ThreadPoolExecutor(max_workers=8) as pool:
+              pending={}
+              for name,slug in pages:
+                  for site,host,path in [
+                      ('original','xuongmunonbaohiem.com','/thong-tin-chinh-sach/'+slug),
+                      ('production','xuongmunonbaohiem.io.vn','/'+slug),
+                  ]:
+                      pending[(slug,site)]=pool.submit(fetch,host,path)
+              rows=[]
+              for name,slug in pages:
+                  a=pending[(slug,'original')].result()
+                  b=pending[(slug,'production')].result()
+                  ok=(a.get('status')==200 and b.get('status')==200 and
+                      len(a.get('h1',[]))==1 and len(b.get('h1',[]))==1 and a['h1'][0]==b['h1'][0])
+                  row={'page':name,'slug':slug,'match':ok,'original':a,'production':b}
+                  rows.append(row)
+                  print('AUDIT '+json.dumps(row,ensure_ascii=False),flush=True)
+          with open('policy-h1-audit.json','w',encoding='utf8') as f:
+              json.dump(rows,f,ensure_ascii=False,indent=2)
+          score=sum(x['match'] for x in rows)
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf8') as f:
+              f.write('## Blue Sea policy page H1 comparison (read-only)\n\n')
+              f.write('Matched **'+str(score)+'/4** pages exactly.\n\n')
+              f.write('| Page | Original H1 | New website H1 | Match |\n|---|---|---|---|\n')
+              for x in rows:
+                  a=x['original']
+                  b=x['production']
+                  original=' ; '.join(a.get('h1',[])) or a.get('error','No H1')
+                  production=' ; '.join(b.get('h1',[])) or b.get('error','No H1')
+                  f.write('| '+x['page'].replace('|','\\|')+' | '+original.replace('|','\\|')+' | '+production.replace('|','\\|')+' | '+('PASS' if x['match'] else 'MISMATCH / UNVERIFIED')+' |\n')
+          if any('error' in x['original'] or 'error' in x['production'] for x in rows):
+              print('WARNING: One or more live pages were inaccessible; do not infer a H1 mismatch from an access error.')
+          print('RESULT: '+str(score)+'/4 exact H1 matches')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blue-sea-policy-h1-audit
+          path: policy-h1-audit.json
+          retention-days: 14

@@ -4,6 +4,12 @@ on:
   repository_dispatch:
     types: [wp_trigger_build]
   workflow_dispatch:
+    inputs:
+      refresh_product_seo_h1:
+        description: "Refresh 160 verified product H1 values from WordPress in existing Astro cache"
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -24,6 +30,12 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Checkout Actions Hub for optional H1 cache repair
+        if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[refresh-product-h1-cache]')) || (github.event_name == 'workflow_dispatch' && inputs.refresh_product_seo_h1) || (github.event_name == 'repository_dispatch' && github.event.client_payload.refresh_product_seo_h1 == true) }}
+        uses: actions/checkout@v4
+        with:
+          path: actions-hub
+
       - name: Validate required secrets
         shell: bash
         env:
@@ -83,6 +95,19 @@ jobs:
           key: ${{ runner.os }}-xuongmunonbaohiem-dot-cache-${{ github.run_id }}
           restore-keys: |
             ${{ runner.os }}-xuongmunonbaohiem-dot-cache-
+
+      - name: Repair only verified product SEO H1 metadata in cache
+        if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[refresh-product-h1-cache]')) || (github.event_name == 'workflow_dispatch' && inputs.refresh_product_seo_h1) || (github.event_name == 'repository_dispatch' && github.event.client_payload.refresh_product_seo_h1 == true) }}
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          ASTRO_CACHE_DIR: source/.cache
+          H1_MANIFEST: actions-hub/reports/product-h1-verified-candidates.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test actions-hub/scripts/refresh-product-h1-cache.test.mjs
+          node actions-hub/scripts/refresh-product-h1-cache.mjs
+          echo "Refreshed only the verified 160 product H1 metadata fields without image regeneration." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Force Page cache refresh for Action migrations
         if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[force-page-cache]') }}

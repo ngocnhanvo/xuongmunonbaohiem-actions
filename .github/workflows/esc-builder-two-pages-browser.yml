@@ -1,0 +1,88 @@
+name: ESC Builder Two Pages Chrome QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/esc-builder-two-pages-browser.txt']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: stable
+      - run: npm install --no-save --no-package-lock puppeteer-core@24
+      - name: Verify two published PostsPage previews in real Chrome (no writes)
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import puppeteer from 'puppeteer-core';
+          const origin = new URL(process.env.WP_ADMIN_URL).origin;
+          const browser = await puppeteer.launch({
+            headless:true,executablePath:process.env.CHROME_PATH,
+            args:['--no-sandbox','--disable-dev-shm-usage']
+          });
+          const page = await browser.newPage();
+          await page.setViewport({width:1440,height:900});
+          let writes = 0;
+          const errors = [];
+          page.on('pageerror', e => errors.push(String(e.message).slice(0,120)));
+          await page.setRequestInterception(true);
+          page.on('request', req => {
+            let route = '';try { route = new URL(req.url()).pathname; } catch {}
+            if(req.method() === 'POST' && /\/esc-builder\/v1\/(save|delete|swap|insert|reorder|update|set)/.test(route)){
+              writes++; req.abort('blockedbyclient');
+            } else req.continue();
+          });
+          try {
+            await page.goto(origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:65000});
+            await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
+            await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
+            await Promise.all([
+              page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),
+              page.click('#wp-submit')
+            ]);
+            if(page.url().includes('wp-login.php'))throw Error('WordPress admin login failed');
+            const results=[];
+            for(const id of [53420,53415]){
+              const started=Date.now();
+              const url=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page='+id+'&esc_vb_view=desktop';
+              const res=await page.goto(url,{waitUntil:'domcontentloaded',timeout:65000});
+              if(res?.status()!==200)throw Error('Admin Page '+id+' HTTP '+res?.status());
+              const handle=await page.waitForSelector('#esc-vb-frame',{timeout:18000});
+              const frame=await handle.contentFrame();
+              if(!frame)throw Error('Iframe missing for '+id);
+              await frame.waitForSelector('main',{timeout:60000});
+              const view=await frame.evaluate(()=>({
+                hasMain:!!document.querySelector('main'),
+                textLen:(document.querySelector('main')?.innerText||'').trim().length,
+                headingCount:document.querySelectorAll('main h1').length,
+                title:document.title,
+                hasError:(document.body?.textContent||'').includes('Không thể mở bản xem trước')
+              }));
+              const entry={id,readyMs:Date.now()-started,hasMain:view.hasMain,textLen:view.textLen,
+                headingCount:view.headingCount,hasError:view.hasError};
+              console.log('BUILDER_CHROME_QA='+JSON.stringify(entry));
+              if(!view.hasMain || view.textLen<100 || view.hasError)
+                throw Error('Invalid rendered preview for '+id);
+              results.push(entry);
+            }
+            if(writes)throw Error('Unexpected edit API write attempt: '+writes);
+            console.log('BUILDER_TWO_PAGE_CHROME_PASS='+JSON.stringify({
+              pages:results.map(x=>x.id),writes,errors:errors.slice(0,5)
+            }));
+          }finally{await browser.close();}
+          JS

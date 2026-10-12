@@ -1,1 +1,2 @@
 Read-only sitemap URL coverage vs legacy Blue Sea website on 2026-10-12.
+Check HTTP redirect/reachability for source-only sitemap URLs.

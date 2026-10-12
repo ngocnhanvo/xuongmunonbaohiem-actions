@@ -57,4 +57,36 @@ jobs:
              'sourceOnlyExamples':missing[:28],'astroOnlyExamples':extra[:18]}
           print('SITEMAP_COVERAGE='+json.dumps(summary,ensure_ascii=False),flush=True)
           if not o or not a:raise SystemExit('Could not obtain both sitemaps')
+          # Check whether legacy-only paths redirect successfully rather than
+          # assuming all missing sitemap paths are lost.
+          from concurrent.futures import ThreadPoolExecutor
+          legacy={normalize(urllib.parse.urlsplit(url).path):urllib.parse.urlsplit(url).path for url in o}
+          def check(old):
+              url='https://xuongmunonbaohiem.io.vn'+legacy[old]
+              req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 ESC-Legacy-Redirect-Audit/1.0'})
+              try:
+                  with urllib.request.urlopen(req,timeout=22) as response:
+                      final=response.url
+                      status=response.status
+                  dest=urllib.parse.urlsplit(final)
+                  if dest.hostname!='xuongmunonbaohiem.io.vn':
+                      category='external'
+                  elif status==200 and (dest.path.rstrip('/') or '/') != (legacy[old].rstrip('/') or '/'):
+                      category='redirected'
+                  elif status==200:
+                      category='reachable_not_in_sitemap'
+                  else:
+                      category='http_'+str(status)
+                  return {'old':legacy[old],'category':category,'finalPath':dest.path}
+              except Exception as e:
+                  return {'old':legacy[old],'category':'error','error':str(e)[:65]}
+          with ThreadPoolExecutor(max_workers=6) as pool:
+              checks=list(pool.map(check,missing))
+          groups=collections.Counter(x['category'] for x in checks)
+          notOK=[x for x in checks if x['category'] not in ('redirected','reachable_not_in_sitemap')]
+          print('LEGACY_PATH_CHECK='+json.dumps({
+            'checked':len(checks),'outcomes':dict(groups),'problemExamples':notOK[:22],
+            'redirectExamples':[x for x in checks if x['category']=='redirected'][:12],
+            'reachableNotListedExamples':[x for x in checks if x['category']=='reachable_not_in_sitemap'][:10]
+          },ensure_ascii=False),flush=True)
           PY

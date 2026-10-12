@@ -1,3 +1,5 @@
 Deploy clean URL routing seed v4.
 PHP source: 2daa402f8c95c6b780b6d0f651893fc1c06e737f
 Goal: preserve /*.html -> /* redirect and exclude sitemap.xml/robots.txt/static one-level files from post-detail fallback.
+
+2026-10-13: Deploy WordPress seed v5 with 22 verified exact SEO legacy 301 redirects (36 system rules total); php master 47e02014ef9a0a6aabf72e8cb139f539db73424d. Preserve all structural Rewrite groups.

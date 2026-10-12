@@ -24,33 +24,32 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import json, pathlib, os, re, unicodedata, html
+          import json, pathlib, os, html
           from urllib.parse import urlparse, unquote
           p=pathlib.Path('requests/product-h1-sync-once.txt')
           mode=p.read_text().strip() if p.exists() else 'preview'
           if mode not in ('preview','apply'): raise SystemExit('Invalid request mode')
           report=json.loads(pathlib.Path('reports/product-h1-audit.json').read_text(encoding='utf8'))
+          manifest=json.loads(pathlib.Path('reports/product-h1-verified-candidates.json').read_text(encoding='utf8'))
           wp=urlparse(os.environ['WP_ADMIN_URL'] if '://' in os.environ['WP_ADMIN_URL'] else 'https://'+os.environ['WP_ADMIN_URL'])
-          if report['wp']!='https://'+wp.hostname: raise SystemExit('WordPress audit hostname differs from deploy secret')
-          if report['wp_products']!=180 or report['summary'].get('needs_h1')!=117: raise SystemExit('Audit summary unexpectedly changed')
-          items=[]
-          seen=set()
-          for row in report['rows']:
-            if row['status']!='needs_h1': continue
-            if row['method']!='exact_slug' or row['existing_h1']: raise SystemExit('Not an empty exact-slug record')
+          if report['wp']!='https://'+wp.hostname: raise SystemExit('WordPress hostname differs from audit')
+          if report['wp_products']!=180 or manifest['counts']!={'import_seo_h1':160,'no_change':14,'manual_review':6}: raise SystemExit('Unexpected audited product count')
+          items=[]; seen=set()
+          for row in manifest['products']:
+            product_id=row['id']
+            if product_id in seen: raise SystemExit('Repeated product id')
+            seen.add(product_id)
             url=urlparse(row['legacy_url'])
             slug=unquote(url.path.rstrip('/').split('/')[-1]).removesuffix('.html').lower()
-            if url.scheme!='https' or url.hostname!='xuongmunonbaohiem.com' or slug!=row['wp_slug'].lower(): raise SystemExit('Unexpected legacy URL for ID '+str(row['wp_id']))
-            title=html.unescape(row['wp_title']).strip()
-            h1=html.unescape(row['legacy_h1']).strip()
-            if not h1.casefold().startswith(title.casefold()+' - '): raise SystemExit('H1 does not start with exact title: '+str(row['wp_id']))
-            if row['wp_id'] in seen: raise SystemExit('Repeated product id')
-            seen.add(row['wp_id'])
-            items.append({'id':row['wp_id'],'slug':row['wp_slug'],'title':title,'h1':h1})
-          if len(items)!=117: raise SystemExit('Expected 117 import records')
+            if url.scheme!='https' or url.hostname!='xuongmunonbaohiem.com' or slug!=row['slug'].lower(): raise SystemExit('URL mismatch ID '+str(product_id))
+            title=html.unescape(row['title']).strip()
+            h1=html.unescape(row['seo_h1']).strip()
+            if not h1.startswith(title+' - ') or len(h1)>255: raise SystemExit('Invalid source H1 ID '+str(product_id))
+            items.append({'id':product_id,'slug':row['slug'],'title':title,'h1':h1})
+          if len(items)!=160: raise SystemExit('Expected 160 verified H1 values')
           pathlib.Path('/tmp/esc-h1-plan.json').write_text(json.dumps({'items':items},ensure_ascii=False),encoding='utf8')
           pathlib.Path('/tmp/esc-h1-mode').write_text(mode)
-          print(f'Prepared {len(items)} exact matches; 63 unresolved products explicitly excluded; mode={mode}')
+          print(f'Prepared {len(items)} verified H1 values; 14 exact-title and 6 manual-review items excluded; mode={mode}')
           PY
       - name: Prepare short-lived guarded PHP importer
         shell: bash
@@ -75,7 +74,7 @@ jobs:
               echo json_encode(['ok' => false, 'reason' => $reason], JSON_UNESCAPED_UNICODE);
               exit;
           };
-          if (!in_array($mode, ['preview', 'apply'], true) || !is_array($items) || count($items) !== 117) $fail('Invalid request');
+          if (!in_array($mode, ['preview', 'apply'], true) || !is_array($items) || count($items) !== 160) $fail('Invalid request');
           $known = []; $pending = []; $already = 0;
           $norm = static function ($s): string {
               $s = html_entity_decode(wp_strip_all_tags((string)$s), ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -176,7 +175,7 @@ jobs:
           import json,pathlib
           d=json.loads(pathlib.Path('/tmp/esc-h1-preview.json').read_text())
           print('Server validation: ',d)
-          if not d.get('ok') or d.get('validated')!=117: raise SystemExit('Preview validation failed; WordPress unchanged')
+          if not d.get('ok') or d.get('validated')!=160: raise SystemExit('Preview validation failed; WordPress unchanged')
           PY
           mode="$(cat /tmp/esc-h1-mode)"
           if [[ "$mode" == 'apply' ]]; then
@@ -187,12 +186,12 @@ jobs:
           import json,pathlib
           d=json.loads(pathlib.Path('/tmp/esc-h1-apply.json').read_text())
           print('Import result:',d)
-          if not d.get('ok') or d.get('validated')!=117 or d.get('updated',0)+d.get('already_correct',0)!=117:
-              raise SystemExit('Import did not verify all 117 items')
+          if not d.get('ok') or d.get('validated')!=160 or d.get('updated',0)+d.get('already_correct',0)!=160:
+              raise SystemExit('Import did not verify all 160 items')
           PY
             echo "Imported only verified H1 metadata. Production Astro build is a separate operation." >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "PREVIEW PASS: 117 products server-validated, no WordPress writes." >> "$GITHUB_STEP_SUMMARY"
+            echo "PREVIEW PASS: 160 products server-validated, no WordPress writes." >> "$GITHUB_STEP_SUMMARY"
           fi
           # Always run cleanup before finishing. Trap also covers any failure.
           cleanup

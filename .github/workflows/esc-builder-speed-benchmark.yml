@@ -51,7 +51,11 @@ jobs:
             await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
             await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
             await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),page.click('#wp-submit')]);
-            if(page.url().includes('wp-login.php'))throw Error('WordPress login not authenticated');
+            if(page.url().includes('wp-login.php')){
+              const reason=await page.$eval('#login_error',el=>el.textContent.trim().slice(0,180))
+                .catch(()=>'(no login_error text)');
+              throw Error('WordPress login not authenticated: '+reason);
+            }
             const base=origin+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder';
             for(let run=1;run<=5;run++){
               if(run>1)await new Promise(ok=>setTimeout(ok,6500));

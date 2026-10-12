@@ -1,0 +1,112 @@
+name: Blue Sea Missing Legacy Product URL Discovery
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/product-h1-legacy-discovery.yml'
+permissions:
+  contents: write
+concurrency:
+  group: blue-sea-product-h1-legacy-discovery
+  cancel-in-progress: false
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - name: Checkout earlier read-only audit report
+        uses: actions/checkout@v4
+      - name: Checkout tested Astro H1 parser only
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: astro
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Discover only 62 missing URLs without WordPress writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'JS'
+          import {readFileSync,writeFileSync} from 'node:fs';
+          import {extractH1s,slugFromUrl,safeLegacyUrl,normalizeH1,rowsToCsv} from './astro/scripts/audit-legacy-product-h1.mjs';
+          const original='https://xuongmunonbaohiem.com';
+          const audit=JSON.parse(readFileSync('reports/product-h1-audit.json','utf8'));
+          const missing=audit.rows.filter(x=>x.status==='unmatched_url');
+          if(missing.length!==62)throw Error('Expected 62 original unmatched URLs, not '+missing.length);
+          const outcome=[];
+          async function check(url,row){
+            const ctrl=new AbortController();
+            const abort=setTimeout(()=>ctrl.abort(),14000);
+            try {
+              const resp=await fetch(url,{signal:ctrl.signal,redirect:'follow',headers:{'User-Agent':'ESC-H1-ReadOnly-Audit/1.0'}});
+              if(!resp.ok)return {ok:false,url,status:resp.status};
+              if(!safeLegacyUrl(resp.url,original)||slugFromUrl(resp.url)!==row.wp_slug.toLocaleLowerCase('vi-VN'))return {ok:false,url,status:'redirect_review',finalUrl:resp.url};
+              const h1s=extractH1s(await resp.text());
+              if(h1s.length!==1)return {ok:false,url,status:'h1_count_'+h1s.length};
+              const h1=h1s[0],title=normalizeH1(row.wp_title);
+              if(!h1.startsWith(title+' - '))return {ok:false,url,status:'title_h1_mismatch',h1};
+              return {ok:true,url:resp.url,h1};
+            } catch(e){return {ok:false,url,status:String(e?.message||e).slice(0,140)}}
+            finally{clearTimeout(abort)}
+          }
+          async function resolve(row){
+            const slug=encodeURIComponent(row.wp_slug);
+            const guesses=[original+'/san-pham/'+slug+'/',original+'/'+slug+'.html'];
+            const finds=[];
+            for(const url of guesses){
+              let result=await check(url,row);
+              if(result.ok&&!finds.some(x=>x.url===result.url))finds.push(result);
+            }
+            let status=finds.length===1?'recovered_needs_h1':finds.length>1?'ambiguous_urls':'unmatched_url';
+            return {...row,status,method:status==='recovered_needs_h1'?'verified_direct_url':status,
+              legacy_url:finds.length===1?finds[0].url:'',legacy_h1:finds.length===1?finds[0].h1:'',
+              candidates:finds};
+          }
+          let cursor=0;
+          async function worker(){
+            while(cursor<missing.length){
+              const i=cursor++;
+              outcome[i]=await resolve(missing[i]);
+              if((i+1)%10===0)console.log('Checked '+(i+1)+'/'+missing.length);
+            }
+          }
+          await Promise.all(Array.from({length:4},worker));
+          const summary={};
+          for(const row of outcome)summary[row.status]=(summary[row.status]||0)+1;
+          const data={generated_at:new Date().toISOString(),base_audit:audit.generated_at,summary,rows:outcome};
+          writeFileSync('reports/product-h1-supplement.json',JSON.stringify(data,null,2)+'\n');
+          writeFileSync('reports/product-h1-supplement.csv',rowsToCsv(outcome));
+          console.log('Read-only sitemap-gap discovery results:',summary);
+          JS
+      - name: Summary and artifacts
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json,os
+          j=json.load(open('reports/product-h1-supplement.json',encoding='utf8'))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('Read-only scan of 62 sitemap-unmatched WordPress product slugs. No product metadata written.\n')
+              f.write('Results: '+str(j['summary'])+'\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: product-h1-supplement-${{ github.run_id }}
+          path: reports/product-h1-supplement.*
+          retention-days: 30
+      - name: Publish read-only source-discovery report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reports/product-h1-supplement.json reports/product-h1-supplement.csv
+          if ! git diff --cached --quiet; then
+            git commit -m "reports(seo): investigate 62 missing original product URLs"
+            git push origin HEAD:main
+          fi

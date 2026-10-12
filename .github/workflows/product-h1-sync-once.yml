@@ -197,7 +197,12 @@ jobs:
           # Always run cleanup before finishing. Trap also covers any failure.
           cleanup
           trap - EXIT
-          # Ensure temporary script no longer exists (HTTP 404/403 is acceptable).
-          status="$(curl -sSL -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 20 "$wp_url")"
-          if [[ "$status" == '200' ]]; then echo 'Temporary PHP endpoint still accessible'; exit 1; fi
-          echo "Temporary PHP entry removed; response after cleanup: $status" >> "$GITHUB_STEP_SUMMARY"
+          # POST with the valid short-lived token must now return HTTP 404, not 200/403.
+          # A plain GET would return 403 even if cleanup failed and is not adequate proof.
+          status="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 10 --max-time 30 \
+            -H "X-Esc-H1-Token: $token" -H 'Content-Type: application/json' \
+            --data-binary @/tmp/esc-h1-plan.json "$wp_url?mode=preview")"
+          if [[ "$status" != '404' && "$status" != '410' ]]; then
+            echo "Temporary PHP cleanup could not be verified (HTTP $status)"; exit 1
+          fi
+          echo "Temporary importer removal verified via authenticated POST: HTTP $status" >> "$GITHUB_STEP_SUMMARY"

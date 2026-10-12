@@ -1,0 +1,1 @@
+Read-only production comparison of original .com vs Astro .io.vn on 2026-10-12. No CMS writes and no deploy.

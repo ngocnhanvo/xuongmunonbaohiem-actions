@@ -1,1 +1,1 @@
-Run product H1 integration regression/build QA for development branch after explicit HTML whitespace separator fix. Target github commit bb20e82c7d8d934fee0bfe7a922c268583e36dba. Do not deploy or merge as part of QA.
+Verify legacy category H1 parity fix (products index and Vespa Bọc da) after Astro github commit 2ec49eb84cad1f6ed1e4898ad1a7fa3b19916cce. QA-only, no deployment. 2026-10-12.

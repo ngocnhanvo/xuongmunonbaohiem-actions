@@ -1,4 +1,4 @@
-name: Blue Sea Ten Listing SEO Titles Smoke
+name: Blue Sea Eleven Listing SEO Titles Smoke
 on:
   workflow_dispatch:
   push:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Verify ten public SEO titles, social titles, and live H1 without modifying content
+      - name: Verify eleven public SEO titles, social titles, and live H1 without modifying content
         shell: bash
         run: |
           set -euo pipefail
@@ -22,6 +22,7 @@ jobs:
           expected={
             '/san-pham':'Mũ Bảo Hiểm In Logo Theo Yêu Cầu | Blue Sea',
             '/san-pham/non-bao-hiem-nua-dau':'Nón Bảo Hiểm Nửa Đầu | Xưởng Sản Xuất Blue Sea',
+            '/san-pham/non-bao-hiem-boc-da':'Nón Bảo Hiểm Bọc Da | Blue Sea',
             '/san-pham/non-bao-hiem-co-kinh':'Nón Bảo Hiểm Có Kính | Blue Sea',
             '/san-pham/non-bao-hiem-3-4':'Nón Bảo Hiểm 3/4 | Blue Sea',
             '/san-pham/mau-non-khac':'Các Mẫu Nón Bảo Hiểm Khác | Blue Sea',

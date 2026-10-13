@@ -160,8 +160,47 @@ jobs:
               content = file.read_text(encoding='utf-8')
               if re.search(r'(?m)^([ ]*)env:[ ]*\n\1(?:run|shell|working-directory|uses):', content):
                   raise SystemExit(f'Empty env declaration: {file}')
-              if 'name: Resolve WC_URL from ENV_FILE' in content:
-                  if 'secrets.WP_ADMIN_URL' in content or 'secrets.WC_URL' in content:
+              if re.search(r'(?m)^      - name: Resolve WC_URL from ENV_FILE
+                      raise SystemExit(f'Legacy or nonexistent URL secret in {file}')
+                  if 'secrets.ENV_FILE' not in content:
+                      raise SystemExit(f'Missing ENV_FILE binding in {file}')
+                  checked += 1
+          if checked < 15:
+              raise SystemExit(f'Expected at least 15 converted workflows, found {checked}')
+          print(f'WC_URL migration structure checks passed: {checked} workflows')
+          PY
+
+      - name: Validate every Actions workflow parses as YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip -q install PyYAML
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          for file in Path('.github/workflows').glob('*.yml'):
+              workflow=yaml.safe_load(file.read_text(encoding='utf-8'))
+              if not isinstance(workflow,dict) or not isinstance(workflow.get('jobs'),dict):
+                  raise SystemExit(f'Invalid workflow or missing jobs: {file}')
+              for job_name,job in workflow['jobs'].items():
+                  if not isinstance(job,dict):raise SystemExit(f'Invalid job {job_name} in {file}')
+                  steps=job.get('steps',[])
+                  if not isinstance(steps,list):raise SystemExit(f'Invalid steps in {file}')
+                  for step in steps:
+                      if isinstance(step,dict) and 'env' in step and not isinstance(step['env'],dict):
+                          raise SystemExit(f'Empty or invalid step environment in {file}')
+          print("All Actions workflows parsed without YAML errors")
+          PY
+
+      - name: Validate orchestration syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/wordpress-build-trigger-e2e.mjs
+          php -l private/php/wp-content/mu-plugins/esc-github-trigger-config.php
+          php -l private/php/wp-content/plugins/github-trigger/vcs-build-trigger.php
+, content):
+                  if re.search(r'\$\{\{\s*secrets\.(?:WP_ADMIN_URL|WC_URL)\s*\}\}', content):
                       raise SystemExit(f'Legacy or nonexistent URL secret in {file}')
                   if 'secrets.ENV_FILE' not in content:
                       raise SystemExit(f'Missing ENV_FILE binding in {file}')

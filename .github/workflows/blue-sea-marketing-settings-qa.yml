@@ -55,7 +55,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Marketing tracking integration tests
         working-directory: source
-        run: pnpm exec vitest run src/lib/googleServices.test.ts src/lib/googleLeadConversions.test.ts src/lib/marketingTags.test.ts
+        run: pnpm exec vitest run src/lib/googleServices.test.ts src/lib/googleLeadConversions.test.ts src/lib/marketingTags.test.ts src/lib/marketingPixels.test.ts
       - name: Write existing production-equivalent build environment
         working-directory: source
         env:

@@ -1,1 +1,3 @@
 Deploy category SEO Title and Description editor on WordPress PHP master, with PHP unit tests and API read-only check. 2026-10-13.
+
+2026-10-13 correction: remove redundant Astro-specific Woo category SEO inputs (native Yoast form already exists), export ONLY explicitly saved Yoast taxonomy wpseo_title/wpseo_desc via existing category API. PHP master 48f9fe0854bb83b1f7349b4821b75bd6ea9382d2. Do not create duplicate fields. Check backend API without content writes.

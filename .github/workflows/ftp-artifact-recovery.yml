@@ -94,6 +94,18 @@ jobs:
           bye
           LFTP
           echo "path=$target" >> "$GITHUB_OUTPUT"
+      - name: Verify signed WordPress unzip protocol before uploading
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          ASTRO_FTP_TARGET: ${{ steps.ftp_target.outputs.path }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+          ZIP_PATH: source/upload/escvn.zip
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/esc-remote-unzip.py
+          python3 scripts/esc-remote-unzip.py verify
       - name: Resume FTP upload from archived ZIP
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
@@ -122,19 +134,18 @@ jobs:
           elapsed=$((SECONDS - started))
           echo "FTP recovery transfer completed in ${elapsed}s"
           echo "- FTP recovery transfer: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
-      - name: Trigger production unpack
-        env:
-          ENV_FILE: ${{ secrets.ENV_FILE }}
+      - name: Trigger signed remote unzip and validate Astro artifact
         shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          ASTRO_FTP_TARGET: ${{ steps.ftp_target.outputs.path }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+          ZIP_PATH: source/upload/escvn.zip
         run: |
           set -euo pipefail
           started=$SECONDS
-          printf '%s\n' "$ENV_FILE" > /tmp/blue-sea-ftp.env
-          set -a
-          source /tmp/blue-sea-ftp.env
-          set +a
-          test -n "${WC_URL:-}"
-          curl --max-time 60 -fsS "$WC_URL/unzip.php"
+          python3 scripts/esc-remote-unzip.py unpack
           elapsed=$((SECONDS - started))
-          echo "Remote unpack completed in ${elapsed}s"
-          echo "- Remote unpack: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo "Signed remote unzip completed in ${elapsed}s"
+          echo "- Authenticated remote unzip: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"

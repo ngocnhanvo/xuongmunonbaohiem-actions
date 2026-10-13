@@ -14,17 +14,45 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          values = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  values.append(v)
+          if len(values) != 1: raise SystemExit("ENV_FILE must contain exactly one WC_URL")
+          url = urlsplit(values[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid backend WC_URL in ENV_FILE")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend domain:", host)
+          PY
       - name: Validate required credentials
         env:
           SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in SOURCE_REPO_PAT FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do
+          for name in SOURCE_REPO_PAT FTP_SERVER FTP_USERNAME FTP_PASSWORD WC_URL; do
             test -n "${!name:-}"
           done
       - name: Checkout PHP repository master
@@ -62,16 +90,15 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         shell: bash
         run: |
           set -euo pipefail
           remote_path="$(python3 - <<'PY'
           import os
           from urllib.parse import urlparse
-          raw=os.environ['WP_ADMIN_URL'].strip()
+          raw=os.environ['WC_URL'].strip()
           hostname=urlparse(raw if '://' in raw else 'https://'+raw).hostname
-          if not hostname:raise SystemExit('Invalid WP_ADMIN_URL')
+          if not hostname:raise SystemExit('Invalid WC_URL')
           print('/domains/'+hostname+'/public_html/wp-content/plugins/github-trigger')
           PY
           )"
@@ -98,13 +125,12 @@ jobs:
           echo "Native Yoast category SEO integration: uploaded 2 PHP files, byte-for-byte verified."
       - name: Read-only WordPress category API smoke test
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json,os,urllib.request,urllib.parse
-          raw=os.environ['WP_ADMIN_URL']
+          raw=os.environ['WC_URL']
           origin=urllib.parse.urlparse(raw if '://' in raw else 'https://'+raw)
           url=origin.scheme+'://'+origin.netloc+'/wp-json/astro/v1/get-product-categories'
           req=urllib.request.Request(url,headers={'User-Agent':'ESC-Category-SEO-ReadOnlySmoke/1.0'})

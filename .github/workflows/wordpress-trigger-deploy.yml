@@ -21,6 +21,35 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          values = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  values.append(v)
+          if len(values) != 1: raise SystemExit("ENV_FILE must contain exactly one WC_URL")
+          url = urlsplit(values[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid backend WC_URL in ENV_FILE")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend domain:", host)
+          PY
       - name: Validate required secrets
         shell: bash
         env:
@@ -28,14 +57,13 @@ jobs:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           set -euo pipefail
           test -n "$SOURCE_REPO_PAT"
           test -n "$FTP_SERVER"
           test -n "$FTP_USERNAME"
           test -n "$FTP_PASSWORD"
-          test -n "$WP_ADMIN_URL"
+          test -n "$WC_URL"
 
       - name: Checkout WordPress source
         uses: actions/checkout@v4
@@ -80,17 +108,16 @@ jobs:
         id: wp_path
         shell: bash
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           set -euo pipefail
           host="$(python3 - <<'PY'
           import os
           from urllib.parse import urlparse
 
-          raw = os.environ["WP_ADMIN_URL"].strip()
+          raw = os.environ["WC_URL"].strip()
           parsed = urlparse(raw if "://" in raw else "https://" + raw)
           if not parsed.hostname:
-              raise SystemExit("Unable to resolve hostname from WP_ADMIN_URL")
+              raise SystemExit("Unable to resolve hostname from WC_URL")
           print(parsed.hostname)
           PY
           )"

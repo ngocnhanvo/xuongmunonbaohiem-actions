@@ -14,6 +14,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          values = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  values.append(v)
+          if len(values) != 1: raise SystemExit("ENV_FILE must contain exactly one WC_URL")
+          url = urlsplit(values[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid backend WC_URL in ENV_FILE")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend domain:", host)
+          PY
       - name: Checkout PHP master
         uses: actions/checkout@v4
         with:
@@ -43,16 +72,15 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
-          test -n "$WP_ADMIN_URL"
+          test -n "$WC_URL"
           host="$(python3 - <<'PY'
           from urllib.parse import urlparse
           import os
-          raw=os.environ["WP_ADMIN_URL"]
+          raw=os.environ["WC_URL"]
           p=urlparse(raw if '://' in raw else 'https://'+raw)
           assert p.hostname, 'Missing WordPress admin host'
           print(p.hostname)
@@ -75,13 +103,12 @@ jobs:
           echo "WordPress marketing settings MU-plugin: FTP byte verification PASS."
       - name: Verify public Info REST now exposes WordPress marketing fields
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import json,os,urllib.parse,urllib.request
-          p=urllib.parse.urlparse(os.environ['WP_ADMIN_URL'])
+          p=urllib.parse.urlparse(os.environ['WC_URL'])
           url=f'{p.scheme}://{p.netloc}/wp-json/wp/v2/thong-tin-chung?per_page=3'
           req=urllib.request.Request(url,headers={'User-Agent':'BlueSea-WP-Marketing-QA/1.0'})
           with urllib.request.urlopen(req,timeout=40) as response:

@@ -1,0 +1,120 @@
+name: Install signed Astro unzip v2 on WordPress
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blue-sea-wordpress-unzip-v2
+  cancel-in-progress: false
+
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Actions scripts
+        uses: actions/checkout@v4
+      - name: Checkout WordPress PHP master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: php-source
+          persist-credentials: false
+      - name: Lint endpoint and verify GET is disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l php-source/unzip.php
+          python3 -m py_compile scripts/esc-remote-unzip.py
+          test "$(cat php-source/unzip-v2.ready)" = 'ESC_ASTRO_UNZIP_PROTOCOL=2'
+          test "$(REQUEST_METHOD=GET php php-source/unzip.php)" = '{"ok":false,"error":"POST required"}'
+      - name: Install lftp
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp; then
+              sudo apt-get update -y -qq
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp
+            fi
+          fi
+      - name: Resolve admin WordPress FTP directory
+        id: path
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          p=urlsplit(os.environ["WP_ADMIN_URL"])
+          host=p.hostname or ""
+          if p.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host) or ".." in host or "." not in host or p.path not in ("","/"):
+              raise SystemExit("Invalid WP_ADMIN_URL")
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              f.write("dir=/domains/%s/public_html\n" % host)
+          PY
+      - name: Upload endpoint and then readiness marker, with byte checks
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          REMOTE_WP_DIR: ${{ steps.path.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          protocol="${FTP_PROTOCOL:-ftp}"
+          case "$protocol" in ftp|ftps|sftp) ;; *) echo "::error::Bad FTP protocol"; exit 1;; esac
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 30
+          set ssl:verify-certificate no
+          cd "$REMOTE_WP_DIR"
+          put php-source/unzip.php -o unzip.php
+          get unzip.php -o "$RUNNER_TEMP/unzip.remote.php"
+          bye
+          LFTP
+          cmp php-source/unzip.php "$RUNNER_TEMP/unzip.remote.php"
+          php -l "$RUNNER_TEMP/unzip.remote.php"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 30
+          set ssl:verify-certificate no
+          cd "$REMOTE_WP_DIR"
+          put php-source/unzip-v2.ready -o unzip-v2.ready
+          get unzip-v2.ready -o "$RUNNER_TEMP/unzip-v2.remote.ready"
+          bye
+          LFTP
+          cmp php-source/unzip-v2.ready "$RUNNER_TEMP/unzip-v2.remote.ready"
+      - name: Verify signed PHP endpoint on the actual backend
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+        run: |
+          set -euo pipefail
+          ASTRO_FTP_TARGET="$(python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+          lines=os.environ["ENV_FILE"].splitlines()
+          urls=[x.split("=",1)[1].strip().strip("'\"") for x in lines if x.startswith("WC_URL_CLIENT=")]
+          if len(urls)!=1: raise SystemExit("Missing WC_URL_CLIENT")
+          host=urlsplit(urls[0]).hostname
+          if not host: raise SystemExit("Invalid WC_URL_CLIENT")
+          print(os.environ.get("FTP_ASTRO_DIR") or "/domains/%s/public_html/" % host)
+          PY
+          )"
+          export ASTRO_FTP_TARGET
+          python3 scripts/esc-remote-unzip.py verify
+          echo "Signed unpacker v2 installed and verified." >> "$GITHUB_STEP_SUMMARY"

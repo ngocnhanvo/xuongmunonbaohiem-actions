@@ -22,6 +22,35 @@ jobs:
       AGENT_CASE_MAX_ATTEMPTS: '2'
       AGENT_REPORT_PATH: tests/agent-regression/report.json
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          vals = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  vals.append(v)
+          if len(vals) != 1: raise SystemExit("Missing or duplicate WC_URL in ENV_FILE")
+          url = urlsplit(vals[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend host:", host)
+          PY
       - name: Checkout Actions Hub
         uses: actions/checkout@v4
         with:
@@ -74,14 +103,13 @@ jobs:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           set -euo pipefail
-          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD" && test -n "$WP_ADMIN_URL"
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD" && test -n "$WC_URL"
           python3 - <<'PY' >> "$GITHUB_ENV"
           import os
           from urllib.parse import urlparse
-          raw=os.environ["WP_ADMIN_URL"].strip()
+          raw=os.environ["WC_URL"].strip()
           host=urlparse(raw if "://" in raw else "https://"+raw).hostname
           if not host: raise SystemExit("Missing valid WordPress admin host")
           print(f"REMOTE_MU_PLUGINS=/domains/{host}/public_html/wp-content/mu-plugins")

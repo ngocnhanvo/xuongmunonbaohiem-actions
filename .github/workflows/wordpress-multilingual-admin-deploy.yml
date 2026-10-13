@@ -58,6 +58,8 @@ jobs:
           php -l wp-content/mu-plugins/esc-multilingual-admin.php
           php -l wp-content/mu-plugins/tests/multilingual-admin-regression.php
           php wp-content/mu-plugins/tests/multilingual-admin-regression.php
+          php -l wp-content/mu-plugins/tests/product-duplicate-language-regression.php
+          php wp-content/mu-plugins/tests/product-duplicate-language-regression.php
 
       - name: Resolve WordPress FTP path
         id: wp_path

@@ -30,8 +30,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Checkout Actions Hub for optional H1 cache repair
-        if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[refresh-product-h1-cache]')) || (github.event_name == 'workflow_dispatch' && inputs.refresh_product_seo_h1) || (github.event_name == 'repository_dispatch' && github.event.client_payload.refresh_product_seo_h1 == true) }}
+      - name: Checkout Actions Hub for safe deploy scripts and optional H1 cache repair
         uses: actions/checkout@v4
         with:
           path: actions-hub
@@ -203,6 +202,18 @@ jobs:
           bye
           LFTP
           echo "path=$target" >> "$GITHUB_OUTPUT"
+      - name: Verify signed WordPress unzip protocol before uploading
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          ASTRO_FTP_TARGET: ${{ steps.ftp_target.outputs.path }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+          ZIP_PATH: source/upload/escvn.zip
+        run: |
+          set -euo pipefail
+          python3 -m py_compile actions-hub/scripts/esc-remote-unzip.py
+          python3 actions-hub/scripts/esc-remote-unzip.py verify
       - name: Sync files via resumable FTP
         shell: bash
         env:
@@ -236,14 +247,18 @@ jobs:
           echo "Resumable FTP transfer completed in ${elapsed}s; archive staged for remote unzip."
           echo "- FTP transfer: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Trigger Remote Unzip
-        working-directory: source
+      - name: Trigger signed remote unzip and validate Astro artifact
         shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          ASTRO_FTP_TARGET: ${{ steps.ftp_target.outputs.path }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+          ZIP_PATH: source/upload/escvn.zip
         run: |
           set -euo pipefail
           started=$SECONDS
-          source .env
-          curl -fsS "$WC_URL/unzip.php"
+          python3 actions-hub/scripts/esc-remote-unzip.py unpack
           elapsed=$((SECONDS - started))
-          echo "Remote unzip completed in ${elapsed}s"
-          echo "- Remote unzip: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
+          echo "Signed remote unzip completed in ${elapsed}s"
+          echo "- Authenticated remote unzip: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"

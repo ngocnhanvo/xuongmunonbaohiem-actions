@@ -41,7 +41,24 @@ jobs:
               "https://ad.doubleclick.net",
               "https://googleads.g.doubleclick.net",
           ]
-          required_script = ["https://googleads.g.doubleclick.net"]
+          required_script = [
+              "https://googleads.g.doubleclick.net",
+              "https://connect.facebook.net",
+              "https://analytics.tiktok.com",
+              "https://www.clarity.ms",
+              "https://static.hotjar.com",
+              "https://script.hotjar.com",
+              "https://snap.licdn.com",
+              "https://s.pinimg.com",
+          ]
+          required_pixel_connect = [
+              "https://analytics.tiktok.com",
+              "https://c.clarity.ms",
+              "https://vars.hotjar.com",
+              "https://vc.hotjar.io",
+              "https://ct.pinterest.com",
+              "wss://ws.hotjar.com",
+          ]
           for policy in policies:
               pieces = {}
               for directive in policy.split(";"):
@@ -51,6 +68,8 @@ jobs:
                   assert origin in pieces.get("connect-src", []), f"CSP connect-src missing {origin}"
               for origin in required_script:
                   assert origin in pieces.get("script-src", []), f"CSP script-src missing {origin}"
+              for origin in required_pixel_connect:
+                  assert origin in pieces.get("connect-src", []), f"CSP connect-src missing pixel endpoint {origin}"
               assert "'none'" in pieces.get("default-src", []), "CSP default-src was weakened"
               assert "'none'" in pieces.get("object-src", []), "CSP object-src was weakened"
               assert "*" not in pieces.get("connect-src", []), "Wildcard CSP connect-src forbidden"

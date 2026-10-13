@@ -6,3 +6,5 @@ Rerun focused PostsPage contract tests and full dev build.
 2026-10-13: Verify SEO listingTitle fix on Astro github branch ef8f93e926714cdd26fe8173d3413bbbbc99046d. Run 8 category + product landing + Tin tức title tests, legacy H1 tests, and full Astro build; no deploy.
 
 2026-10-13: Test Astro github category custom SEO title and description, cache version 3, 8 category fallback, prior H1 and Visual Builder regression; no production deployment until PASS.
+
+2026-10-13: Re-verify Astro github category Yoast SEO full build, cache v3 schema and legacy H1 after replacing duplicate PHP form with existing Yoast taxonomy UI. Backend CI run 38327796092 passed.

@@ -51,7 +51,7 @@ jobs:
         run: |
           # The legacy product banner title assertion still checks {pageTitle}
           # after the independent SEO H1 refactor; do not alter customer SEO.
-          pnpm exec vitest run src/lib/wordpress/builderPostsPreview.test.ts src/lib/wordpress/pages/ssrActionAudit.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts src/lib/seo/listingTitles.test.ts src/lib/seo/legacyPageHeadings.test.ts
+          pnpm exec vitest run src/lib/wordpress/builderPostsPreview.test.ts src/lib/wordpress/pages/ssrActionAudit.test.ts src/lib/wordpress/builderHeaderNavLock.test.ts src/lib/seo/listingTitles.test.ts src/lib/seo/legacyPageHeadings.test.ts scripts/product-category-cache.test.ts
           pnpm exec vitest run src/lib/wordpress/builderProductListing.test.ts -t 'selects SSR props|SSR route imports|passes the correct first page'
       - name: Compile development Builder and public pages without deploy
         working-directory: source

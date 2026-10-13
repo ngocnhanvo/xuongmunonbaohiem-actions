@@ -1,0 +1,1 @@
+Read-only admin product_cat term 1689 UI check after removing duplicate category SEO fields. 2026-10-13.

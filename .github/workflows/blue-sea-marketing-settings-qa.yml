@@ -1,0 +1,72 @@
+name: Blue Sea WordPress Marketing Settings QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/blue-sea-marketing-settings-qa.txt']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-marketing-settings-qa
+  cancel-in-progress: true
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout WordPress master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: wp
+          persist-credentials: false
+      - name: PHP settings syntax and mock WordPress tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l wp/wp-content/mu-plugins/esc-marketing-settings.php
+          php -l wp/tests/marketing-tracking-settings.php
+          php wp/tests/marketing-tracking-settings.php
+      - name: Checkout Astro github development branch
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Show exact source revisions
+        shell: bash
+        run: |
+          git -C wp rev-parse HEAD
+          git -C source rev-parse HEAD
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install Astro dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Marketing tracking integration tests
+        working-directory: source
+        run: pnpm exec vitest run src/lib/googleServices.test.ts src/lib/googleLeadConversions.test.ts
+      - name: Write existing production-equivalent build environment
+        working-directory: source
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          test -n "$ENV_FILE"
+          printf '%s\n' "$ENV_FILE" > .env
+      - name: Full Astro github build without deployment
+        working-directory: source
+        run: pnpm run build-git
+      - name: Check server parsing
+        working-directory: source
+        run: node --check dist/server/entry.mjs

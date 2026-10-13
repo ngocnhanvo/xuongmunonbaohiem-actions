@@ -193,6 +193,16 @@ jobs:
           print("All Actions workflows parsed without YAML errors")
           PY
 
+      - name: Validate multilingual linked-delete lifecycle (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l private/php/wp-content/mu-plugins/esc-multilingual-delete-sync.php
+          php -l private/php/wp-content/mu-plugins/tests/multilingual-delete-regression.php
+          php private/php/wp-content/mu-plugins/tests/multilingual-delete-regression.php
+          php private/php/wp-content/mu-plugins/tests/multilingual-admin-regression.php
+          php private/php/wp-content/mu-plugins/tests/product-duplicate-language-regression.php
+
       - name: Validate orchestration syntax
         shell: bash
         run: |

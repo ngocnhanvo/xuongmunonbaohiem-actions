@@ -1,3 +1,4 @@
 Deploy Yoast score sorting compatibility for multilingual admin.
 PHP source: f60e7b8af9eb01c5c51fdaab6102e8d022937e86
 Fix: Post/Product SEO and readability sorting use Yoast indexables so records without legacy _yoast_wpseo_linkdex/content_score postmeta stay visible.
+2026-10-13: Fix standalone Product copy vs translation behavior. PHP master 84be6b739dc8ca86ba53c81aefc3a26172f3bb93: WooCommerce Duplicate and Yoast Duplicate Post no longer carry origin_product_id into cloned product; product_lang and other product fields unchanged. Manual multilingual translation selector remains unchanged. Validate multilingual-admin-regression.php plus new product-duplicate-language-regression.php before uploading only wp-content/mu-plugins/esc-multilingual-admin.php via FTP, byte verify, smoke WordPress index. Do not mutate any existing products or translations.

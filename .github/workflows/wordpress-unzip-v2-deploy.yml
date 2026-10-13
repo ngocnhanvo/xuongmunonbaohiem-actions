@@ -43,22 +43,26 @@ jobs:
               sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp
             fi
           fi
-      - name: Resolve admin WordPress FTP directory
+      - name: Resolve WordPress FTP directory from ENV_FILE WC_URL
         id: path
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import os,re
-          from urllib.parse import urlsplit
-          p=urlsplit(os.environ["WP_ADMIN_URL"])
-          host=p.hostname or ""
-          if p.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host) or ".." in host or "." not in host or p.path not in ("","/"):
-              raise SystemExit("Invalid WP_ADMIN_URL")
-          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
-              f.write("dir=/domains/%s/public_html\n" % host)
+          import importlib.util
+          import os
+
+          spec = importlib.util.spec_from_file_location("esc_remote_unzip", "scripts/esc-remote-unzip.py")
+          helper = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(helper)
+
+          wc_url = helper.env_value(os.environ["ENV_FILE"], "WC_URL")
+          _, host = helper.validate_url(wc_url)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"dir=/domains/{host}/public_html\n")
+          print(f"WordPress FTP destination resolved from ENV_FILE WC_URL: /domains/{host}/public_html")
           PY
       - name: Upload endpoint and then readiness marker, with byte checks
         env:
@@ -105,13 +109,13 @@ jobs:
         run: |
           set -euo pipefail
           ASTRO_FTP_TARGET="$(python3 - <<'PY'
+          import importlib.util
           import os
-          from urllib.parse import urlsplit
-          lines=os.environ["ENV_FILE"].splitlines()
-          urls=[x.split("=",1)[1].strip().strip("'\"") for x in lines if x.startswith("WC_URL_CLIENT=")]
-          if len(urls)!=1: raise SystemExit("Missing WC_URL_CLIENT")
-          host=urlsplit(urls[0]).hostname
-          if not host: raise SystemExit("Invalid WC_URL_CLIENT")
+          spec = importlib.util.spec_from_file_location("esc_remote_unzip", "scripts/esc-remote-unzip.py")
+          helper = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(helper)
+          frontend_url = helper.env_value(os.environ["ENV_FILE"], "WC_URL_CLIENT")
+          _, host = helper.validate_url(frontend_url)
           print(os.environ.get("FTP_ASTRO_DIR") or "/domains/%s/public_html/" % host)
           PY
           )"

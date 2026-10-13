@@ -1,1 +1,3 @@
 Read-only production tracking HTML verification after successful deploy 37900345360. Expected Astro master 7ce5ba760a5fd319cbb505847071730a36e64cbd. Verify Google Search Console, Ahrefs, GTM, GA4, Ads IDs.
+
+2026-10-13: Post-deploy marketing settings integration smoke for Astro master ccd25fa856100c141cab6c07233e9fcd4d65a166, FTP production run 38333112970 PASS. WP tracking settings REST deployed run 38332945251 PASS, configured=false initially. Verify existing GTM/GA4/Ads/Google/Ahrefs remain present in published HTML (zero disruption prior to first explicit WP save), shared loader continues without duplicate tracks.

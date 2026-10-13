@@ -14,6 +14,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          values = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  values.append(v)
+          if len(values) != 1: raise SystemExit("ENV_FILE must contain exactly one WC_URL")
+          url = urlsplit(values[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid backend WC_URL in ENV_FILE")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend domain:", host)
+          PY
       - uses: actions/checkout@v4
         with:
           repository: ngocnhanvo/xuongmunonbaohiem-php
@@ -36,17 +65,16 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          for key in FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do test -n "${!key:-}"; done
+          for key in FTP_SERVER FTP_USERNAME FTP_PASSWORD WC_URL; do test -n "${!key:-}"; done
           sudo apt-get update -qq
           sudo apt-get install -qq -y lftp
           export REMOTE_DIR="$(python3 - <<'PY'
           import os
           from urllib.parse import urlparse
-          url=os.environ['WP_ADMIN_URL']
+          url=os.environ['WC_URL']
           domain=urlparse(url if '://' in url else 'https://'+url).hostname
           if not domain:raise SystemExit('Missing WP hostname')
           print('/domains/'+domain+'/public_html/wp-content/plugins/esc-visual-builder/includes')
@@ -74,13 +102,11 @@ jobs:
           php -l /tmp/esc-builder-item-ui-remote.php
           echo "Verified item-section-ui.php only; other plugins untouched."
       - name: Verify WordPress alive
-        env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           python3 - <<'PY'
           import os,requests
           from urllib.parse import urlparse
-          url=os.environ['WP_ADMIN_URL']
+          url=os.environ['WC_URL']
           host=urlparse(url if '://' in url else 'https://'+url).hostname
           r=requests.get('https://'+host+'/wp-json/',timeout=30)
           assert r.status_code==200,('WP REST',r.status_code)

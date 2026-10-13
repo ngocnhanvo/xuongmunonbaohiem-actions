@@ -15,6 +15,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          values = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  values.append(v)
+          if len(values) != 1: raise SystemExit("ENV_FILE must contain exactly one WC_URL")
+          url = urlsplit(values[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid backend WC_URL in ENV_FILE")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend domain:", host)
+          PY
       - name: Validate deploy secrets
         shell: bash
         env:
@@ -22,10 +51,9 @@ jobs:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           set -euo pipefail
-          for key in SOURCE_REPO_PAT FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do
+          for key in SOURCE_REPO_PAT FTP_SERVER FTP_USERNAME FTP_PASSWORD WC_URL; do
             test -n "${!key:-}"
           done
       - name: Checkout PHP master (do not modify source)
@@ -51,7 +79,6 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -59,9 +86,9 @@ jobs:
           export REMOTE_DIR="$(python3 - <<'PY'
           from urllib.parse import urlparse
           import os
-          raw=os.environ['WP_ADMIN_URL']
+          raw=os.environ['WC_URL']
           host=urlparse(raw if '://' in raw else 'https://'+raw).hostname
-          if not host: raise SystemExit('Invalid WP_ADMIN_URL')
+          if not host: raise SystemExit('Invalid WC_URL')
           print('/domains/'+host+'/public_html/wp-content/mu-plugins')
           PY
           )"
@@ -88,14 +115,12 @@ jobs:
           echo "WordPress SEO H1 MU-plugin FTP byte verification passed." >> "$GITHUB_STEP_SUMMARY"
       - name: WordPress REST field smoke test
         shell: bash
-        env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
         run: |
           set -euo pipefail
           host="$(python3 - <<'PY'
           from urllib.parse import urlparse
           import os
-          raw=os.environ['WP_ADMIN_URL']
+          raw=os.environ['WC_URL']
           print(urlparse(raw if '://' in raw else 'https://'+raw).hostname)
           PY
           )"

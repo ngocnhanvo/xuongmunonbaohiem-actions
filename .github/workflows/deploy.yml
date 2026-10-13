@@ -30,6 +30,34 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          values=[]
+          for line in os.environ.get("ENV_FILE","").splitlines():
+              line=line.strip()
+              if line.startswith("export "): line=line[7:].strip()
+              if line.startswith("WC_URL="):
+                  val=line.partition("=")[2].strip()
+                  if len(val)>1 and val[0]==val[-1] and val[0] in ("'",'"'): val=val[1:-1]
+                  values.append(val)
+          if len(values)!=1: raise SystemExit("Exactly one WC_URL required in ENV_FILE")
+          url=urlsplit(values[0])
+          host=(url.hostname or "").lower()
+          if (url.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None,443) or url.path not in ("","/")
+                  or url.query or url.fragment): raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf8") as out:
+              out.write("WC_URL=https://"+host+"\n")
+          print("WordPress URL derived from ENV_FILE:",host)
+          PY
       - name: Checkout Actions Hub for safe deploy scripts and optional H1 cache repair
         uses: actions/checkout@v4
         with:
@@ -98,7 +126,6 @@ jobs:
       - name: Repair only verified product SEO H1 metadata in cache
         if: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[refresh-product-h1-cache]')) || (github.event_name == 'workflow_dispatch' && inputs.refresh_product_seo_h1) || (github.event_name == 'repository_dispatch' && github.event.client_payload.refresh_product_seo_h1 == true) }}
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           ASTRO_CACHE_DIR: source/.cache
           H1_MANIFEST: actions-hub/reports/product-h1-verified-candidates.json
         shell: bash

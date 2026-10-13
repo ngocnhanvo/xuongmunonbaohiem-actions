@@ -111,7 +111,9 @@ jobs:
           assert 'pnpm test:run' in smoke
 
           assert 'scripts/wordpress-build-trigger-e2e.mjs' in e2e
-          assert 'WP_ADMIN_URL' in e2e
+          assert 'ENV_FILE' in e2e
+          assert 'WC_URL' in e2e
+          assert 'secrets.WP_ADMIN_URL' not in e2e
           assert 'WP_ADMIN_USERNAME' in e2e
           assert 'WP_ADMIN_PASSWORD' in e2e
           assert 'repository_dispatch' in e2e
@@ -138,6 +140,29 @@ jobs:
               'WordPress trigger must prefer the dedicated Actions Hub token'
 
           print('Blue Sea Actions Hub architecture contract passed.')
+          PY
+
+      - name: Validate WC_URL workflow migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          checked = 0
+          for file in Path('.github/workflows').glob('*.yml'):
+              content = file.read_text(encoding='utf-8')
+              if re.search(r'(?m)^([ ]*)env:[ ]*\n\1(?:run|shell|working-directory|uses):', content):
+                  raise SystemExit(f'Empty env declaration: {file}')
+              if 'name: Resolve WC_URL from ENV_FILE' in content:
+                  if 'secrets.WP_ADMIN_URL' in content or 'secrets.WC_URL' in content:
+                      raise SystemExit(f'Legacy or nonexistent URL secret in {file}')
+                  if 'secrets.ENV_FILE' not in content:
+                      raise SystemExit(f'Missing ENV_FILE binding in {file}')
+                  checked += 1
+          if checked < 15:
+              raise SystemExit(f'Expected at least 15 converted workflows, found {checked}')
+          print(f'WC_URL migration structure checks passed: {checked} workflows')
           PY
 
       - name: Validate orchestration syntax

@@ -1,0 +1,46 @@
+name: Verify Native Yoast Product Category Editor
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/blue-sea-verify-native-yoast-editor.txt']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Read-only WordPress category editor verification
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,requests,re,json
+          from urllib.parse import urlparse
+          raw=os.environ['WP_ADMIN_URL'].strip()
+          u=urlparse(raw if '://' in raw else 'https://'+raw)
+          origin=u.scheme+'://'+u.netloc
+          session=requests.Session()
+          session.headers['User-Agent']='BlueSea-ReadOnly-NativeYoast-Editor-Check/1.0'
+          session.get(origin+'/wp-login.php',timeout=40)
+          data={'log':os.environ['WP_ADMIN_USERNAME'],'pwd':os.environ['WP_ADMIN_PASSWORD'],
+                'wp-submit':'Log In','redirect_to':origin+'/wp-admin/','testcookie':'1'}
+          sess=session.post(origin+'/wp-login.php',data=data,timeout=45)
+          if '/wp-login.php' in sess.url:
+            raise SystemExit('WordPress admin login was not successful')
+          r=session.get(origin+'/wp-admin/term.php',params={
+             'taxonomy':'product_cat','tag_ID':'1689','post_type':'product'},timeout=60)
+          source=r.text
+          outcome={'status':r.status_code,'termEdit':('term.php' in r.url),
+            'duplicateSEOEditor':('vcs_product_category_seo_title' in source or 'SEO Title (Astro)' in source),
+            'hasYoastMarkup':('yoast' in source.lower() or 'wpseo' in source.lower())}
+          print('NATIVE_YOAST_EDITOR_QA='+json.dumps(outcome))
+          assert r.status_code==200 and 'wp-login.php' not in r.url
+          assert not outcome['duplicateSEOEditor'],'Duplicate Astro category SEO editor remains loaded'
+          assert outcome['hasYoastMarkup'],'Existing Yoast SEO editor resources not present'
+          PY

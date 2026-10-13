@@ -1,0 +1,1 @@
+2026-10-13: Verify WordPress marketing tracking settings MU-plugin and Astro github tracking consumer. PHP mocked WordPress save/default/build-queue test, Astro Google services tests, full Astro build. No FTP or production changes from this QA workflow.

@@ -1,0 +1,51 @@
+name: Astro Unzip v2 Safety QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/unzip-v2-safety-qa.yml'
+      - 'scripts/esc-remote-unzip.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout PHP endpoint source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: php-source
+          persist-credentials: false
+      - name: Validate source syntax and reject unsigned GET
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l php-source/unzip.php
+          python3 -m py_compile scripts/esc-remote-unzip.py
+          test "$(REQUEST_METHOD=GET php php-source/unzip.php)" = '{"ok":false,"error":"POST required"}'
+          test "$(cat php-source/unzip-v2.ready)" = 'ESC_ASTRO_UNZIP_PROTOCOL=2'
+      - name: Check Python URL and environment parsing safeguards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util
+          spec=importlib.util.spec_from_file_location("esc_unzip","scripts/esc-remote-unzip.py")
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          assert mod.env_value("WC_URL_CLIENT=https://example.com\n", "WC_URL_CLIENT")=="https://example.com"
+          assert mod.validate_url("https://tuannguyen.io.vn")[1]=="tuannguyen.io.vn"
+          for bad in ("http://example.com","https://example.com/bad","https://example.com.evil/path"):
+              try: mod.validate_url(bad)
+              except ValueError: pass
+              else: raise AssertionError("Accepted unsafe origin: "+bad)
+          print("Remote unzip v2 parsing regression PASS")
+          PY

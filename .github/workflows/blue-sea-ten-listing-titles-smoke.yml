@@ -22,7 +22,7 @@ jobs:
           expected={
             '/san-pham':'Mũ Bảo Hiểm In Logo Theo Yêu Cầu | Blue Sea',
             '/san-pham/non-bao-hiem-nua-dau':'Nón Bảo Hiểm Nửa Đầu | Xưởng Sản Xuất Blue Sea',
-            '/san-pham/non-bao-hiem-boc-da':'Nón Bảo Hiểm Bọc Da | Blue Sea',
+            '/san-pham/non-bao-hiem-boc-da':'Nón bảo hiểm bọc da | Blue Sea',
             '/san-pham/non-bao-hiem-co-kinh':'Nón Bảo Hiểm Có Kính | Blue Sea',
             '/san-pham/non-bao-hiem-3-4':'Nón Bảo Hiểm 3/4 | Blue Sea',
             '/san-pham/mau-non-khac':'Các Mẫu Nón Bảo Hiểm Khác | Blue Sea',

@@ -1,1 +1,2 @@
 Read-only production comparison of original .com vs Astro .io.vn on 2026-10-12. No CMS writes and no deploy.
+2026-10-13 replace-original decision audit: Read-only final cutover readiness QA: compare representative routes H1/metadata/HTTP, Lighthouse old vs new on identical runner; do not deploy or submit forms.

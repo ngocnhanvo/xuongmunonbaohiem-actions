@@ -8,3 +8,5 @@ Rerun focused PostsPage contract tests and full dev build.
 2026-10-13: Test Astro github category custom SEO title and description, cache version 3, 8 category fallback, prior H1 and Visual Builder regression; no production deployment until PASS.
 
 2026-10-13: Re-verify Astro github category Yoast SEO full build, cache v3 schema and legacy H1 after replacing duplicate PHP form with existing Yoast taxonomy UI. Backend CI run 38327796092 passed.
+
+2026-10-13: QA category SEO fix on Astro github bf593acc46979e799f35fa6abb5bcbbfa4eb1d84. Verify Nón Bảo Hiểm Bọc Da now receives unique title, future unknown categories derive title from WP name when Yoast SEO absent; saved Yoast overrides still win. No H1, media, route or products changes. Run full Astro build + SSR SEO regression before production merge.

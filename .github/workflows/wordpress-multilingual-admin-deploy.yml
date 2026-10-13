@@ -88,6 +88,9 @@ jobs:
           php wp-content/mu-plugins/tests/multilingual-admin-regression.php
           php -l wp-content/mu-plugins/tests/product-duplicate-language-regression.php
           php wp-content/mu-plugins/tests/product-duplicate-language-regression.php
+          php -l wp-content/mu-plugins/esc-multilingual-delete-sync.php
+          php -l wp-content/mu-plugins/tests/multilingual-delete-regression.php
+          php wp-content/mu-plugins/tests/multilingual-delete-regression.php
 
       - name: Resolve WordPress FTP path
         id: wp_path
@@ -146,12 +149,15 @@ jobs:
           cd "$REMOTE_MU_PLUGINS"
           put "source/wp-content/mu-plugins/esc-multilingual-admin.php" -o "esc-multilingual-admin.php"
           get "esc-multilingual-admin.php" -o /tmp/esc-multilingual-admin.remote.php
+          put "source/wp-content/mu-plugins/esc-multilingual-delete-sync.php" -o "esc-multilingual-delete-sync.php"
+          get "esc-multilingual-delete-sync.php" -o /tmp/esc-multilingual-delete-sync.remote.php
 
           bye
           LFTP
 
           cmp source/wp-content/mu-plugins/esc-multilingual-admin.php /tmp/esc-multilingual-admin.remote.php
-          rm -f /tmp/esc-multilingual-admin.remote.php
+          cmp source/wp-content/mu-plugins/esc-multilingual-delete-sync.php /tmp/esc-multilingual-delete-sync.remote.php
+          rm -f /tmp/esc-multilingual-admin.remote.php /tmp/esc-multilingual-delete-sync.remote.php
           echo "Multilingual admin runtime deployed and byte-verified."
 
       - name: Smoke test WordPress backend

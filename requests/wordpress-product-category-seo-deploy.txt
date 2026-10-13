@@ -1,0 +1,1 @@
+Deploy category SEO Title and Description editor on WordPress PHP master, with PHP unit tests and API read-only check. 2026-10-13.

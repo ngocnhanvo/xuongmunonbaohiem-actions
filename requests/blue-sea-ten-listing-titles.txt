@@ -1,3 +1,5 @@
 2026-10-13: Post-deploy read-only HTML title, OG/Twitter title and H1 verification for ten Blue Sea pages. Astro master fc27a4abe473020bc2f5d581296483faaedc6fd0; deploy run 38323988228 success.
 
 2026-10-13: Post-deploy fallback regression after native Yoast product_cat SEO integration (Astro deploy run 38328216868 successful). Ensure all eight existing category titles, main Products & News plus social tags/H1 remain unchanged when Yoast per-term overrides empty.
+
+2026-10-13: POST-DEPLOY read-only SEO regression for Astro master 5066e394b6102f032e124ae3fd7a88acdc05e306. Production FTP deploy run 38330582688 PASS. Verify 11 URLs including /san-pham/non-bao-hiem-boc-da title sourced from existing WordPress category name, Open Graph and Twitter titles, unchanged unique H1, and previously verified eight categories plus Sản phẩm/Tin tức.

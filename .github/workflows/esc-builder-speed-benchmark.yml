@@ -14,6 +14,32 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          vals=[]
+          for line in os.environ.get("ENV_FILE","").splitlines():
+              line=line.strip()
+              if line.startswith("export "):line=line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v=line.split("=",1)[1].strip()
+                  if len(v)>=2 and v[0]==v[-1] and v[0] in ("'",'"'):v=v[1:-1]
+                  vals.append(v)
+          if len(vals)!=1:raise SystemExit("Missing or duplicate WC_URL in ENV_FILE")
+          parsed=urlsplit(vals[0]);host=(parsed.hostname or "").lower()
+          if (parsed.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host)
+              or "." not in host or ".." in host or parsed.username or parsed.password
+              or parsed.port not in (None,443) or parsed.path not in ("","/")
+              or parsed.query or parsed.fragment):raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf8") as f:
+              f.write("WC_URL=https://"+host+"\n")
+          PY
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -24,7 +50,6 @@ jobs:
       - run: npm install --no-save --no-package-lock puppeteer-core@24
       - name: Measure real Builder latency without WordPress writes
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
@@ -32,7 +57,7 @@ jobs:
         run: |
           node --input-type=module <<'JS'
           import puppeteer from 'puppeteer-core';
-          const origin=new URL(process.env.WP_ADMIN_URL).origin;
+          const origin=new URL(process.env.WC_URL).origin;
           const browser=await puppeteer.launch({headless:true,
             executablePath:process.env.CHROME_PATH,
             args:['--no-sandbox','--disable-dev-shm-usage']});

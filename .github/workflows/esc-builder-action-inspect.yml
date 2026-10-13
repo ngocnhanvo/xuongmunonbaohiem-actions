@@ -12,9 +12,35 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import re
+          from urllib.parse import urlsplit
+          values=[]
+          for line in os.environ.get("ENV_FILE","").splitlines():
+              line=line.strip()
+              if line.startswith("export "):line=line[7:].strip()
+              if line.startswith("WC_URL="):
+                  val=line.split("=",1)[1].strip()
+                  if len(val)>1 and val[0]==val[-1] and val[0] in ("'",'"'):val=val[1:-1]
+                  values.append(val)
+          if len(values)!=1:raise SystemExit("Missing or duplicate WC_URL")
+          url=urlsplit(values[0]);host=(url.hostname or "").lower()
+          if (url.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host)
+              or "." not in host or ".." in host or url.username or url.password
+              or url.port not in (None,443) or url.path not in ("","/")
+              or url.query or url.fragment):raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as f:
+              f.write("WC_URL=https://"+host+"\n")
+          PY
       - name: Inspect ACF Action field for Page 53504 without writes
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
         run: |
@@ -22,12 +48,12 @@ jobs:
           python3 - <<'PY'
           import os,re,requests,json
           from bs4 import BeautifulSoup
-          required=['WP_ADMIN_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD']
+          required=['WC_URL','WP_ADMIN_USERNAME','WP_ADMIN_PASSWORD']
           for name in required:
               if not os.getenv(name): raise SystemExit('Missing '+name)
           base='https://'+__import__('urllib.parse',fromlist=['urlparse']).urlparse(
-              os.environ['WP_ADMIN_URL'] if '://' in os.environ['WP_ADMIN_URL']
-              else 'https://'+os.environ['WP_ADMIN_URL']).hostname
+              os.environ['WC_URL'] if '://' in os.environ['WC_URL']
+              else 'https://'+os.environ['WC_URL']).hostname
           s=requests.Session()
           s.get(base+'/wp-login.php',timeout=25)
           s.post(base+'/wp-login.php',data={

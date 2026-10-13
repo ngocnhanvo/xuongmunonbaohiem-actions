@@ -12,9 +12,34 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          values=[]
+          for line in os.environ.get("ENV_FILE","").splitlines():
+              line=line.strip()
+              if line.startswith("export "): line=line[7:].strip()
+              if line.startswith("WC_URL="):
+                  val=line.partition("=")[2].strip()
+                  if len(val)>1 and val[0]==val[-1] and val[0] in ("'",'"'): val=val[1:-1]
+                  values.append(val)
+          if len(values)!=1: raise SystemExit("Exactly one WC_URL required in ENV_FILE")
+          url=urlsplit(values[0]);host=(url.hostname or "").lower()
+          if (url.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None,443) or url.path not in ("","/")
+                  or url.query or url.fragment): raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf8") as out:
+              out.write("WC_URL=https://"+host+"\n")
+          PY
       - name: Verify WordPress gallery image source without writes
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
         shell: bash
@@ -25,7 +50,7 @@ jobs:
           import os,re,requests
           from bs4 import BeautifulSoup
           from urllib.parse import urlparse,parse_qs
-          root=os.environ['WP_ADMIN_URL'].split('/wp-admin')[0].rstrip('/')
+          root=os.environ['WC_URL'].split('/wp-admin')[0].rstrip('/')
           session=requests.Session()
           session.get(root+'/wp-login.php',timeout=30)
           response=session.post(root+'/wp-login.php',data={

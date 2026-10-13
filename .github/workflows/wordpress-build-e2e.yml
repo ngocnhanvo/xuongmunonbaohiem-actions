@@ -22,18 +22,47 @@ jobs:
     timeout-minutes: 40
 
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          values = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  value = line.split("=", 1)[1].strip()
+                  if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                      value = value[1:-1]
+                  values.append(value)
+          if len(values) != 1: raise SystemExit("ENV_FILE must contain exactly one WC_URL")
+          parsed = urlsplit(values[0])
+          host = (parsed.hostname or "").lower()
+          if (parsed.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or parsed.username or parsed.password
+                  or parsed.port not in (None, 443) or parsed.path not in ("", "/")
+                  or parsed.query or parsed.fragment):
+              raise SystemExit("Invalid backend WC_URL")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as target:
+              target.write("WC_URL=https://" + host + "\n")
+          print("Backend hostname:", host)
+          PY
       - name: Checkout Actions Hub
         uses: actions/checkout@v4
 
       - name: Validate WordPress secrets
         shell: bash
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$WP_ADMIN_URL"
+          test -n "$WC_URL"
           test -n "$WP_ADMIN_USERNAME"
           test -n "$WP_ADMIN_PASSWORD"
 
@@ -53,7 +82,6 @@ jobs:
 
       - name: Trigger Build Website through WordPress
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
         run: node scripts/wordpress-build-trigger-e2e.mjs

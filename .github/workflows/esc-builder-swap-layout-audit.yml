@@ -14,6 +14,32 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 9
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          vals=[]
+          for line in os.environ.get("ENV_FILE","").splitlines():
+              line=line.strip()
+              if line.startswith("export "):line=line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v=line.split("=",1)[1].strip()
+                  if len(v)>=2 and v[0]==v[-1] and v[0] in ("'",'"'):v=v[1:-1]
+                  vals.append(v)
+          if len(vals)!=1:raise SystemExit("Missing or duplicate WC_URL in ENV_FILE")
+          parsed=urlsplit(vals[0]);host=(parsed.hostname or "").lower()
+          if (parsed.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host)
+              or "." not in host or ".." in host or parsed.username or parsed.password
+              or parsed.port not in (None,443) or parsed.path not in ("","/")
+              or parsed.query or parsed.fragment):raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf8") as f:
+              f.write("WC_URL=https://"+host+"\n")
+          PY
       - uses: actions/setup-node@v4
         with: {node-version: '24'}
       - uses: browser-actions/setup-chrome@v2
@@ -22,7 +48,6 @@ jobs:
       - run: npm install --no-save --no-package-lock puppeteer-core@24
       - name: Inspect home_01 and home_09 PHP groups and iframe ancestor layout
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
@@ -32,11 +57,11 @@ jobs:
           const browser=await puppeteer.launch({executablePath:process.env.CHROME_PATH,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
           try{
             const page=await browser.newPage();
-            await page.goto(new URL(process.env.WP_ADMIN_URL).origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
+            await page.goto(new URL(process.env.WC_URL).origin+'/wp-login.php',{waitUntil:'domcontentloaded',timeout:70000});
             await page.type('#user_login',process.env.WP_ADMIN_USERNAME);
             await page.type('#user_pass',process.env.WP_ADMIN_PASSWORD);
             await Promise.all([page.waitForNavigation({waitUntil:'domcontentloaded',timeout:45000}).catch(()=>{}),page.click('#wp-submit')]);
-            const base=new URL(process.env.WP_ADMIN_URL).origin;
+            const base=new URL(process.env.WC_URL).origin;
             await page.goto(base+'/wp-admin/edit.php?post_type=page&page=esc-visual-builder&esc_vb_page=248',{waitUntil:'domcontentloaded',timeout:80000});
             const frame=await (await page.waitForSelector('#esc-vb-frame')).contentFrame();
             await frame.waitForSelector('[data-tablepress-preview="home_09"]',{timeout:60000});

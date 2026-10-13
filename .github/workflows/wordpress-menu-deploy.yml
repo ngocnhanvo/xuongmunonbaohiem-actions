@@ -94,7 +94,6 @@ jobs:
       - name: Resolve WordPress FTP path
         id: wp_path
         shell: bash
-        env:
         run: |
           set -euo pipefail
           host="$(python3 - <<'PY'

@@ -124,7 +124,6 @@ jobs:
           php -l /tmp/esc-cat-info.remote.php
           echo "Native Yoast category SEO integration: uploaded 2 PHP files, byte-for-byte verified."
       - name: Read-only WordPress category API smoke test
-        env:
         shell: bash
         run: |
           set -euo pipefail

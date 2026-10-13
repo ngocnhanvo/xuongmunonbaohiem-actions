@@ -102,7 +102,6 @@ jobs:
           php -l /tmp/esc-marketing-settings.remote.php
           echo "WordPress marketing settings MU-plugin: FTP byte verification PASS."
       - name: Verify public Info REST now exposes WordPress marketing fields
-        env:
         shell: bash
         run: |
           set -euo pipefail

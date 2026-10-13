@@ -1,2 +1,3 @@
 Read-only sitemap URL coverage vs legacy Blue Sea website on 2026-10-12.
 Check HTTP redirect/reachability for source-only sitemap URLs.
+2026-10-13 replace-original decision audit: Read-only final cutover readiness QA: compare complete original vs new sitemaps and inspect missing/redirecting URLs; no CMS writes.

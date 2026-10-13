@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/unzip-v2-safety-qa.yml'
       - 'scripts/esc-remote-unzip.py'
+      - 'scripts/test-unzip-virtual-path.py'
       - '.github/workflows/wordpress-unzip-v2-deploy.yml'
   workflow_dispatch:
 
@@ -56,3 +57,9 @@ jobs:
               else: raise AssertionError("Accepted unsafe origin: "+bad)
           print("Remote unzip v2 parsing regression PASS")
           PY
+
+      - name: Integration regression for FTP virtual path on shared hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/test-unzip-virtual-path.py

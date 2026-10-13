@@ -172,12 +172,44 @@ jobs:
           echo "lftp setup completed in ${elapsed}s"
           echo "- lftp setup: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Resolve Astro FTP target
+        id: ftp_target
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          url=$(printf '%s\n' "$ENV_FILE" | sed -n 's/^WC_URL_CLIENT=//p' | tail -1 | tr -d '\r\"\047')
+          [[ "$url" =~ ^https?://([a-zA-Z0-9.-]+)(:[0-9]+)?/?$ ]] || { echo '::error::Invalid or missing WC_URL_CLIENT in ENV_FILE'; exit 1; }
+          host="${BASH_REMATCH[1],,}"
+          [[ "$host" == *.* && "$host" != *..* && "$host" =~ ^[a-z0-9.-]+$ ]] || exit 1
+          default_dir="/domains/$host/public_html/"
+          target="${FTP_ASTRO_DIR:-$default_dir}"
+          [[ "$target" =~ ^/[a-zA-Z0-9._/-]+/$ && "$target" != *..* && "$target" != *'//'* ]] || { echo '::error::Unsafe FTP target'; exit 1; }
+          echo "Using FTP target: $target (frontend: $host)"
+          if [[ "$target" != "$default_dir" ]]; then echo '::warning::Explicit FTP_ASTRO_DIR override in use'; fi
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 30
+          set ftp:passive-mode yes
+          set ssl:verify-certificate no
+          cd "$target"
+          pwd
+          bye
+          LFTP
+          echo "path=$target" >> "$GITHUB_OUTPUT"
       - name: Sync files via resumable FTP
         shell: bash
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          ASTRO_FTP_TARGET: ${{ steps.ftp_target.outputs.path }}
         run: |
           set -euo pipefail
           test -s source/upload/escvn.zip
@@ -185,7 +217,7 @@ jobs:
           # The old escvn.zip is not replaced until the new package is fully sent.
           # FTP data sockets can drop during a 47MB upload (EPIPE); "put -c"
           # resumes the partial transfer after reconnect, without rebuilding.
-          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<'LFTP'
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<LFTP
           set cmd:fail-exit yes
           set net:max-retries 10
           set net:reconnect-interval-base 5
@@ -193,7 +225,7 @@ jobs:
           set ftp:passive-mode yes
           set ssl:verify-certificate no
           set xfer:clobber yes
-          cd /domains/xuongmunonbaohiem.io.vn/public_html/
+          cd "$ASTRO_FTP_TARGET"
           rm -f .escvn.zip.uploading
           put -c source/upload/escvn.zip -o .escvn.zip.uploading
           rm -f escvn.zip

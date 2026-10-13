@@ -88,8 +88,8 @@ async function atomicJSON(path, data) {
 }
 
 async function main() {
-  const host = process.env.WP_ADMIN_URL;
-  if (!host) throw Error("Missing WP_ADMIN_URL secret");
+  const host = process.env.WC_URL;
+  if (!host) throw Error("Missing WC_URL secret");
   const wp = new URL(host.includes("://") ? host : "https://" + host).origin;
   const root = resolve(process.env.ASTRO_CACHE_DIR || "source/.cache");
   const manifest = await readJSON(resolve(process.env.H1_MANIFEST || "actions-hub/reports/product-h1-verified-candidates.json"));

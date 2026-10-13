@@ -30,7 +30,7 @@ FTP Astro: /domains/tuannguyen.io.vn/public_html/
 FTP WordPress: /domains/admin.tuannguyen.io.vn/public_html/
 ```
 
-Workflow cài `unzip.php` đọc `WC_URL` từ `ENV_FILE` để suy ra thư mục WordPress, không còn phụ thuộc `WP_ADMIN_URL` riêng. Đường dẫn Astro mặc định được suy ra từ `WC_URL_CLIENT`. `FTP_ASTRO_DIR` (GitHub Variable tùy chọn) chỉ hỗ trợ đường dẫn thực tế dạng `/domains/<hostname>/public_html/`. Nếu hosting không theo cấu trúc này, quy trình **dừng an toàn** và cần bổ sung quy tắc allowlist phù hợp trước khi deploy.
+Workflow cài `unzip.php` đọc `WC_URL` từ `ENV_FILE` để suy ra thư mục WordPress, không còn phụ thuộc `WP_ADMIN_URL` riêng. Đường dẫn Astro mặc định được suy ra từ `WC_URL_CLIENT`. Đây là **đường dẫn FTP ảo** (ví dụ `/domains/khachhang.com/public_html/`); `unzip.php` tự ánh xạ sang thư mục vật lý nằm cùng cây `domains` với WordPress (`/home/.../domains/khachhang.com/public_html/`). Server PHP trả lại đường dẫn FTP ban đầu để Actions có thể xác nhận đúng đích. Không tự mở rộng quyền truy cập sang thư mục nằm ngoài cây `domains`. `FTP_ASTRO_DIR` (GitHub Variable tùy chọn) chỉ hỗ trợ đường dẫn thực tế dạng `/domains/<hostname>/public_html/`. Nếu hosting không theo cấu trúc này, quy trình **dừng an toàn** và cần bổ sung quy tắc allowlist phù hợp trước khi deploy.
 
 Artifact Recovery cố tình từ chối ZIP của domain cũ: `.env` nằm trong ZIP phải có cùng hostname `WC_URL_CLIENT` hiện tại.
 

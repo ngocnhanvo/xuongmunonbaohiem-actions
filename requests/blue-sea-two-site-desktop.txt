@@ -1,1 +1,2 @@
 Independent original vs Astro desktop Lighthouse audit on 2026-10-12; no production modifications.
+2026-10-13 cutover readiness: compare desktop homepage and products of original and Astro with correct desktop preset to supplement successful mobile comparison. Read-only; no deploy.

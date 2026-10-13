@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/unzip-v2-safety-qa.yml'
       - 'scripts/esc-remote-unzip.py'
+      - '.github/workflows/wordpress-unzip-v2-deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -43,6 +44,12 @@ jobs:
           spec.loader.exec_module(mod)
           assert mod.env_value("WC_URL_CLIENT=https://example.com\n", "WC_URL_CLIENT")=="https://example.com"
           assert mod.validate_url("https://tuannguyen.io.vn")[1]=="tuannguyen.io.vn"
+          config = 'WC_URL="https://admin.tuannguyen.io.vn"\nWC_URL_CLIENT=https://tuannguyen.io.vn\n'
+          assert mod.validate_url(mod.env_value(config, "WC_URL"))[1]=="admin.tuannguyen.io.vn"
+          from pathlib import Path
+          installer=Path(".github/workflows/wordpress-unzip-v2-deploy.yml").read_text()
+          assert 'helper.env_value(os.environ["ENV_FILE"], "WC_URL")' in installer
+          assert 'secrets.WP_ADMIN_URL' not in installer
           for bad in ("http://example.com","https://example.com/bad","https://example.com.evil/path"):
               try: mod.validate_url(bad)
               except ValueError: pass

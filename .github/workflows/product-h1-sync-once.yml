@@ -24,12 +24,40 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          vals = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  vals.append(v)
+          if len(vals) != 1: raise SystemExit("Missing or duplicate WC_URL in ENV_FILE")
+          url = urlsplit(vals[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend host:", host)
+          PY
       - name: Checkout verified H1 report and mode
         uses: actions/checkout@v4
       - name: Validate and prepare exact-slug-only import manifest
         shell: bash
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           REQUEST_MODE: ${{ inputs.mode || '' }}
         run: |
           set -euo pipefail
@@ -41,7 +69,7 @@ jobs:
           if mode not in ('preview','apply'): raise SystemExit('Invalid request mode')
           report=json.loads(pathlib.Path('reports/product-h1-audit.json').read_text(encoding='utf8'))
           manifest=json.loads(pathlib.Path('reports/product-h1-verified-candidates.json').read_text(encoding='utf8'))
-          wp=urlparse(os.environ['WP_ADMIN_URL'] if '://' in os.environ['WP_ADMIN_URL'] else 'https://'+os.environ['WP_ADMIN_URL'])
+          wp=urlparse(os.environ['WC_URL'] if '://' in os.environ['WC_URL'] else 'https://'+os.environ['WC_URL'])
           if report['wp']!='https://'+wp.hostname: raise SystemExit('WordPress hostname differs from audit')
           if report['wp_products']!=180 or manifest['counts']!={'import_seo_h1':160,'no_change':14,'manual_review':6}: raise SystemExit('Unexpected audited product count')
           items=[]; seen=set()
@@ -141,18 +169,17 @@ jobs:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
         run: |
           set -euo pipefail
-          for key in FTP_SERVER FTP_USERNAME FTP_PASSWORD WP_ADMIN_URL; do test -n "${!key:-}"; done
+          for key in FTP_SERVER FTP_USERNAME FTP_PASSWORD WC_URL; do test -n "${!key:-}"; done
           sudo apt-get update -qq
           sudo apt-get install -y -qq lftp
           filename="$(cat /tmp/esc-h1-filename)"
           wp_host="$(python3 - <<'PY'
           import os
           from urllib.parse import urlparse
-          raw=os.environ['WP_ADMIN_URL']; print(urlparse(raw if '://' in raw else 'https://'+raw).hostname)
+          raw=os.environ['WC_URL']; print(urlparse(raw if '://' in raw else 'https://'+raw).hostname)
           PY
           )"
           remote_dir="/domains/$wp_host/public_html"

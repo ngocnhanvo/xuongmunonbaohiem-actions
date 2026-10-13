@@ -1,4 +1,4 @@
-name: Deploy WooCommerce Category SEO Editor
+name: Sync Native Yoast WooCommerce Category SEO
 on:
   workflow_dispatch:
   push:
@@ -35,16 +35,15 @@ jobs:
           token: ${{ secrets.SOURCE_REPO_PAT }}
           path: source
           persist-credentials: false
-      - name: Validate PHP SEO edit fields and API contract
+      - name: Validate Yoast category SEO serializer and no duplicate editor
         shell: bash
         run: |
           set -euo pipefail
           git -C source rev-parse HEAD
-          php -l source/wp-content/plugins/github-trigger/product-categories/seo-fields.php
           php -l source/wp-content/plugins/github-trigger/product-categories/endpoint.php
           php -l source/wp-content/plugins/github-trigger/info/product-categories.php
-          php -l source/tests/product-category-seo-fields.php
-          php source/tests/product-category-seo-fields.php
+          php -l source/tests/product-category-yoast-seo.php
+          php source/tests/product-category-yoast-seo.php
           grep -Fq 'seoTitle' source/wp-content/plugins/github-trigger/product-categories/endpoint.php
           grep -Fq 'seoDescription' source/wp-content/plugins/github-trigger/product-categories/endpoint.php
       - name: Install lftp without unconditional apt update
@@ -57,7 +56,7 @@ jobs:
             fi
           fi
           lftp --version >/dev/null
-      - name: Upload only 3 category SEO PHP files and verify bytes
+      - name: Upload only 2 existing category integration PHP files and verify bytes
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -85,22 +84,18 @@ jobs:
           set ssl:verify-certificate no
           cd "$remote_path"
           cd product-categories
-          put source/wp-content/plugins/github-trigger/product-categories/seo-fields.php -o seo-fields.php
           put source/wp-content/plugins/github-trigger/product-categories/endpoint.php -o endpoint.php
-          get seo-fields.php -o /tmp/esc-cat-seo.remote.php
           get endpoint.php -o /tmp/esc-cat-endpoint.remote.php
           cd ../info
           put source/wp-content/plugins/github-trigger/info/product-categories.php -o product-categories.php
           get product-categories.php -o /tmp/esc-cat-info.remote.php
           bye
           LFTP
-          cmp source/wp-content/plugins/github-trigger/product-categories/seo-fields.php /tmp/esc-cat-seo.remote.php
           cmp source/wp-content/plugins/github-trigger/product-categories/endpoint.php /tmp/esc-cat-endpoint.remote.php
           cmp source/wp-content/plugins/github-trigger/info/product-categories.php /tmp/esc-cat-info.remote.php
-          php -l /tmp/esc-cat-seo.remote.php
           php -l /tmp/esc-cat-endpoint.remote.php
           php -l /tmp/esc-cat-info.remote.php
-          echo "SEO category editor: uploaded 3 PHP files, byte-for-byte verified."
+          echo "Native Yoast category SEO integration: uploaded 2 PHP files, byte-for-byte verified."
       - name: Read-only WordPress category API smoke test
         env:
           WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
@@ -118,5 +113,5 @@ jobs:
             data=json.load(resp)
           assert isinstance(data,list) and len(data)>0,'No Woo product categories from WP'
           assert all(isinstance(x.get('seoTitle'),str) and isinstance(x.get('seoDescription'),str) for x in data),'Missing category SEO fields in API'
-          print('CATEGORY_SEO_API_PASS='+json.dumps({'categories':len(data),'custom_titles':sum(bool(x['seoTitle']) for x in data),'custom_descriptions':sum(bool(x['seoDescription']) for x in data)}))
+          print('YOAST_CATEGORY_SEO_API_PASS='+json.dumps({'categories':len(data),'custom_titles':sum(bool(x['seoTitle']) for x in data),'custom_descriptions':sum(bool(x['seoDescription']) for x in data)}))
           PY

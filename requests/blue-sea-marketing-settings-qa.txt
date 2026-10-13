@@ -2,3 +2,4 @@
 Run 2: PHP syntax fix at master a384858f2efd1ad240a7fb5ad5f68bd979ef4ecc. Recheck all earlier PHP tests and Astro build before deployment.
 Run 3: correct migration test expects GTM and Search Console values; WordPress PHP master c4cff80a66c4cef015a560b564f604dca75329dd, php -l PASS previously.
 2026-10-13: Validate new public-ID-only presets Meta Pixel, TikTok Pixel, Microsoft Clarity, Hotjar, LinkedIn Insight Tag and Pinterest Tag. Confirm already-configured six Google/Ahrefs + SEO verification values stay untouched, duplicate select IDs and arbitrary JS blocked; Astro github compiles and all vendor and existing tracking tests pass. No FTP/production from this QA.
+2026-10-13 follow-up: run complete QA on latest Astro github after add exact CSP allowlist (scripts/inject-handler.js) and latest src/lib/marketingPixels.test.ts. Validate full build, no wildcard CSP regression and all vendor ID-only presets. No FTP from QA.

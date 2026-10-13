@@ -1,0 +1,116 @@
+name: Blue Sea Cutover Read-only Preflight
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/blue-sea-cutover-readonly-qa.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - name: Check representative SEO pages and eight sitemap omissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,urllib.error,urllib.parse,xml.etree.ElementTree as ET
+          from html.parser import HTMLParser
+          import concurrent.futures,collections,json,time,os
+          original="https://xuongmunonbaohiem.com"
+          astro="https://xuongmunonbaohiem.io.vn"
+          omitted=[
+            "/cong-ty-san-xuat-non-bao-hiem-tai-tphcm/",
+            "/danh-sach-cong-ty-san-xuat-mu-bao-hiem-uy-tin/",
+            "/dat-lam-mu-bao-hiem-quang-cao-in-logo-theo-yeu-cau/",
+            "/dat-non-bao-hiem-theo-yeu-cau/",
+            "/gia-mu-bao-hiem-in-logo-cong-ty/",
+            "/in-non-bao-hiem-so-luong-it-va-co-co-gia-cong-uy-tin/",
+            "/lam-mu-bao-hiem-quang-cao-in-logo-gia-re-theo-yeu-cau-tai-ha-noi/",
+            "/tai-sao-doanh-nghiep-lai-chon-mu-bao-hiem-lam-qua-tang/"
+          ]
+          pages=[
+            ("home","/","/"),("products","/san-pham","/san-pham"),
+            ("news","/tin-tuc","/tin-tuc"),("contact","/lien-he","/lien-he"),
+            ("returns","/thong-tin-chinh-sach/chinh-sach-doi-tra","/chinh-sach-doi-tra"),
+            ("privacy","/thong-tin-chinh-sach/chinh-sach-bao-mat-thong-tin","/chinh-sach-bao-mat-thong-tin"),
+            ("product","/non-bao-hiem-3-4-cj.html","/san-pham/non-bao-hiem-3-4-cj")
+          ]
+          class H(HTMLParser):
+            def __init__(self):
+              super().__init__(convert_charrefs=True);self.tag='';self.title=[];self.h1=[];self.h1count=0;self.canonical=[];self.robots=[];self.desc=[];self.forms=0;self.images=0;self.imgNoAlt=0;self.scripts=[];self.links=[];self.visible=[]
+            def handle_starttag(self,tag,attrs):
+              d=dict(attrs)
+              if tag=='title':self.tag='title'
+              if tag=='h1':self.tag='h1';self.h1count+=1
+              if tag=='link':
+                if 'canonical' in str(d.get('rel','')).lower().split():self.canonical.append(d.get('href',''))
+                if d.get('href') and str(d.get('href')).startswith('/_astro/'):self.links.append(d['href'])
+              if tag=='script' and d.get('src') and str(d['src']).startswith('/_astro/'):self.scripts.append(d['src'])
+              if tag=='meta':
+                n=(d.get('name') or '').lower()
+                if n=='robots':self.robots.append(d.get('content',''))
+                if n=='description':self.desc.append(d.get('content',''))
+              if tag=='form':self.forms+=1
+              if tag=='img':
+                self.images+=1
+                if not (d.get('alt') or '').strip():self.imgNoAlt+=1
+            def handle_endtag(self,tag):
+              if tag==self.tag:self.tag=''
+            def handle_data(self,s):
+              if self.tag=='title':self.title.append(s)
+              if self.tag=='h1':self.h1.append(s)
+          def get(base,path):
+            url=base+path;error=None
+            for attempt in range(3):
+              try:
+                start=time.monotonic()
+                req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; ESC-Cutover-ReadOnlyQA/1.0)','Cache-Control':'no-cache'})
+                with urllib.request.urlopen(req,timeout=24) as r:
+                  body=r.read(1600000)
+                  status=r.status;final=r.url
+                p=H();p.feed(body.decode('utf8','replace'))
+                return {'status':status,'final':final,'seconds':round(time.monotonic()-start,2),'title':''.join(p.title).strip(),
+                  'h1':' '.join(''.join(p.h1).split())[:170],'h1Count':p.h1count,'canonical':p.canonical[:1],
+                  'robots':p.robots[:1],'description':p.desc[:1],'forms':p.forms,'images':p.images,
+                  'imagesNoAlt':p.imgNoAlt,'scripts':p.scripts[:8],'css':p.links[:8]}
+              except Exception as e:
+                error=type(e).__name__+': '+str(e)[:100]
+                time.sleep(attempt+1)
+            return {'error':error}
+          records=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+            work=[]
+            for title,old,new in pages:
+              work.append((title,old,new,pool.submit(get,original,old),pool.submit(get,astro,new)))
+            for title,old,new,a,b in work:
+              av,bv=a.result(),b.result()
+              record={'page':title,'old':av,'astro':bv,'h1Equal':av.get('h1')==bv.get('h1') if av.get('h1') and bv.get('h1') else False}
+              records.append(record)
+              print('CUTOVER_PAIR='+json.dumps(record,ensure_ascii=False),flush=True)
+          found=[]
+          with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            futures={pool.submit(get,astro,p):p for p in omitted}
+            for future in concurrent.futures.as_completed(futures):
+              p=futures[future]
+              result=future.result()
+              item={'path':p,'status':result.get('status'),'title':result.get('title'),'h1Count':result.get('h1Count'),'canonical':result.get('canonical'),'robots':result.get('robots'),'error':result.get('error')}
+              found.append(item)
+              print('CUTOVER_SITEMAP_OMISSION='+json.dumps(item,ensure_ascii=False),flush=True)
+          good=sum(x['astro'].get('status')==200 for x in records)
+          clean=sum(x['astro'].get('h1Count')==1 for x in records)
+          live8=sum(x.get('status')==200 for x in found)
+          canonical_wrong=[x['page'] for x in records if x['astro'].get('status')==200 and
+            x['astro'].get('canonical') and
+            'xuongmunonbaohiem.io.vn' not in x['astro']['canonical'][0]]
+          print('CUTOVER_SUMMARY='+json.dumps({'sampledPages':len(records),'target200':good,'singleH1':clean,
+            'equalH1':sum(r['h1Equal'] for r in records),'omittedPages200':live8,
+            'missingCanonicals':[r['page'] for r in records if not r['astro'].get('canonical')],
+            'canonicalWrongHost':canonical_wrong,
+            'pagesWithError':[r['page'] for r in records if r['astro'].get('error')]},ensure_ascii=False),flush=True)
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+            f.write('Read-only cutover preflight: '+str(good)+'/'+str(len(records))+' target pages HTTP 200; '+
+              str(clean)+' single H1; '+str(live8)+' omitted legacy pages HTTP 200; no forms submitted.\n')
+          PY

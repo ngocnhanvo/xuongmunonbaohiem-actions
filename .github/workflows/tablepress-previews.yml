@@ -43,17 +43,45 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Resolve WC_URL from ENV_FILE
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          vals = []
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line = line.strip()
+              if line.startswith("export "): line = line[7:].strip()
+              if line.startswith("WC_URL="):
+                  v = line.split("=", 1)[1].strip()
+                  if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'): v = v[1:-1]
+                  vals.append(v)
+          if len(vals) != 1: raise SystemExit("Missing or duplicate WC_URL in ENV_FILE")
+          url = urlsplit(vals[0])
+          host = (url.hostname or "").lower()
+          if (url.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+", host)
+                  or "." not in host or ".." in host or url.username or url.password
+                  or url.port not in (None, 443) or url.path not in ("", "/")
+                  or url.query or url.fragment):
+              raise SystemExit("Invalid WC_URL")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
+              f.write("WC_URL=https://" + host + "\n")
+          print("Backend host:", host)
+          PY
       - name: Validate required secrets
         shell: bash
         env:
           SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
         run: |
           set -euo pipefail
           test -n "$SOURCE_REPO_PAT"
-          test -n "$WP_ADMIN_URL"
+          test -n "$WC_URL"
           test -n "$WP_ADMIN_USERNAME"
           test -n "$WP_ADMIN_PASSWORD"
 
@@ -88,7 +116,6 @@ jobs:
       - name: Capture and publish ESC Table previews
         working-directory: source
         env:
-          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
           WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
           WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
           TABLEPRESS_PUBLIC_ORIGIN: https://xuongmunonbaohiem.io.vn

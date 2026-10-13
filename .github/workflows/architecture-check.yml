@@ -160,7 +160,8 @@ jobs:
               content = file.read_text(encoding='utf-8')
               if re.search(r'(?m)^([ ]*)env:[ ]*\n\1(?:run|shell|working-directory|uses):', content):
                   raise SystemExit(f'Empty env declaration: {file}')
-              if re.search(r'(?m)^      - name: Resolve WC_URL from ENV_FILE
+              if file.name not in ('architecture-check.yml', 'unzip-v2-safety-qa.yml') and 'name: Resolve WC_URL from ENV_FILE' in content:
+                  if 'secrets.WP_ADMIN_URL' in content or 'secrets.WC_URL' in content:
                       raise SystemExit(f'Legacy or nonexistent URL secret in {file}')
                   if 'secrets.ENV_FILE' not in content:
                       raise SystemExit(f'Missing ENV_FILE binding in {file}')

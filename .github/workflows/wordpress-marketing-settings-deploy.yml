@@ -1,0 +1,98 @@
+name: Deploy WordPress Marketing Settings
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['requests/wordpress-marketing-settings-deploy.txt']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-wp-marketing-settings-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PHP master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Verify PHP before FTP
+        run: |
+          set -euo pipefail
+          git -C source rev-parse HEAD
+          php -l source/wp-content/mu-plugins/esc-marketing-settings.php
+          php source/tests/marketing-tracking-settings.php
+      - name: Prepare lftp
+        run: |
+          set -euo pipefail
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp; then
+              sudo apt-get update -qq -y
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp
+            fi
+          fi
+      - name: Upload only the marketing settings MU-plugin and byte-verify
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          test -n "$WP_ADMIN_URL"
+          host="$(python3 - <<'PY'
+          from urllib.parse import urlparse
+          import os
+          raw=os.environ["WP_ADMIN_URL"]
+          p=urlparse(raw if '://' in raw else 'https://'+raw)
+          assert p.hostname, 'Missing WordPress admin host'
+          print(p.hostname)
+          PY
+          )"
+          proto="${FTP_PROTOCOL:-ftp}"
+          case "$proto" in ftp|ftps|sftp) ;; *) echo "Unsupported protocol"; exit 1;; esac
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$proto://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 30
+          set ssl:verify-certificate no
+          cd "/domains/$host/public_html/wp-content/mu-plugins"
+          put "source/wp-content/mu-plugins/esc-marketing-settings.php" -o "esc-marketing-settings.php"
+          get "esc-marketing-settings.php" -o "/tmp/esc-marketing-settings.remote.php"
+          bye
+          LFTP
+          cmp source/wp-content/mu-plugins/esc-marketing-settings.php /tmp/esc-marketing-settings.remote.php
+          php -l /tmp/esc-marketing-settings.remote.php
+          echo "WordPress marketing settings MU-plugin: FTP byte verification PASS."
+      - name: Verify public Info REST now exposes WordPress marketing fields
+        env:
+          WP_ADMIN_URL: ${{ secrets.WP_ADMIN_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,urllib.parse,urllib.request
+          p=urllib.parse.urlparse(os.environ['WP_ADMIN_URL'])
+          url=f'{p.scheme}://{p.netloc}/wp-json/wp/v2/thong-tin-chung?per_page=3'
+          req=urllib.request.Request(url,headers={'User-Agent':'BlueSea-WP-Marketing-QA/1.0'})
+          with urllib.request.urlopen(req,timeout=40) as response:
+              assert response.status==200
+              data=json.load(response)
+          assert isinstance(data,list) and data,'Missing Info REST records'
+          required={'configured','tagManagerId','analyticsId','adsId','legacyAnalyticsId','searchConsoleVerification','ahrefsVerification'}
+          for info in data:
+              tracking=info.get('esc_marketing_tracking')
+              assert isinstance(tracking,dict),'Missing esc_marketing_tracking in REST'
+              assert required.issubset(tracking),'Missing tracking keys'
+              assert isinstance(tracking['configured'],bool)
+          print('WORDPRESS_MARKETING_REST_PASS='+json.dumps({'records':len(data),'configured':data[0]['esc_marketing_tracking']['configured']}))
+          PY

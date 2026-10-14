@@ -1,0 +1,122 @@
+name: Deploy Blue Sea WordPress SEO Files
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/wordpress-seo-files-deploy.yml'
+      - 'requests/wordpress-seo-files-deploy.txt'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: blue-sea-wordpress-seo-files-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Resolve backend host from ENV_FILE WC_URL
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re
+          from urllib.parse import urlsplit
+          entries=[]
+          for line in os.environ.get("ENV_FILE", "").splitlines():
+              line=line.strip()
+              if line.startswith("export "): line=line[7:].strip()
+              if line.startswith("WC_URL="):
+                  val=line.split("=",1)[1].strip()
+                  if len(val)>1 and val[0]==val[-1] and val[0] in "'\"": val=val[1:-1]
+                  entries.append(val)
+          if len(entries)!=1: raise SystemExit("Expected exactly one WC_URL")
+          uri=urlsplit(entries[0])
+          host=(uri.hostname or "").lower()
+          if uri.scheme != "https" or not re.fullmatch(r"[a-z0-9.-]+",host) or "." not in host or ".." in host or uri.username or uri.password or uri.port not in (None,443) or uri.path not in ("","/") or uri.query or uri.fragment:
+              raise SystemExit("Invalid WordPress WC_URL")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as target:
+              target.write("WC_URL=https://"+host+"\n")
+              target.write("WP_FTP_DIR=/domains/"+host+"/public_html/wp-content/mu-plugins\n")
+          print("WordPress deploy target:", host)
+          PY
+      - name: Checkout WordPress PHP master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Validate plugin and security regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C source rev-parse HEAD
+          php -l source/wp-content/mu-plugins/esc-seo-files.php
+          php source/tests/seo-files.php
+      - name: Install lftp only when needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp; then
+              sudo apt-get update -y -qq
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp
+            fi
+          fi
+      - name: Upload SEO Files MU-plugin by FTP and byte verify
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD" && test -n "$WP_FTP_DIR"
+          proto="${FTP_PROTOCOL:-ftp}"
+          case "$proto" in ftp|ftps|sftp) ;; *) echo "Unsupported FTP protocol"; exit 1;; esac
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$proto://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 4
+          set net:timeout 35
+          set ftp:passive-mode yes
+          set ssl:verify-certificate no
+          cd "$WP_FTP_DIR"
+          put "source/wp-content/mu-plugins/esc-seo-files.php" -o ".esc-seo-files.php.uploading"
+          mv ".esc-seo-files.php.uploading" "esc-seo-files.php"
+          get "esc-seo-files.php" -o "$RUNNER_TEMP/esc-seo-files.remote.php"
+          bye
+          LFTP
+          cmp source/wp-content/mu-plugins/esc-seo-files.php "$RUNNER_TEMP/esc-seo-files.remote.php"
+          php -l "$RUNNER_TEMP/esc-seo-files.remote.php"
+          echo "WordPress SEO Files plugin uploaded; remote bytes match source." >> "$GITHUB_STEP_SUMMARY"
+      - name: Confirm public REST returns Blue Sea settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,urllib.request
+          url=os.environ["WC_URL"]+"/wp-json/esc-seo-files/v1/public"
+          req=urllib.request.Request(url,headers={"User-Agent":"BlueSea-SEO-Files-DeployQA/1.0","Accept":"application/json"})
+          with urllib.request.urlopen(req,timeout=40) as response:
+              if response.status!=200: raise RuntimeError("SEO Files REST is not HTTP 200")
+              data=json.load(response)
+          if data.get("version")!=1 or data.get("site")!="https://xuongmunonbaohiem.com":
+              raise RuntimeError("SEO Files site/version mismatch")
+          if not isinstance(data.get("sitemap",{}).get("extra"),list) or not isinstance(data.get("sitemap",{}).get("exclude"),list):
+              raise RuntimeError("Invalid sitemap settings contract")
+          if not data.get("robots","").startswith("User-agent:"):
+              raise RuntimeError("Missing robots.txt content")
+          if not data.get("llms","").startswith("# Blue Sea"):
+              raise RuntimeError("Wrong llms.txt brand")
+          print("BLUE_SEA_SEO_FILES_REST_PASS")
+          PY

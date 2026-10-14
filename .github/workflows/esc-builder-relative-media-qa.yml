@@ -36,4 +36,4 @@ jobs:
           php "$folder/tests/items-and-sections.test.php"
           php "$folder/tests/page-image.test.php"
           php "$folder/tests/auto-discovery.test.php"
-          echo 'ESC_BUILDER_RELATIVE_MEDIA_QA_PASS'
+          echo 'ESC_BUILDER_RELATIVE_MEDIA_QA_PASS' # Mock public URLs expand relative paths

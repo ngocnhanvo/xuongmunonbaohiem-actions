@@ -1,0 +1,32 @@
+name: Blue Sea Resumable FTP Contract QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/esc-resumable-ftp-qa.yml'
+      - '.github/workflows/deploy.yml'
+      - '.github/workflows/ftp-artifact-recovery.yml'
+      - 'scripts/esc-resumable-ftp.sh'
+      - 'tests/esc-resumable-ftp.test.sh'
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify both workflows source shared resumable FTP upload
+        run: |
+          set -euo pipefail
+          grep -Fq 'bash actions-hub/scripts/esc-resumable-ftp.sh' .github/workflows/deploy.yml
+          grep -Fq 'bash scripts/esc-resumable-ftp.sh' .github/workflows/ftp-artifact-recovery.yml
+          grep -Fq 'ZIP_PATH: source/upload/escvn.zip' .github/workflows/deploy.yml
+          grep -Fq 'ZIP_PATH: source/upload/escvn.zip' .github/workflows/ftp-artifact-recovery.yml
+          if grep -Fq 'rm -f .escvn.zip.uploading' .github/workflows/deploy.yml .github/workflows/ftp-artifact-recovery.yml; then
+            echo 'Legacy destructive partial upload cleanup must not remain'
+            exit 1
+          fi
+      - name: Test resume and safe target without FTP credentials
+        run: bash tests/esc-resumable-ftp.test.sh

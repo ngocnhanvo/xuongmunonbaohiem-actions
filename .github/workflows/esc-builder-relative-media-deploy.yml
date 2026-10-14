@@ -1,0 +1,118 @@
+name: Deploy ESC Builder Relative Media Paths
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/esc-builder-relative-media-deploy.yml', 'requests/esc-builder-relative-media-deploy.txt']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-relative-media-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Resolve WordPress FTP directory
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          urls=[]
+          for raw in os.environ.get('ENV_FILE','').splitlines():
+            line=raw.strip().removeprefix('export ').strip()
+            if line.startswith('WC_URL='):
+              value=line.split('=',1)[1].strip()
+              if len(value)>1 and value[0]==value[-1] and value[0] in ('"',"'"):value=value[1:-1]
+              urls.append(value)
+          if len(urls)!=1:raise SystemExit('WC_URL missing or ambiguous')
+          u=urlsplit(urls[0]); host=(u.hostname or '').lower()
+          if (u.scheme!='https' or not re.fullmatch(r'[a-z0-9.-]+',host)
+            or '..' in host or '.' not in host or u.username or u.password
+            or u.port not in (None,443) or u.path not in ('','/') or u.query or u.fragment):
+            raise SystemExit('Unsafe WC_URL')
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+            f.write('WP_URL=https://'+host+'\n')
+            f.write('WP_FTP_PATH=/domains/'+host+'/public_html/wp-content/plugins/esc-visual-builder/includes\n')
+          print('WordPress production:',host)
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          persist-credentials: false
+          path: source
+      - name: PHP and relative media regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C source rev-parse HEAD
+          d=source/wp-content/plugins/esc-visual-builder
+          php -l "$d/includes/image-editor.php"
+          php -l "$d/includes/item-manager.php"
+          php "$d/tests/items-and-sections.test.php"
+          php "$d/tests/page-image.test.php"
+          php "$d/tests/auto-discovery.test.php"
+      - name: Install FTP client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends lftp; then
+              sudo apt-get update -qq
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends lftp
+            fi
+          fi
+      - name: Upload only 2 Builder PHP files and compare FTP bytes
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD" && test -n "$WP_FTP_PATH"
+          protocol="${FTP_PROTOCOL:-ftp}"
+          case "$protocol" in ftp|ftps|sftp) ;; *) exit 1;; esac
+          localdir=source/wp-content/plugins/esc-visual-builder/includes
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 4
+          set net:timeout 35
+          set ftp:passive-mode yes
+          set ssl:verify-certificate no
+          cd "$WP_FTP_PATH"
+          put "$localdir/image-editor.php" -o ".image-editor.php.uploading"
+          mv ".image-editor.php.uploading" "image-editor.php"
+          put "$localdir/item-manager.php" -o ".item-manager.php.uploading"
+          mv ".item-manager.php.uploading" "item-manager.php"
+          get "image-editor.php" -o "$RUNNER_TEMP/esc-vb-image.remote.php"
+          get "item-manager.php" -o "$RUNNER_TEMP/esc-vb-item.remote.php"
+          bye
+          LFTP
+          cmp "$localdir/image-editor.php" "$RUNNER_TEMP/esc-vb-image.remote.php"
+          cmp "$localdir/item-manager.php" "$RUNNER_TEMP/esc-vb-item.remote.php"
+          php -l "$RUNNER_TEMP/esc-vb-image.remote.php"
+          php -l "$RUNNER_TEMP/esc-vb-item.remote.php"
+          echo 'ESC_BUILDER_RELATIVE_MEDIA_FTP_BYTES_MATCH_PASS' >> "$GITHUB_STEP_SUMMARY"
+      - name: Read-only ESC Table REST status check
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,urllib.request
+          url=os.environ['WP_URL']+'/wp-json/esc-table/v1/status'
+          req=urllib.request.Request(url,headers={'User-Agent':'BlueSea-Relative-Media-QA/1.0'})
+          with urllib.request.urlopen(req,timeout=40) as response:
+            if response.status!=200:raise RuntimeError('WordPress REST status not 200')
+            data=json.load(response)
+          if data.get('plugin')!='ESC Table': raise RuntimeError('ESC Table is not healthy')
+          print('ESC_TABLE_PRODUCTION_STATUS_PASS')
+          PY

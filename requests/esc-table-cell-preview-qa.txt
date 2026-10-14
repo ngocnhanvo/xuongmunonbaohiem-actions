@@ -1,1 +1,2 @@
 2026-10-14: Rerun ESC Table Advanced Editor visual preview regression after test corrected for WordPress generated textarea DOM. PHP master 897c8ecf503ce081670427f178629430c3ea3234; no deployment.
+2026-10-14: Regress stale ESC Table Visual preview when programmatic textarea.value is replaced by a new selected cell without input event. PHP master 75933252b0593ced86abda66bff2f3a3ecce681c. Run Chromium and unit tests; do not deploy until PASS.

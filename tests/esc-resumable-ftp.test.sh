@@ -22,7 +22,7 @@ export ZIP_PATH="$temp/archive.zip"
 printf 'Astro deployment artifact version A\n' > "$ZIP_PATH"
 sha_a="$(sha256sum "$ZIP_PATH" | cut -d ' ' -f 1)"
 bash scripts/esc-resumable-ftp.sh
-grep -Fqx "put -c $ZIP_PATH -o .escvn.${sha_a}.zip.uploading" "$FTP_CAPTURE"
+grep -Fqx "put -c \"$ZIP_PATH\" -o \".escvn.${sha_a}.zip.uploading\"" "$FTP_CAPTURE"
 if grep -Fq "rm -f .escvn.${sha_a}.zip.uploading" "$FTP_CAPTURE"; then
   echo 'Partial upload was deleted; resume would not work' >&2
   exit 1
@@ -30,18 +30,18 @@ fi
 grep -Fqx 'set net:max-retries 3' "$FTP_CAPTURE"
 grep -Fqx 'set net:timeout 25' "$FTP_CAPTURE"
 grep -Fqx 'rm -f escvn.zip' "$FTP_CAPTURE"
-grep -Fqx "mv .escvn.${sha_a}.zip.uploading escvn.zip" "$FTP_CAPTURE"
+grep -Fqx "mv \".escvn.${sha_a}.zip.uploading\" escvn.zip" "$FTP_CAPTURE"
 
 # Same bytes across retry => exact same remote partial archive filename.
 bash scripts/esc-resumable-ftp.sh
-grep -Fqx "put -c $ZIP_PATH -o .escvn.${sha_a}.zip.uploading" "$FTP_CAPTURE"
+grep -Fqx "put -c \"$ZIP_PATH\" -o \".escvn.${sha_a}.zip.uploading\"" "$FTP_CAPTURE"
 
 # Different bytes cannot accidentally resume the previous upload.
 printf 'Astro deployment artifact version B\n' > "$ZIP_PATH"
 sha_b="$(sha256sum "$ZIP_PATH" | cut -d ' ' -f 1)"
 test "$sha_a" != "$sha_b"
 bash scripts/esc-resumable-ftp.sh
-grep -Fqx "put -c $ZIP_PATH -o .escvn.${sha_b}.zip.uploading" "$FTP_CAPTURE"
+grep -Fqx "put -c \"$ZIP_PATH\" -o \".escvn.${sha_b}.zip.uploading\"" "$FTP_CAPTURE"
 if grep -Fq "$sha_a" "$FTP_CAPTURE"; then
   echo 'New ZIP still used an old SHA-named temp artifact' >&2
   exit 1

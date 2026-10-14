@@ -13,7 +13,7 @@ permissions:
 jobs:
   qa:
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 14
     steps:
       - name: Checkout WordPress PHP master
         uses: actions/checkout@v4
@@ -33,3 +33,15 @@ jobs:
           node source/tests/esc-table-cell-preview.test.cjs
           node source/tests/esc-table-image-attributes.test.cjs
           echo 'ESC_TABLE_VISUAL_PREVIEW_QA_PASS'
+
+      - name: Install isolated Chromium test runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Real browser image attribute editing regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node source/tests/esc-table-image-attributes.browser.cjs

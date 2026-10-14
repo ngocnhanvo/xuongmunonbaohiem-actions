@@ -1,0 +1,170 @@
+name: Deploy ESC Table Cell Visual Preview
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/esc-table-cell-preview-deploy.yml'
+      - 'requests/esc-table-cell-preview-deploy.txt'
+
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-esc-table-cell-preview-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Resolve WordPress FTP directory
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          urls=[]
+          for raw in os.environ.get('ENV_FILE','').splitlines():
+              line=raw.strip().removeprefix('export ').strip()
+              if line.startswith('WC_URL='):
+                  val=line.split('=',1)[1].strip()
+                  if len(val)>1 and val[0]==val[-1] and val[0] in ("'",'"'):
+                      val=val[1:-1]
+                  urls.append(val)
+          if len(urls)!=1:raise SystemExit('Missing unique WC_URL')
+          uri=urlsplit(urls[0])
+          host=(uri.hostname or '').lower()
+          if (uri.scheme!='https' or not re.fullmatch(r'[a-z0-9.-]+',host)
+              or '.' not in host or '..' in host or uri.username or uri.password
+              or uri.port not in (None,443) or uri.path not in ('','/')
+              or uri.query or uri.fragment):raise SystemExit('Invalid WC_URL')
+          with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as f:
+              f.write('WP_BASE=https://'+host+'\n')
+              f.write('WP_ESC_TABLE_FTP=/domains/'+host+'/public_html/wp-content/plugins/esc-table\n')
+          print('WordPress destination domain:',host)
+          PY
+
+      - name: Checkout WordPress PHP master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+
+      - name: Verify Advanced Editor files and non-mutating regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C source rev-parse HEAD
+          php -l source/wp-content/plugins/esc-table/views/view-edit.php
+          node --check source/wp-content/plugins/esc-table/admin/js/esc-cell-visual-preview.js
+          node source/tests/esc-table-cell-preview.test.cjs
+          test -s source/wp-content/plugins/esc-table/admin/css/esc-cell-visual-preview.css
+          echo "ESC_TABLE_PREVIEW_PREDEPLOY_TEST_PASS"
+
+      - name: Install lftp if absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v lftp >/dev/null; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp; then
+              sudo apt-get update -y -qq
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp
+            fi
+          fi
+
+      - name: Upload only 3 Advanced Editor files via FTP and verify bytes
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD" && test -n "$WP_ESC_TABLE_FTP"
+          protocol="${FTP_PROTOCOL:-ftp}"
+          case "$protocol" in ftp|ftps|sftp) ;; *) echo "::error::Unsupported FTP protocol"; exit 1;; esac
+          plugin="source/wp-content/plugins/esc-table"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 4
+          set net:timeout 35
+          set ssl:verify-certificate no
+          cd "$WP_ESC_TABLE_FTP"
+          put "$plugin/admin/css/esc-cell-visual-preview.css" -o "admin/css/.esc-cell-visual-preview.css.uploading"
+          mv "admin/css/.esc-cell-visual-preview.css.uploading" "admin/css/esc-cell-visual-preview.css"
+          put "$plugin/admin/js/esc-cell-visual-preview.js" -o "admin/js/.esc-cell-visual-preview.js.uploading"
+          mv "admin/js/.esc-cell-visual-preview.js.uploading" "admin/js/esc-cell-visual-preview.js"
+          put "$plugin/views/view-edit.php" -o "views/.view-edit.php.uploading"
+          mv "views/.view-edit.php.uploading" "views/view-edit.php"
+          get "admin/css/esc-cell-visual-preview.css" -o "$RUNNER_TEMP/esc-cell-preview.remote.css"
+          get "admin/js/esc-cell-visual-preview.js" -o "$RUNNER_TEMP/esc-cell-preview.remote.js"
+          get "views/view-edit.php" -o "$RUNNER_TEMP/esc-view-edit.remote.php"
+          bye
+          LFTP
+          cmp "$plugin/admin/css/esc-cell-visual-preview.css" "$RUNNER_TEMP/esc-cell-preview.remote.css"
+          cmp "$plugin/admin/js/esc-cell-visual-preview.js" "$RUNNER_TEMP/esc-cell-preview.remote.js"
+          cmp "$plugin/views/view-edit.php" "$RUNNER_TEMP/esc-view-edit.remote.php"
+          php -l "$RUNNER_TEMP/esc-view-edit.remote.php"
+          node --check "$RUNNER_TEMP/esc-cell-preview.remote.js"
+          echo "ESC_TABLE_CELL_VISUAL_FTP_BYTE_MATCH_PASS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check public preview static assets are available at WordPress domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,urllib.request
+          root=os.environ['WP_BASE']
+          for suffix,token in (
+            ('/wp-content/plugins/esc-table/admin/js/esc-cell-visual-preview.js','esc-table-visual-frame'),
+            ('/wp-content/plugins/esc-table/admin/css/esc-cell-visual-preview.css','#esc-table-visual-frame'),
+          ):
+              req=urllib.request.Request(root+suffix,headers={'User-Agent':'ESC-Table-Visual-Deploy-QA/1.0'})
+              with urllib.request.urlopen(req,timeout=35) as response:
+                  assert response.status==200,(suffix,response.status)
+                  content=response.read().decode('utf8')
+                  assert token in content,(suffix,'missing expected content')
+              print('ASSET_PASS',suffix,len(content))
+          print('ESC_TABLE_CELL_VISUAL_ASSETS_PASS')
+          PY
+
+      - name: Check authenticated ESC Table editor contains preview tabs (read only)
+        shell: bash
+        env:
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,requests
+          from bs4 import BeautifulSoup
+          root=os.environ['WP_BASE']
+          s=requests.Session()
+          s.get(root+'/wp-login.php',timeout=25)
+          target=root+'/wp-admin/admin.php?page=tablepress&action=edit&table_id=home_00'
+          s.post(root+'/wp-login.php',data={
+              'log':os.environ['WP_ADMIN_USERNAME'],
+              'pwd':os.environ['WP_ADMIN_PASSWORD'],
+              'wp-submit':'Log In',
+              'redirect_to':target,
+              'testcookie':'1'},timeout=40)
+          page=s.get(target,timeout=40)
+          if page.status_code!=200 or 'wp-login.php' in page.url:
+              raise RuntimeError('Cannot access ESC Table authenticated editor')
+          doc=BeautifulSoup(page.text,'html.parser')
+          for key in ('advanced-editor','esc-table-tab-html','esc-table-tab-visual',
+                      'esc-table-html-panel','esc-table-visual-panel','esc-table-visual-frame'):
+              if not doc.find(id=key):raise RuntimeError('Missing visual editor element: '+key)
+          if not doc.find('script',src=lambda x: x and 'esc-cell-visual-preview.js' in x):
+              raise RuntimeError('Preview JS not enqueued in admin edit screen')
+          print('ESC_TABLE_CELL_VISUAL_ADMIN_PASS')
+          PY

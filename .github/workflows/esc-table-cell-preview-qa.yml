@@ -1,0 +1,34 @@
+name: ESC Table Advanced Cell Visual Preview QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/esc-table-cell-preview-qa.yml'
+      - 'requests/esc-table-cell-preview-qa.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout WordPress PHP master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Check PHP template syntax and generated markup contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C source rev-parse HEAD
+          php -l source/wp-content/plugins/esc-table/views/view-edit.php
+          node --check source/wp-content/plugins/esc-table/admin/js/esc-cell-visual-preview.js
+          node source/tests/esc-table-cell-preview.test.cjs
+          echo 'ESC_TABLE_VISUAL_PREVIEW_QA_PASS'

@@ -1,0 +1,54 @@
+name: Verify Blue Sea SEO Files Production
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/seo-files-production-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  smoke:
+    name: Check canonical production SEO files
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read only canonical production HTTP smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re, time, urllib.request, xml.etree.ElementTree as ET
+          base = "https://xuongmunonbaohiem.com"
+          urls = ["/", "/sitemap.xml", "/robots.txt", "/llms.txt"]
+          result = {}
+          for suffix in urls:
+              error = None
+              for attempt in range(3):
+                  try:
+                      req = urllib.request.Request(base+suffix, headers={"User-Agent":"BlueSea-SEO-Files-Production-QA/1.0"})
+                      with urllib.request.urlopen(req, timeout=35) as response:
+                          body=response.read(2_000_000).decode("utf-8-sig")
+                          if response.status != 200: raise RuntimeError("HTTP "+str(response.status))
+                      result[suffix] = body
+                      break
+                  except Exception as e:
+                      error=e
+                      if attempt<2: time.sleep(7)
+              if suffix not in result: raise RuntimeError("Cannot retrieve "+suffix+": "+str(error))
+          xml = ET.fromstring(result["/sitemap.xml"])
+          urls = [x.text.strip() for x in xml.findall(".//{*}loc") if x.text]
+          if len(urls)<200: raise RuntimeError("Sitemap has unexpectedly few URLs: "+str(len(urls)))
+          if len(urls)!=len(set(urls)): raise RuntimeError("Sitemap contains duplicate URLs")
+          if not all(x.startswith(base+"/") for x in urls): raise RuntimeError("Sitemap has noncanonical host")
+          if base+"/san-pham" not in urls: raise RuntimeError("Missing products route in sitemap")
+          robots=result["/robots.txt"]
+          if not re.search(r"^User-agent:\s*\*",robots,re.M|re.I): raise RuntimeError("No user agent in robots")
+          if "Sitemap: "+base+"/sitemap.xml" not in robots: raise RuntimeError("Wrong robots sitemap host")
+          llms=result["/llms.txt"].lstrip()
+          if not llms.startswith("# Blue Sea"): raise RuntimeError("llms.txt must describe Blue Sea")
+          if "ESC.vn" in llms or "httpsesc.vn" in llms: raise RuntimeError("Legacy ESC contents found")
+          if base+"/san-pham" not in llms: raise RuntimeError("Missing official product URL in llms")
+          if len(result["/"])<300: raise RuntimeError("Root HTML unexpectedly short")
+          print("SEO_FILES_PRODUCTION_SMOKE_PASS",{"sitemap_urls":len(urls),"robots_bytes":len(robots),"llms_bytes":len(llms),"homepage_bytes":len(result["/"])})
+          PY

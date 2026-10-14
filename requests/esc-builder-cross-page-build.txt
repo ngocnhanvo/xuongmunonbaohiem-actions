@@ -16,3 +16,5 @@ Rerun focused PostsPage contract tests and full dev build.
 2026-10-14: Independent full Astro github build smoke for WordPress SEO Files config dist-only publication. No FTP deploy, no WordPress content modification.
 
 2026-10-14: Re-run development full build after fixing duplicate fileURLToPath config declaration e626743e1711. No production deploy.
+
+2026-10-14: Verify new manual sitemap XML WordPress mode, auto mode backwards compatibility, Astro github e72ff00f7e7f with full build, no FTP until PASS.

@@ -12,3 +12,5 @@ Rerun focused PostsPage contract tests and full dev build.
 2026-10-13: QA category SEO fix on Astro github bf593acc46979e799f35fa6abb5bcbbfa4eb1d84. Verify Nón Bảo Hiểm Bọc Da now receives unique title, future unknown categories derive title from WP name when Yoast SEO absent; saved Yoast overrides still win. No H1, media, route or products changes. Run full Astro build + SSR SEO regression before production merge.
 
 2026-10-13: Recheck final dynamic WordPress category-name SEO fallback on Astro github aad45c1a2cdd16d6eb2be684bf3781dc9ca2823b. Do not hardcode Bọc Da; WordPress term name Nón bảo hiểm bọc da becomes title Nón bảo hiểm bọc da | Blue Sea unless a custom Yoast title exists. Verify SEO tests and full Astro build, no FTP yet.
+
+2026-10-14: Independent full Astro github build smoke for WordPress SEO Files config dist-only publication. No FTP deploy, no WordPress content modification.

@@ -31,4 +31,5 @@ jobs:
           php -l source/wp-content/plugins/esc-table/views/view-edit.php
           node --check source/wp-content/plugins/esc-table/admin/js/esc-cell-visual-preview.js
           node source/tests/esc-table-cell-preview.test.cjs
+          node source/tests/esc-table-image-attributes.test.cjs
           echo 'ESC_TABLE_VISUAL_PREVIEW_QA_PASS'

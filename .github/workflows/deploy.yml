@@ -248,32 +248,10 @@ jobs:
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           ASTRO_FTP_TARGET: ${{ steps.ftp_target.outputs.path }}
+          ZIP_PATH: source/upload/escvn.zip
         run: |
           set -euo pipefail
-          test -s source/upload/escvn.zip
-          started=$SECONDS
-          # The old escvn.zip is not replaced until the new package is fully sent.
-          # FTP data sockets can drop during a 47MB upload (EPIPE); "put -c"
-          # resumes the partial transfer after reconnect, without rebuilding.
-          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<LFTP
-          set cmd:fail-exit yes
-          set net:max-retries 10
-          set net:reconnect-interval-base 5
-          set net:timeout 40
-          set ftp:passive-mode yes
-          set ssl:verify-certificate no
-          set xfer:clobber yes
-          cd "$ASTRO_FTP_TARGET"
-          rm -f .escvn.zip.uploading
-          put -c source/upload/escvn.zip -o .escvn.zip.uploading
-          rm -f escvn.zip
-          mv .escvn.zip.uploading escvn.zip
-          bye
-          LFTP
-          elapsed=$((SECONDS - started))
-          echo "Resumable FTP transfer completed in ${elapsed}s; archive staged for remote unzip."
-          echo "- FTP transfer: ${elapsed}s" >> "$GITHUB_STEP_SUMMARY"
-
+          bash actions-hub/scripts/esc-resumable-ftp.sh
       - name: Trigger signed remote unzip and validate Astro artifact
         shell: bash
         env:

@@ -1,0 +1,90 @@
+name: Blue Sea Manual Sitemap Release QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/seo-files-manual-qa.yml'
+permissions:
+  contents: read
+jobs:
+  qa:
+    name: WordPress sitemap editor and Astro XML regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Resolve WordPress host from ENV_FILE
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+          values=[x.split('=',1)[1].strip().strip('"').strip("'") for x in os.environ['ENV_FILE'].splitlines() if x.strip().startswith('WC_URL=')]
+          if len(values)!=1: raise SystemExit('Missing WordPress URL')
+          u=urlsplit(values[0])
+          if u.scheme != 'https' or not u.hostname: raise SystemExit('Invalid WC_URL')
+          with open(os.environ['GITHUB_ENV'],'a') as f:f.write('WP_HOST='+u.scheme+'://'+u.hostname+'\n')
+          PY
+      - name: Check authenticated WordPress sitemap UI and current URL inventory (read only)
+        env:
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python3 -m pip install -q requests beautifulsoup4
+          python3 - <<'PY'
+          import os,re,requests
+          from bs4 import BeautifulSoup
+          root=os.environ['WP_HOST']
+          s=requests.Session()
+          s.get(root+'/wp-login.php',timeout=30)
+          data={'log':os.environ['WP_ADMIN_USERNAME'],'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In','redirect_to':root+'/wp-admin/options-general.php?page=esc-seo-files&tab=sitemap','testcookie':'1'}
+          response=s.post(root+'/wp-login.php',data=data,timeout=35)
+          page=s.get(root+'/wp-admin/options-general.php?page=esc-seo-files&tab=sitemap',timeout=35)
+          if page.status_code!=200 or 'wp-login.php' in page.url:raise AssertionError('Admin login/page inaccessible')
+          soup=BeautifulSoup(page.text,'html.parser')
+          for key in ['esc-seo-auto-panel','esc-seo-manual-panel','esc-seo-xml','esc-seo-copy-live','esc-seo-url-list','esc-seo-confirm-drop']:
+            if not soup.select_one('#'+key):raise AssertionError('Missing element '+key)
+          modes=[x.get('value') for x in soup.select('input[name=sitemap_mode]')]
+          if modes!=['auto','manual']:raise AssertionError('Missing sitemap modes')
+          match=re.search(r'action:\s*[\'"]esc_seo_files_current_sitemap[\'"],\s*nonce:\s*["\']([^"\']+)',page.text)
+          if not match: raise AssertionError('Missing inventory AJAX nonce')
+          inventory=s.post(root+'/wp-admin/admin-ajax.php',
+            data={'action':'esc_seo_files_current_sitemap','nonce':match.group(1)},timeout=40)
+          inventory.raise_for_status()
+          result=inventory.json()
+          if not result.get('success'):raise AssertionError('Inventory AJAX failed')
+          info=result['data']
+          if info.get('count',0)<200 or len(info.get('urls',[]))!=info['count']:
+            raise AssertionError('Current sitemap URL inventory missing')
+          if not all(url.startswith('https://xuongmunonbaohiem.com/') for url in info['urls']):
+            raise AssertionError('Inventory includes noncanonical domain')
+          if '<urlset' not in info.get('xml',''):raise AssertionError('Missing XML for manual copy')
+          print('SEO_FILES_WORDPRESS_EDITOR_AJAX_PASS',{'count':info['count'],'modes':modes})
+          PY
+      - name: Checkout Astro github development branch
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install source dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Focused sitemap XML mode regression
+        working-directory: source
+        run: pnpm exec vitest run scripts/sync-seo-files.test.ts scripts/generate-sitemap-robots.test.ts

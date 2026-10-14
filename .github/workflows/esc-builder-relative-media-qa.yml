@@ -1,0 +1,39 @@
+name: Blue Sea Builder Relative Media URL QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/esc-builder-relative-media-qa.yml'
+      - 'requests/esc-builder-relative-media-qa.txt'
+
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-builder-relative-media-qa
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout WordPress PHP source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Verify PHP and Visual Builder regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C source rev-parse HEAD
+          folder=source/wp-content/plugins/esc-visual-builder
+          php -l "$folder/includes/image-editor.php"
+          php -l "$folder/includes/item-manager.php"
+          php "$folder/tests/items-and-sections.test.php"
+          php "$folder/tests/page-image.test.php"
+          php "$folder/tests/auto-discovery.test.php"
+          echo 'ESC_BUILDER_RELATIVE_MEDIA_QA_PASS'

@@ -1,0 +1,38 @@
+name: Blue Sea Media Folder Editor QA
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/media-folder-editor-qa.yml'
+      - 'requests/media-folder-editor-qa.txt'
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: Verify post/page/product editor media folder integration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout WordPress backend
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: PHP syntax, editor profile and menu regression tests
+        run: |
+          set -euo pipefail
+          php -l source/wp-content/mu-plugins/disable-plugins-for-api.php
+          php source/wp-content/mu-plugins/tests/admin-performance-phase2.php
+          php source/wp-content/mu-plugins/tests/admin-performance-content-management-screens.php
+          php source/wp-content/mu-plugins/tests/admin-performance-media-library.php
+          php source/wp-content/mu-plugins/tests/admin-performance-custom-content-routing.php
+      - name: Ensure Folders plugin registers WordPress media modal hook
+        run: |
+          set -euo pipefail
+          grep -Fq "add_action('wp_enqueue_media', [\$this, 'output_backbone_view_filters'])" source/wp-content/plugins/folders/includes/folders.class.php
+          grep -Fq "wp_enqueue_script('folders-media'" source/wp-content/plugins/folders/includes/folders.class.php
+          echo 'MEDIA_FOLDER_EDITOR_PLUGIN_INTEGRATION_QA_PASS'

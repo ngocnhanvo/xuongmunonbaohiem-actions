@@ -1,1 +1,3 @@
 Verify Astro github preview route fix commit 209c37b5444446b29e3bc4093e5def356dbe841f. Must pass unit tests, Astro build, local SSR /preview/trang-chu HTTP 200, missing preview 404, private Builder 403. 2026-10-09.
+
+2026-10-14: Verify Astro github SEO Files integration (WP-admin SEO Files REST sync, preserve sitemap, reject invalid URLs; Vitest and full build). No production deployment.

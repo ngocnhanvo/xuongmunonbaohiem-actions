@@ -65,6 +65,7 @@ jobs:
           php -l source/wp-content/plugins/esc-table/views/view-edit.php
           node --check source/wp-content/plugins/esc-table/admin/js/esc-cell-visual-preview.js
           node source/tests/esc-table-cell-preview.test.cjs
+          node source/tests/esc-table-image-attributes.test.cjs
           test -s source/wp-content/plugins/esc-table/admin/css/esc-cell-visual-preview.css
           echo "ESC_TABLE_PREVIEW_PREDEPLOY_TEST_PASS"
 
@@ -79,7 +80,7 @@ jobs:
             fi
           fi
 
-      - name: Upload only 3 Advanced Editor files via FTP and verify bytes
+      - name: Upload 3 Advanced Editor files and verify remote bytes
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
           FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
@@ -162,8 +163,15 @@ jobs:
               raise RuntimeError('Cannot access ESC Table authenticated editor')
           doc=BeautifulSoup(page.text,'html.parser')
           for key in ('advanced-editor','esc-table-tab-html','esc-table-tab-visual',
-                      'esc-table-html-panel','esc-table-visual-panel','esc-table-visual-frame'):
+                      'esc-table-html-panel','esc-table-visual-panel','esc-table-visual-frame',
+                      'esc-table-image-editor','esc-table-image-attributes',
+                      'esc-table-new-attribute','esc-table-new-value','esc-table-attribute-add-button'):
               if not doc.find(id=key):raise RuntimeError('Missing visual editor element: '+key)
+          visual_frame=doc.find(id='esc-table-visual-frame')
+          if visual_frame is None or visual_frame.get('sandbox')!=['allow-same-origin']:
+              raise RuntimeError('Preview iframe sandbox must allow only same-origin, not scripts')
+          if not doc.find(id='esc-table-tab-visual').text.strip().startswith('Trực quan'):
+              raise RuntimeError('Visual tab is not present')
           if not doc.find('script',src=lambda x: x and 'esc-cell-visual-preview.js' in x):
               raise RuntimeError('Preview JS not enqueued in admin edit screen')
           print('ESC_TABLE_CELL_VISUAL_ADMIN_PASS')

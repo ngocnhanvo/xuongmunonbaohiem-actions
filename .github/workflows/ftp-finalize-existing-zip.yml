@@ -1,0 +1,96 @@
+name: Finalize Existing Blue Sea Astro ZIP (No FTP)
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: "Failed deploy run ID whose FTP ZIP was uploaded successfully"
+        required: true
+        type: string
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ftp-finalize-existing-zip.yml'
+      - 'requests/ftp-finalize-existing-zip.txt'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: xuongmunonbaohiem-actions-deploy
+  cancel-in-progress: false
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select exact saved ZIP from previously built run
+        id: source
+        env:
+          REQUESTED_RUN: ${{ inputs.source_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$REQUESTED_RUN"
+          if [ -z "$run_id" ]; then run_id="$(head -n 1 requests/ftp-finalize-existing-zip.txt | tr -d '\r\n')"; fi
+          [[ "$run_id" =~ ^[0-9]{8,20}$ ]] || { echo '::error::Source run ID invalid'; exit 1; }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Using ZIP saved from Actions build #$run_id (no rebuild and no FTP)."
+      - name: Download and validate original build package
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN: ${{ steps.source.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p source/upload
+          gh run download "$SOURCE_RUN" --repo "$GITHUB_REPOSITORY" \
+            --name blue-sea-ftp-package --dir source/upload
+          test -s source/upload/escvn.zip
+          unzip -tq source/upload/escvn.zip
+          echo "Local SHA-256: $(sha256sum source/upload/escvn.zip | cut -d ' ' -f 1)"
+      - name: Resolve and validate frontend target without FTP
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          lines=[s.strip().removeprefix("export ").strip() for s in os.environ["ENV_FILE"].splitlines()]
+          vals=[s.split("=",1)[1].strip().strip("\"'") for s in lines if s.startswith("WC_URL_CLIENT=")]
+          if len(vals)!=1: raise SystemExit("Need exactly one WC_URL_CLIENT")
+          parsed=urlsplit(vals[0]); host=(parsed.hostname or "").lower()
+          if parsed.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host) or ".." in host or "." not in host or parsed.username or parsed.password or parsed.port not in (None,443) or parsed.path not in ("","/") or parsed.query or parsed.fragment:
+            raise SystemExit("Unexpected production origin")
+          default="/domains/"+host+"/public_html/"
+          target=os.environ.get("FTP_ASTRO_DIR","").strip() or default
+          if not re.fullmatch(r"/domains/[A-Za-z0-9.-]+/public_html/",target) or ".." in target or "//" in target:
+            raise SystemExit("Invalid target path")
+          with open(os.environ["GITHUB_ENV"],"a",encoding="utf-8") as out: out.write("ASTRO_FTP_TARGET="+target+"\n")
+          print("Target:",target)
+          PY
+      - name: Verify hosting signed unzip endpoint is ready
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          ASTRO_FTP_TARGET: ${{ env.ASTRO_FTP_TARGET }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+          ZIP_PATH: source/upload/escvn.zip
+        run: |
+          set -euo pipefail
+          python3 scripts/esc-remote-unzip.py verify
+      - name: Finalize previously FTP-uploaded ZIP with checksum validation
+        shell: bash
+        env:
+          SOURCE_REPO_PAT: ${{ secrets.SOURCE_REPO_PAT }}
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          ASTRO_FTP_TARGET: ${{ env.ASTRO_FTP_TARGET }}
+          FTP_ASTRO_DIR: ${{ vars.FTP_ASTRO_DIR }}
+          ZIP_PATH: source/upload/escvn.zip
+        run: |
+          set -euo pipefail
+          python3 scripts/esc-remote-unzip.py unpack
+          echo 'FTP_RECOVERY_UNZIP_ONLY_SUCCESS' >> "$GITHUB_STEP_SUMMARY"

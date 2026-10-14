@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/seo-files-production-smoke.yml'
+      - 'requests/seo-files-production-smoke.txt'
 permissions:
   contents: read
 jobs:

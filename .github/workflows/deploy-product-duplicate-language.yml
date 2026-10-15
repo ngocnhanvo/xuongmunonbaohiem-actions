@@ -1,0 +1,111 @@
+name: Deploy Product Duplicate Language Fix
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-product-duplicate-language.yml'
+      - 'requests/deploy-product-duplicate-language.txt'
+permissions:
+  contents: read
+concurrency:
+  group: xuongmunonbaohiem-actions-wordpress-multilingual-admin-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Resolve WordPress production host
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          vals=[]
+          for original in os.environ.get('ENV_FILE','').splitlines():
+              line=original.strip().removeprefix('export ').strip()
+              if line.startswith('WC_URL='):
+                  value=line.split('=',1)[1].strip()
+                  if len(value)>1 and value[0]==value[-1] and value[0] in ('"',"'"):value=value[1:-1]
+                  vals.append(value)
+          if len(vals)!=1:raise SystemExit('WC_URL missing or ambiguous')
+          url=urlsplit(vals[0]);host=(url.hostname or '').lower()
+          if (url.scheme!='https' or not re.fullmatch(r'[a-z0-9.-]+',host)
+              or '.' not in host or '..' in host or url.username or url.password
+              or url.port not in (None,443) or url.path not in ('','/')
+              or url.query or url.fragment):raise SystemExit('Unsafe WordPress WC_URL')
+          with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as out:
+              out.write('WP_BASE=https://'+host+'\n')
+              out.write('FTP_MU_PATH=/domains/'+host+'/public_html/wp-content/mu-plugins\n')
+          print('WordPress deploy host:',host)
+          PY
+      - name: Checkout tested WordPress PHP master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Pin exact source and run language regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C source rev-parse HEAD)"
+          echo "Source revision: $actual"
+          test "$actual" = "2899f99ca72753764166a1db8c52067bf6a68ec1"
+          dir=source/wp-content/mu-plugins
+          php -l "$dir/esc-multilingual-admin.php"
+          php "$dir/tests/product-duplicate-language-regression.php"
+          php "$dir/tests/multilingual-admin-regression.php"
+          php "$dir/tests/multilingual-delete-regression.php"
+          echo 'PRODUCT_DUPLICATE_PREDEPLOY_TEST_PASS'
+      - name: Install FTP client if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends lftp; then
+              sudo apt-get update -qq
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -qq -y --no-install-recommends lftp
+            fi
+          fi
+      - name: Upload only multilingual admin runtime and verify remote bytes
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD" && test -n "$FTP_MU_PATH"
+          protocol="${FTP_PROTOCOL:-ftp}"
+          case "$protocol" in ftp|ftps|sftp) ;; *) echo "::error::Unsupported FTP protocol"; exit 1;; esac
+          source_file="source/wp-content/mu-plugins/esc-multilingual-admin.php"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 25
+          set net:reconnect-interval-base 3
+          set ftp:passive-mode yes
+          set ssl:verify-certificate no
+          cd "$FTP_MU_PATH"
+          put "$source_file" -o ".esc-multilingual-admin.php.uploading"
+          mv ".esc-multilingual-admin.php.uploading" "esc-multilingual-admin.php"
+          get "esc-multilingual-admin.php" -o "$RUNNER_TEMP/esc-multilingual-admin.remote.php"
+          bye
+          LFTP
+          cmp "$source_file" "$RUNNER_TEMP/esc-multilingual-admin.remote.php"
+          php -l "$RUNNER_TEMP/esc-multilingual-admin.remote.php"
+          echo 'PRODUCT_DUPLICATE_FTP_BYTE_MATCH_PASS' >> "$GITHUB_STEP_SUMMARY"
+      - name: Read-only WordPress production smoke check
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --connect-timeout 10 --max-time 35 "$WP_BASE/wp-json/" >/dev/null
+          echo 'WORDPRESS_PRODUCT_DUPLICATE_PRODUCTION_SMOKE_PASS' >> "$GITHUB_STEP_SUMMARY"

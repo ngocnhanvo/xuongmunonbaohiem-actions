@@ -24,3 +24,5 @@ Rerun focused PostsPage contract tests and full dev build.
 2026-10-15: Re-run full Astro github build and product preview parity QA after fixing comment-only test matcher. Astro github 8f9dbb419147646c0078b112cfeef7b88496010b; no FTP.
 
 2026-10-15: Final scoped full Astro QA after isolating /preview SSR products loader from Posts SSR: github f94302374aa9743334fd5c5a653c39ffac89acde; targeted cache_dist.preview tests plus build-git. No FTP or master yet.
+
+2026-10-15: Final QA Astro github c7b1518e5c01ae938b0e113f56fac5f1a705642b: live products preview fetches full REST pagination in parallel, no stale .cache reads/writes; only Product SSR receives change. Vitest + build-git, NO FTP.

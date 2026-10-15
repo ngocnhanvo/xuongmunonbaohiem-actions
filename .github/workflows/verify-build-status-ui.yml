@@ -1,0 +1,42 @@
+name: Verify WordPress GitHub Trigger Status UI
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-build-status-ui.yml']
+permissions:
+  contents: read
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Checkout WordPress backend master
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: backend
+          persist-credentials: false
+      - name: PHP and JS syntax plus build status regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C backend rev-parse HEAD
+          dir=backend/wp-content/plugins/github-trigger
+          php -l "$dir/vcs-build-trigger.php"
+          php -l "$dir/tests/build-status-regression.php"
+          php "$dir/tests/build-status-regression.php"
+          php "$dir/tests/menu-cache-regression.php"
+          node --check "$dir/vcs-build-trigger.js"
+          echo 'WORDPRESS_BUILD_TRIGGER_UI_QA_PASS'
+      - uses: actions/checkout@v4
+        with:
+          path: actions-hub
+      - name: Ensure smoke workflow uses main production domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'root="https://xuongmunonbaohiem.com/"' actions-hub/.github/workflows/production-smoke.yml
+          ! grep -q 'xuongmunonbaohiem.io.vn' actions-hub/.github/workflows/production-smoke.yml

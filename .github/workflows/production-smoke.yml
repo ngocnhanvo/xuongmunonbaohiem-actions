@@ -26,10 +26,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root="https://xuongmunonbaohiem.io.vn/"
-          sitemap="https://xuongmunonbaohiem.io.vn/sitemap.xml"
-          preview="https://xuongmunonbaohiem.io.vn/preview/trang-chu"
-          products="https://xuongmunonbaohiem.io.vn/san-pham"
+          root="https://xuongmunonbaohiem.com/"
+          sitemap="https://xuongmunonbaohiem.com/sitemap.xml"
+          preview="https://xuongmunonbaohiem.com/preview/trang-chu"
+          products="https://xuongmunonbaohiem.com/san-pham"
 
           echo "Smoke test for deployment run: ${{ github.event.workflow_run.html_url }}"
           for attempt in {1..12}; do

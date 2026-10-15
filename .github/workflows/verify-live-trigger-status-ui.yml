@@ -1,0 +1,66 @@
+name: Verify Live GitHub Trigger Status UI (Read Only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-live-trigger-status-ui.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Compare deployed JavaScript and authenticated Build manager
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+          WP_ADMIN_USERNAME: ${{ secrets.WP_ADMIN_USERNAME }}
+          WP_ADMIN_PASSWORD: ${{ secrets.WP_ADMIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import requests,os,urllib.parse,re,hashlib
+          vals=[]
+          for line in os.environ['ENV_FILE'].splitlines():
+            line=line.strip().removeprefix('export ').strip()
+            if line.startswith('WC_URL='): vals.append(line.split('=',1)[1].strip().strip("\"'"))
+          if len(vals)!=1: raise RuntimeError('WC_URL missing or ambiguous')
+          u=urllib.parse.urlsplit(vals[0])
+          if u.scheme!='https' or not u.hostname: raise RuntimeError('Invalid WC_URL')
+          root=u.scheme+'://'+u.netloc
+          s=requests.Session()
+          s.headers.update({'User-Agent':'BlueSea-Trigger-Production-ReadOnly-QA/1.0','Cache-Control':'no-cache'})
+          local=open('source/wp-content/plugins/github-trigger/vcs-build-trigger.js','rb').read()
+          remote=s.get(root+'/wp-content/plugins/github-trigger/vcs-build-trigger.js?qa=latest',timeout=40)
+          remote.raise_for_status()
+          if local != remote.content: raise RuntimeError('Public JS differs from GitHub source')
+          php=open('source/wp-content/plugins/github-trigger/vcs-build-trigger.php').read()
+          if "'1.2.3'" not in php or 'vcs-last-build-summary' not in php:raise RuntimeError('Source PHP missing release markers')
+          s.get(root+'/wp-login.php',timeout=40).raise_for_status()
+          dest=root+'/wp-admin/admin.php?page=vcs-build-trigger'
+          result=s.post(root+'/wp-login.php',data={
+            'log':os.environ['WP_ADMIN_USERNAME'],
+            'pwd':os.environ['WP_ADMIN_PASSWORD'],
+            'wp-submit':'Log In','redirect_to':dest,'testcookie':'1'
+          },timeout=45)
+          result.raise_for_status()
+          result=s.get(dest,timeout=45)
+          result.raise_for_status()
+          if 'wp-login.php' in result.url:raise RuntimeError('Not logged in')
+          html=result.text
+          for mark in ('vcs-build-btn-main','vcs-last-build-summary','vcs-build-trigger.js?ver=1.2.3'):
+            if mark not in html:raise RuntimeError('Missing production HTML marker: '+mark)
+          ajax=re.search(r'var\s+vcsBuild\s*=\s*(\{[^\n;]*\})\s*;',html)
+          if not ajax: raise RuntimeError('Missing authenticated build status settings')
+          print('LIVE_GITHUB_TRIGGER_JS_BYTES_MATCH_PASS '+hashlib.sha256(remote.content).hexdigest()[:16])
+          print('LIVE_WORDPRESS_BUILD_MANAGER_PHP_MARKERS_PASS')
+          print('LIVE_GITHUB_TRIGGER_QA_SUCCESS')
+          PY

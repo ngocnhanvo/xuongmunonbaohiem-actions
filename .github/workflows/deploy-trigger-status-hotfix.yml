@@ -1,9 +1,6 @@
 name: Deploy GitHub Trigger UI Fix (2 Files)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/deploy-trigger-status-hotfix.yml']
 permissions:
   contents: read
 concurrency:
@@ -110,7 +107,7 @@ jobs:
           import os,urllib.request,urllib.parse,http.cookiejar
           root=os.environ['WORDPRESS_ORIGIN']
           def fetch(url,op=urllib.request):
-            with op.open(urllib.request.Request(url,headers={'User-Agent':'BlueSea-Trigger-QA','Cache-Control':'no-cache'}),timeout=40) as response:
+            with (urllib.request.urlopen if op is urllib.request else op.open)(urllib.request.Request(url,headers={'User-Agent':'BlueSea-Trigger-QA','Cache-Control':'no-cache'}),timeout=40) as response:
               return response.read().decode('utf8','replace'),response.geturl()
           rest,_=fetch(root+'/wp-json/')
           if '"name"' not in rest: raise RuntimeError('WordPress REST unavailable')

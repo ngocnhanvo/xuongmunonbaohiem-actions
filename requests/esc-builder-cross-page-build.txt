@@ -20,3 +20,5 @@ Rerun focused PostsPage contract tests and full dev build.
 2026-10-14: Verify new manual sitemap XML WordPress mode, auto mode backwards compatibility, Astro github e72ff00f7e7f with full build, no FTP until PASS.
 
 2026-10-15: Verify Blue Sea Astro github SSR /preview uses full live WordPress product pagination and fresh categories without writing .cache or modifying production data. New targeted regression cache_dist.preview.test.ts + full pnpm build-git; no FTP deploy. GitHub source commit 106fb7972bc19b3c6c9dcebfcd18f02fb479200e.
+
+2026-10-15: Re-run full Astro github build and product preview parity QA after fixing comment-only test matcher. Astro github 8f9dbb419147646c0078b112cfeef7b88496010b; no FTP.

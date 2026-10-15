@@ -100,3 +100,54 @@ jobs:
           print('BLUE_SEA_SSR_PARITY_READ_ONLY_REPORT')
           print(json.dumps(report,ensure_ascii=False,indent=2))
           PY
+
+      - name: Inspect actual preview/public HTML route and active category (read-only)
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re,html,json,urllib.request,urllib.parse
+          from html.parser import HTMLParser
+          values=[]
+          for l in os.environ['ENV_FILE'].splitlines():
+              l=l.strip().removeprefix('export ').strip()
+              if l.startswith('WC_URL_CLIENT='):values.append(l.split('=',1)[1].strip().strip('"\u0027'))
+          if len(values)!=1:raise RuntimeError('WC_URL_CLIENT missing')
+          site=values[0].rstrip('/')
+          class Reader(HTMLParser):
+              def __init__(self):
+                  super().__init__();self.title='';self.h1='';self.inH1=0;self.names=[];self.inTitle=False;self.inCardTitle=0;self.cardText=''
+              def handle_starttag(self,tag,attrs):
+                  attributes=dict(attrs)
+                  if tag=='h1':self.inH1+=1
+                  if tag=='title':self.inTitle=True
+                  if tag=='h2' and 'line-clamp-2' in attributes.get('class',''):self.inCardTitle+=1;self.cardText=''
+              def handle_endtag(self,tag):
+                  if tag=='h1':self.inH1=max(self.inH1-1,0)
+                  if tag=='title':self.inTitle=False
+                  if tag=='h2' and self.inCardTitle:
+                      self.inCardTitle=0
+                      if self.cardText.strip():self.names.append(' '.join(self.cardText.split()))
+              def handle_data(self,text):
+                  if self.inH1:self.h1+=text
+                  if self.inTitle:self.title+=text
+                  if self.inCardTitle:self.cardText+=text
+          for path in ('/preview/san-pham/mau-non-khac','/san-pham/mau-non-khac','/preview/san-pham/non-bao-hiem-f1','/san-pham/non-bao-hiem-f1'):
+              req=urllib.request.Request(site+path,headers={'User-Agent':'BlueSea-SSR-Preview-Inspector/1.0','Cache-Control':'no-cache'})
+              try:
+                  with urllib.request.urlopen(req,timeout=45) as r:
+                      body=r.read().decode('utf-8','replace')
+                      p=Reader();p.feed(body)
+                      snippet=re.findall(r'Trang\s*(?:<[^>]+>\s*)*(\d+)\s*/\s*(?:<[^>]+>\s*)*(\d+)',body)
+                      print(json.dumps({'path':path,'status':r.status,'final_url':r.url,
+                          'preview_header':r.headers.get('X-ESC-Preview-Source'),
+                          'cache_control':r.headers.get('Cache-Control'),
+                          'h1':' '.join(p.h1.split())[:150],
+                          'titles':p.names[:18],'title_count':len(p.names),
+                          'html_size':len(body),'pagination_mentions':snippet[:3]},
+                          ensure_ascii=False))
+              except Exception as err:
+                  print(json.dumps({'path':path,'error':str(err)[:200]},ensure_ascii=False))
+          PY

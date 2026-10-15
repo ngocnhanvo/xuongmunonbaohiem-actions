@@ -151,3 +151,28 @@ jobs:
               except Exception as err:
                   print(json.dumps({'path':path,'error':str(err)[:200]},ensure_ascii=False))
           PY
+
+      - name: Check WordPress REST pagination headers and per-page category membership (read-only)
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,urllib.parse,urllib.request
+          vals=[]
+          for l in os.environ['ENV_FILE'].splitlines():
+              l=l.strip().removeprefix('export ').strip()
+              if l.startswith('WC_URL='):vals.append(l.split('=',1)[1].strip().strip("\"'"))
+          if len(vals)!=1:raise SystemExit('Missing WP URL')
+          root=vals[0].rstrip('/')
+          for page in (1,2,3,4):
+              url=root+'/wp-json/wp/v2/product?status=publish&per_page=50&page='+str(page)+'&_esc_preview=123'
+              with urllib.request.urlopen(urllib.request.Request(url,headers={'Accept':'application/json','Cache-Control':'no-cache','User-Agent':'BlueSea-SSR-ReadOnly/1.0'}),timeout=40) as resp:
+                  records=json.load(resp)
+                  f1=sum(1 for p in records if any(c.get('slug')=='non-bao-hiem-f1' for c in p.get('product_categories',[]) if isinstance(c,dict)))
+                  other=sum(1 for p in records if any(c.get('slug') in ('mau-non-khac','non-bao-hiem-f1','non-bao-hiem-2-ban-chan','non-bao-hiem-6-lo-8-lo','non-bao-hiem-tre-em') for c in p.get('product_categories',[]) if isinstance(c,dict)))
+                  print(json.dumps({'page':page,'count':len(records),'f1_count':f1,'other_count':other,
+                    'X_WP_TotalPages':resp.headers.get('X-WP-TotalPages'),
+                    'X_WP_Total':resp.headers.get('X-WP-Total')},ensure_ascii=False))
+          PY

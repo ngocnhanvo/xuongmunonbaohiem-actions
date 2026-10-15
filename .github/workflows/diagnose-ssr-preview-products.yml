@@ -1,0 +1,102 @@
+name: Diagnose Blue Sea SSR Product Preview Parity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/diagnose-ssr-preview-products.yml']
+permissions:
+  contents: read
+jobs:
+  parity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Compare current WordPress products with published Astro snapshot (read-only)
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,json,urllib.request,urllib.parse,time
+          from collections import Counter
+          def env(name):
+              vals=[]
+              for line in os.environ.get('ENV_FILE','').splitlines():
+                  line=line.strip().removeprefix('export ').strip()
+                  if line.startswith(name+'='):
+                      vals.append(line.split('=',1)[1].strip().strip("\"'"))
+              if len(vals)!=1: raise RuntimeError('Missing '+name)
+              u=urllib.parse.urlsplit(vals[0])
+              if u.scheme!='https' or not u.hostname: raise RuntimeError('Invalid '+name)
+              return u.scheme+'://'+u.netloc
+          wp=env('WC_URL')
+          site=env('WC_URL_CLIENT')
+          def fetch(url):
+              request=urllib.request.Request(url,headers={'User-Agent':'BlueSea-SSR-Parity-ReadOnly/1.0','Accept':'application/json','Cache-Control':'no-cache'})
+              with urllib.request.urlopen(request,timeout=35) as response:
+                  return json.load(response),response.headers.get('Last-Modified','')
+          def cat_branch(cats):
+              sel=next((c for c in cats if c.get('slug')=='mau-non-khac'),None)
+              if not sel:return set(),[]
+              ids={int(sel['id'])}; changed=True
+              while changed:
+                  old=len(ids)
+                  for c in cats:
+                      if int(c.get('parent') or 0) in ids:ids.add(int(c['id']))
+                  changed=len(ids)!=old
+              return ids,[(int(c['id']),c.get('slug'),int(c.get('parent') or 0)) for c in cats if int(c['id']) in ids]
+          live_categories,_=fetch(wp+'/wp-json/astro/v1/get-product-categories?_esc_preview='+str(int(time.time())))
+          raw=[];page=1;raw_page_count=0
+          while page<=30:
+              endpoint=wp+'/wp-json/wp/v2/product?status=publish&per_page=50&page='+str(page)+'&_esc_preview='+str(int(time.time()))
+              try:
+                  records,_=fetch(endpoint)
+              except urllib.error.HTTPError as error:
+                  if error.code==400 and page>1:break
+                  raise
+              if not isinstance(records,list):raise RuntimeError('Invalid product endpoint')
+              raw.extend(records)
+              raw_page_count+=1
+              if len(records)<50:break
+              page+=1
+          live_branch,live_tree=cat_branch(live_categories)
+          def language(raw):
+              obj=raw.get('acf',{}).get('product_lang','vi')
+              if isinstance(obj,dict):return obj.get('value','vi')
+              return obj or 'vi'
+          def live_match(p):
+              if language(p)!='vi':return False
+              cats=p.get('product_categories') or []
+              return any(int(c.get('id') or 0) in live_branch for c in cats if isinstance(c,dict))
+          def title(item):
+              val=item.get('title',{})
+              return val.get('rendered','') if isinstance(val,dict) else str(val)
+          live_hits=[p for p in raw if live_match(p)]
+          report={'wordpress_published_raw_products':len(raw),'wordpress_page_count':raw_page_count,
+                 'wordpress_mau_non_khac_products':len(live_hits),
+                 'wordpress_category_tree':live_tree,
+                 'wordpress_product_titles_sample':[title(p)[:70] for p in live_hits[:8]]}
+          try:
+              current_common,lm_common=fetch(site+'/data/cms-common.json')
+              current_products,lm_products=fetch(site+'/data/cms-products.json')
+              prod_categories=current_common.get('productCategories',[])
+              prod_branch,prod_tree=cat_branch(prod_categories)
+              def prod_match(p):
+                  if not p.get('itemName',{}).get('vi') and not p.get('slug',{}).get('vi'):return False
+                  cats=p.get('categories',{}).get('vi',[])
+                  if cats:
+                      return any(int(c.get('id') or 0) in prod_branch for c in cats if isinstance(c,dict))
+                  return int(p.get('categoryId',{}).get('vi') or 0) in prod_branch
+              prod_hits=[p for p in current_products if prod_match(p)]
+              report.update({'production_processed_products':len(current_products),
+                'production_mau_non_khac_products':len(prod_hits),
+                'production_category_tree':prod_tree,
+                'production_product_titles_sample':[str(p.get('itemName',{}).get('vi',''))[:70] for p in prod_hits[:8]],
+                'production_last_modified':lm_products,
+                'production_category_last_modified':lm_common})
+          except Exception as error:
+              report['production_json_error']=str(error)[:260]
+          print('BLUE_SEA_SSR_PARITY_READ_ONLY_REPORT')
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          PY

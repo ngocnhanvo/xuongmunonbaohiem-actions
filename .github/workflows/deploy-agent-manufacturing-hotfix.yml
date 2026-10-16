@@ -1,0 +1,97 @@
+name: Deploy ESC Agent manufacturing intent hotfix
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-agent-manufacturing-hotfix.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-esc-agent-hotfix
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: 429f70f068582f534184de459331981686580b2e
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Validate pinned backend revision and regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "429f70f068582f534184de459331981686580b2e"
+          d=source/wp-content/mu-plugins/esc-agent
+          for file in src/Core/Planner.php src/Core/AgentSynthesisPrompt.php src/Knowledge/KnowledgeIndex.php; do php -l "$d/$file"; done
+          php -l "$d/tests/manufacturing-order-distinction.php"
+          if ! php -r 'exit(class_exists("SQLite3") ? 0 : 1);'; then sudo apt-get update -qq; sudo apt-get install -y -qq php-sqlite3; fi
+          php "$d/tests/manufacturing-order-distinction.php"
+          php "$d/tests/product-construction-knowledge.php"
+          php "$d/tests/knowledge-index.php"
+          php "$d/tests/article-knowledge-retriever.php"
+      - name: Resolve strictly scoped WordPress FTP path
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          values=[]
+          for l in os.environ.get("ENV_FILE","").splitlines():
+              l=l.strip()
+              if l.startswith("export "): l=l[7:].strip()
+              if l.startswith("WC_URL="):
+                  values.append(l.partition("=")[2].strip().strip("'\\\""))
+          if len(values)!=1: raise SystemExit("Expected exactly one WC_URL")
+          p=urlsplit(values[0]); host=(p.hostname or "").lower()
+          if p.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host) or "." not in host or ".." in host or p.username or p.password or p.port not in (None,443) or p.path not in ("","/") or p.query or p.fragment: raise SystemExit("Unsafe WC_URL")
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write("WP_HOST="+host+"\\n")
+              f.write("REMOTE_AGENT=/domains/"+host+"/public_html/wp-content/mu-plugins/esc-agent\\n")
+          print("Backend host:",host)
+          PY
+      - name: Upload only three ESC Agent runtime files and byte-verify
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          if ! command -v lftp >/dev/null; then sudo apt-get install -y -qq lftp || { sudo apt-get update -qq && sudo apt-get install -y -qq lftp; }; fi
+          protocol="${FTP_PROTOCOL:-ftp}"
+          case "$protocol" in ftp|ftps) ;; *) echo "Unsupported protocol"; exit 1;; esac
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 30
+          set ssl:verify-certificate no
+          cd "$REMOTE_AGENT"
+          cd src/Core
+          put source/wp-content/mu-plugins/esc-agent/src/Core/Planner.php -o Planner.php
+          put source/wp-content/mu-plugins/esc-agent/src/Core/AgentSynthesisPrompt.php -o AgentSynthesisPrompt.php
+          get Planner.php -o /tmp/esc-agent-planner-remote.php
+          get AgentSynthesisPrompt.php -o /tmp/esc-agent-synthesis-remote.php
+          cd ../Knowledge
+          put source/wp-content/mu-plugins/esc-agent/src/Knowledge/KnowledgeIndex.php -o KnowledgeIndex.php
+          get KnowledgeIndex.php -o /tmp/esc-agent-knowledge-remote.php
+          bye
+          LFTP
+          cmp source/wp-content/mu-plugins/esc-agent/src/Core/Planner.php /tmp/esc-agent-planner-remote.php
+          cmp source/wp-content/mu-plugins/esc-agent/src/Core/AgentSynthesisPrompt.php /tmp/esc-agent-synthesis-remote.php
+          cmp source/wp-content/mu-plugins/esc-agent/src/Knowledge/KnowledgeIndex.php /tmp/esc-agent-knowledge-remote.php
+          echo "All three runtime files match pinned GitHub source byte-for-byte" >> "$GITHUB_STEP_SUMMARY"
+      - name: Backend smoke test
+        run: |
+          set -euo pipefail
+          curl -fsS --connect-timeout 10 --max-time 30 "https://$WP_HOST/wp-json/" >/dev/null
+          echo "WordPress REST smoke passed" >> "$GITHUB_STEP_SUMMARY"

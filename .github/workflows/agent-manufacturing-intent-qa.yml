@@ -1,0 +1,44 @@
+name: Agent Manufacturing vs Ordering Regression (No FTP)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agent-manufacturing-intent-qa.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout WordPress backend
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Run production-process routing and evidence regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Backend SHA: $(git -C source rev-parse HEAD)"
+          d=source/wp-content/mu-plugins/esc-agent
+          php -l "$d/src/Knowledge/KnowledgeIndex.php"
+          php -l "$d/src/Core/Planner.php"
+          php -l "$d/src/Core/AgentSynthesisPrompt.php"
+          php -l "$d/tests/knowledge-authoritative.php"
+          php -l "$d/tests/knowledge-search-planner.php"
+          if ! php -r 'exit(class_exists("SQLite3") ? 0 : 1);'; then
+            sudo apt-get update -qq
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-sqlite3
+          fi
+          php "$d/tests/knowledge-authoritative.php"
+          php "$d/tests/knowledge-search-planner.php"
+          php "$d/tests/product-construction-knowledge.php"
+          php "$d/tests/knowledge-index.php"
+          php "$d/tests/article-knowledge-retriever.php"
+          php "$d/tests/knowledge-index-integration.php"
+          echo 'AGENT_MANUFACTURING_PROCESS_QA_PASS'

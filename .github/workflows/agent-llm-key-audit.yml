@@ -1,0 +1,80 @@
+name: ESC Agent LLM Key Inventory (Read Only)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/agent-llm-key-audit.yml'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Resolve production backend host without exposing secrets
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          items=[]
+          for line in os.environ.get("ENV_FILE","").splitlines():
+              line=line.strip()
+              if line.startswith("export "): line=line[7:].strip()
+              if line.startswith("WC_URL="): items.append(line.partition("=")[2].strip().strip("'\""))
+          if len(items)!=1: raise SystemExit("Expected exactly one backend WC_URL")
+          url=urlsplit(items[0])
+          host=(url.hostname or "").lower()
+          if url.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host) or "." not in host or ".." in host or url.username or url.password or url.port not in (None,443) or url.path not in ("","/") or url.query or url.fragment: raise SystemExit("Unsafe backend URL")
+          with open(os.environ["GITHUB_ENV"],"a") as f:
+              f.write("WP_HOST="+host+"\n")
+          print("Backend domain verified")
+          PY
+      - name: Read WordPress configuration through FTP (no changes to production)
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          umask 077
+          trap 'rm -f /tmp/esc-agent-llm-config.php' EXIT
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          if ! command -v lftp >/dev/null 2>&1; then
+            sudo apt-get install -y -qq lftp || { sudo apt-get update -qq && sudo apt-get install -y -qq lftp; }
+          fi
+          protocol="${FTP_PROTOCOL:-ftp}"
+          case "$protocol" in ftp|ftps) ;; *) exit 1;; esac
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 25
+          set ssl:verify-certificate no
+          cd "/domains/$WP_HOST/public_html"
+          get wp-config.php -o /tmp/esc-agent-llm-config.php
+          bye
+          LFTP
+          python3 - <<'PY'
+          import pathlib,re
+          s=pathlib.Path('/tmp/esc-agent-llm-config.php').read_text(encoding='utf-8',errors='replace')
+          if not s.lstrip().startswith('<?php'): raise SystemExit('Not a PHP configuration; abort')
+          def inspect(name):
+              pattern=r"define\s*\(\s*(['\"])" + re.escape(name) + r"\1\s*,\s*"
+              hits=list(re.finditer(pattern,s,re.I))
+              if not hits: return 'NOT_DEFINED'
+              if len(hits)!=1: return 'DUPLICATE_DEFINITIONS'
+              rest=s[hits[0].end():]
+              m=re.match(r"(['\"])((?:\\.|(?!\1).)*)\1\s*[,)]",rest,re.S)
+              if m: return 'PRESENT_NONEMPTY' if m.group(2).strip() else 'EMPTY'
+              return 'DEFINED_DYNAMIC_OR_ARRAY'
+          names=('GEMINI_API_KEY','GROQ_API_KEY','ESC_AGENT_LLM_PROVIDERS','CLOUDFLARE_API_KEY','CEREBRAS_API_KEY','COHERE_API_KEY','OPENROUTER_API_KEY')
+          print('PRODUCTION_WP_CONFIG_KEY_PRESENCE_ONLY')
+          for name in names: print(name+'='+inspect(name))
+          print('No credential values printed; API validity and runtime quotas not tested.')
+          PY

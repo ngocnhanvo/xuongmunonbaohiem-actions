@@ -1,0 +1,93 @@
+name: Deploy ESC Agent Cloudflare-first Provider Config
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-agent-cloudflare-first.yml'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-agent-cloudflare-config
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout reviewed WordPress backend commit
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: 1dff8e1f472c1aa2608992b0a4eaceece49591fe
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Validate source and run LLM routing tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C source rev-parse HEAD)" = "1dff8e1f472c1aa2608992b0a4eaceece49591fe"
+          d=source/wp-content/mu-plugins/esc-agent
+          php -l "$d/src/Core/LlmProviderConfig.php"
+          php -l "$d/tests/llm-provider-config.php"
+          php -l "$d/tests/llm-cloudflare-priority.php"
+          php "$d/tests/llm-provider-config.php"
+          php "$d/tests/llm-cloudflare-priority.php"
+          php "$d/tests/llm-health-router.php"
+          php "$d/tests/llm-provider-clients.php"
+          echo "LLM priority and fallback regressions passed" >> "$GITHUB_STEP_SUMMARY"
+      - name: Resolve backend WordPress host
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,re
+          from urllib.parse import urlsplit
+          vals=[]
+          for line in os.environ.get('ENV_FILE','').splitlines():
+              line=line.strip()
+              if line.startswith('export '): line=line[7:].strip()
+              if line.startswith('WC_URL='): vals.append(line.partition('=')[2].strip().strip("'\""))
+          if len(vals)!=1: raise SystemExit('Expected exactly one WC_URL')
+          u=urlsplit(vals[0]); host=(u.hostname or '').lower()
+          if u.scheme!='https' or not re.fullmatch(r'[a-z0-9.-]+',host) or '.' not in host or '..' in host or u.username or u.password or u.port not in (None,443) or u.path not in ('','/') or u.query or u.fragment: raise SystemExit('Invalid backend host')
+          with open(os.environ['GITHUB_ENV'],'a') as f: f.write('WP_HOST='+host+'\n')
+          print('Resolved WordPress backend host')
+          PY
+      - name: FTP deploy only LlmProviderConfig.php, compare bytes
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          if ! command -v lftp >/dev/null 2>&1; then sudo apt-get install -y -qq lftp || { sudo apt-get update -qq; sudo apt-get install -y -qq lftp; }; fi
+          protocol="${FTP_PROTOCOL:-ftp}"
+          case "$protocol" in ftp|ftps) ;; *) exit 1;; esac
+          remote="/domains/$WP_HOST/public_html/wp-content/mu-plugins/esc-agent/src/Core"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 30
+          set ssl:verify-certificate no
+          cd "$remote"
+          put source/wp-content/mu-plugins/esc-agent/src/Core/LlmProviderConfig.php -o LlmProviderConfig.php
+          get LlmProviderConfig.php -o /tmp/esc-agent-llm-provider-config.remote.php
+          bye
+          LFTP
+          cmp source/wp-content/mu-plugins/esc-agent/src/Core/LlmProviderConfig.php /tmp/esc-agent-llm-provider-config.remote.php
+          php -l /tmp/esc-agent-llm-provider-config.remote.php
+          rm -f /tmp/esc-agent-llm-provider-config.remote.php
+          echo "Remote LlmProviderConfig.php matches reviewed commit byte-for-byte" >> "$GITHUB_STEP_SUMMARY"
+      - name: WordPress API smoke check
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS --connect-timeout 10 --max-time 30 "https://$WP_HOST/wp-json/" > /dev/null
+          echo "Backend REST smoke check passed" >> "$GITHUB_STEP_SUMMARY"

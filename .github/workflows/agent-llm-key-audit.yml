@@ -73,7 +73,7 @@ jobs:
               m=re.match(r"(['\"])((?:\\.|(?!\1).)*)\1\s*[,)]",rest,re.S)
               if m: return 'PRESENT_NONEMPTY' if m.group(2).strip() else 'EMPTY'
               return 'DEFINED_DYNAMIC_OR_ARRAY'
-          names=('GEMINI_API_KEY','GROQ_API_KEY','ESC_AGENT_LLM_PROVIDERS','CLOUDFLARE_API_KEY','CEREBRAS_API_KEY','COHERE_API_KEY','OPENROUTER_API_KEY')
+          names=('GEMINI_API_KEY','GROQ_API_KEY','ESC_AGENT_LLM_PROVIDERS','CLOUDFLARE_API_KEY','CLOUDFLARE_ACCOUNT_ID','CEREBRAS_API_KEY','COHERE_API_KEY','OPENROUTER_API_KEY')
           print('PRODUCTION_WP_CONFIG_KEY_PRESENCE_ONLY')
           for name in names: print(name+'='+inspect(name))
           print('No credential values printed; API validity and runtime quotas not tested.')

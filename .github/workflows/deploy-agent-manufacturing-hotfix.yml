@@ -53,7 +53,7 @@ jobs:
           p=urlsplit(values[0]); host=(p.hostname or "").lower()
           if p.scheme!="https" or not re.fullmatch(r"[a-z0-9.-]+",host) or "." not in host or ".." in host or p.username or p.password or p.port not in (None,443) or p.path not in ("","/") or p.query or p.fragment: raise SystemExit("Unsafe WC_URL")
           with open(os.environ["GITHUB_ENV"],"a") as f:
-              f.write("WP_HOST="+host+"\\n")
+              f.write("WP_HOST="+host+"\n")
               f.write("REMOTE_AGENT=/domains/"+host+"/public_html/wp-content/mu-plugins/esc-agent\\n")
           print("Backend host:",host)
           PY

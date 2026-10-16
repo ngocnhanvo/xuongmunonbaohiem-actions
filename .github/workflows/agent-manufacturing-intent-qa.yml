@@ -29,13 +29,13 @@ jobs:
           php -l "$d/src/Knowledge/KnowledgeIndex.php"
           php -l "$d/src/Core/Planner.php"
           php -l "$d/src/Core/AgentSynthesisPrompt.php"
-          php -l "$d/tests/knowledge-authoritative.php"
+          php -l "$d/tests/manufacturing-order-distinction.php"
           php -l "$d/tests/knowledge-search-planner.php"
           if ! php -r 'exit(class_exists("SQLite3") ? 0 : 1);'; then
             sudo apt-get update -qq
             sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq php-sqlite3
           fi
-          php "$d/tests/knowledge-authoritative.php"
+          php "$d/tests/manufacturing-order-distinction.php"
           php "$d/tests/knowledge-search-planner.php"
           php "$d/tests/product-construction-knowledge.php"
           php "$d/tests/knowledge-index.php"

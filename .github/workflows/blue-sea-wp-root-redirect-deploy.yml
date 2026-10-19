@@ -1,0 +1,254 @@
+name: Deploy Blue Sea WordPress root redirect fast path
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/blue-sea-wp-root-redirect-deploy.yml']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-wordpress-root-redirect-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PHP master (only this project's source)
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: php-source
+          persist-credentials: false
+
+      - name: Verify PHP and Apache source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C php-source rev-parse HEAD
+          php -l php-source/wp-content/themes/vibe-code-theme/inc/page/index.php
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('php-source/.htaccess').read_text(encoding='utf8')
+          assert p.count('# BEGIN ESC WP ROOT ADMIN FAST REDIRECT')==1
+          assert p.count('# END ESC WP ROOT ADMIN FAST REDIRECT')==1
+          assert r'^admin\.xuongmunonbaohiem\.com$' in p
+          assert 'RewriteCond %{QUERY_STRING} ^$' in p
+          assert 'RewriteRule ^$ /wp-admin/ [R=302,L]' in p
+          assert '# BEGIN WordPress' in p and '# END WordPress' in p
+          php=Path('php-source/wp-content/themes/vibe-code-theme/inc/page/index.php').read_text(encoding='utf8')
+          assert 'wp_safe_redirect( admin_url(), 302 );' in php
+          assert "wp_redirect( site_url( '/admin' ), 302 );" not in php
+          PY
+
+      - name: Resolve production admin host from controlled environment
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+          vals=[]
+          for line in os.environ.get('ENV_FILE','').splitlines():
+              s=line.strip()
+              if s.startswith('export '): s=s[7:].strip()
+              if s.startswith('WC_URL='): vals.append(s.split('=',1)[1].strip().strip('"\x27'))
+          if len(vals)!=1: raise SystemExit('Exactly one WC_URL is required')
+          url=urlsplit(vals[0])
+          if url.scheme!='https' or url.hostname!='admin.xuongmunonbaohiem.com' or url.username or url.password or url.query or url.fragment or url.path not in ('','/') or url.port not in (None,443):
+              raise SystemExit('Production backend host mismatch; will not deploy')
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('WP_HOST=admin.xuongmunonbaohiem.com\n')
+              f.write('REMOTE_ROOT=/domains/admin.xuongmunonbaohiem.com/public_html\n')
+          print('Verified production WordPress host')
+          PY
+
+      - name: Prepare lftp
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v lftp >/dev/null 2>&1; then
+            if ! sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp; then
+              sudo apt-get update -qq -y
+              sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends lftp
+            fi
+          fi
+
+      - name: Backup actual hosting files (never overwrite from GitHub blindly)
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          proto="$FTP_PROTOCOL"
+          case "$proto" in '') proto=ftp ;; ftp|ftps|sftp) ;; *) exit 1 ;; esac
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$proto://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 25
+          set ssl:verify-certificate no
+          cd "$REMOTE_ROOT"
+          get ".htaccess" -o "/tmp/esc-root-htaccess.before"
+          get "wp-content/themes/vibe-code-theme/inc/page/index.php" -o "/tmp/esc-root-theme-index.before"
+          bye
+          LFTP
+          test -s /tmp/esc-root-htaccess.before
+          test -s /tmp/esc-root-theme-index.before
+          chmod 600 /tmp/esc-root-htaccess.before /tmp/esc-root-theme-index.before
+          echo 'Backed up the actual hosting files to runner temporary storage.'
+
+      - name: Prepare minimal, idempotent patches on actual hosting content
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          ht=Path('/tmp/esc-root-htaccess.before').read_bytes()
+          source=Path('php-source/.htaccess').read_bytes()
+          start=b'# BEGIN ESC WP ROOT ADMIN FAST REDIRECT'
+          end=b'# END ESC WP ROOT ADMIN FAST REDIRECT'
+          assert source.count(start)==1 and source.count(end)==1
+          block=source[source.index(start):source.index(end)+len(end)] + b'\n\n'
+          if ht.count(start)>1 or ht.count(end)>1: raise SystemExit('Ambiguous live .htaccess redirect blocks')
+          if ht.count(start)!=ht.count(end): raise SystemExit('Partial live redirect block; abort')
+          if b'# BEGIN WordPress' not in ht or b'# END WordPress' not in ht:
+              raise SystemExit('Existing WordPress rules missing on host; abort rather than overwrite')
+          if start in ht:
+              from_index=ht.index(start); to_index=ht.index(end)+len(end)
+              remaining=ht[to_index:]
+              if remaining.startswith(b'\r\n\r\n'): remaining=remaining[4:]
+              elif remaining.startswith(b'\n\n'): remaining=remaining[2:]
+              merged=ht[:from_index]+block+remaining
+          else:
+              merged=block+ht
+          assert merged.count(start)==1 and merged.count(end)==1
+          assert b'# BEGIN WordPress' in merged and b'# END WordPress' in merged
+          assert b'admin\\.xuongmunonbaohiem\\.com' not in merged, 'Unexpected double-escaped host'
+          Path('/tmp/esc-root-htaccess.merged').write_bytes(merged)
+
+          php=Path('/tmp/esc-root-theme-index.before').read_bytes()
+          old=b"wp_redirect( site_url( '/admin' ), 302 );"
+          new=b"wp_safe_redirect( admin_url(), 302 );"
+          if old in php:
+              if php.count(old)!=1: raise SystemExit('Ambiguous theme PHP redirect; abort')
+              new_php=php.replace(old,new)
+          elif new in php:
+              new_php=php
+          else:
+              # A customized theme may no longer use this redirect.
+              # Do not replace the whole theme file or modify unrelated code.
+              new_php=php
+              print('NOTICE: live theme redirect does not match known pattern; leaving it unchanged')
+          Path('/tmp/esc-root-theme-index.merged').write_bytes(new_php)
+          print('HTACCESS_CHANGE='+str(merged!=ht))
+          print('THEME_PHP_CHANGE='+str(new_php!=php))
+          PY
+          php -l /tmp/esc-root-theme-index.merged
+          cmp -s /tmp/esc-root-htaccess.before /tmp/esc-root-htaccess.merged && echo 'Apache rule already present' || true
+
+      - name: Upload scoped changes and byte-verify
+        id: upload
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          proto="$FTP_PROTOCOL"; if test -z "$proto"; then proto=ftp; fi
+          echo 'NEED_ROLLBACK=1' >> "$GITHUB_ENV"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$proto://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 3
+          set net:timeout 25
+          set ssl:verify-certificate no
+          cd "$REMOTE_ROOT"
+          put "/tmp/esc-root-htaccess.merged" -o ".htaccess"
+          get ".htaccess" -o "/tmp/esc-root-htaccess.verify"
+          put "/tmp/esc-root-theme-index.merged" -o "wp-content/themes/vibe-code-theme/inc/page/index.php"
+          get "wp-content/themes/vibe-code-theme/inc/page/index.php" -o "/tmp/esc-root-theme-index.verify"
+          bye
+          LFTP
+          cmp /tmp/esc-root-htaccess.merged /tmp/esc-root-htaccess.verify
+          cmp /tmp/esc-root-theme-index.merged /tmp/esc-root-theme-index.verify
+          php -l /tmp/esc-root-theme-index.verify
+          echo 'Hosting changes uploaded and byte-verified.'
+
+      - name: Validate production root fast redirect, REST, and admin login
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, statistics, time, urllib.request, urllib.error
+          from urllib.parse import urlsplit
+          root='https://admin.xuongmunonbaohiem.com'
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):
+                  return None
+          op=urllib.request.build_opener(NoRedirect)
+          for label,path,expected in [
+              ('root','/',302),('rest','/wp-json/',200),
+              ('rest_query','/?rest_route=%2F',200),
+              ('admin','/wp-admin/',302),('login','/wp-login.php',200),
+          ]:
+              samples=[]
+              for i in range(3 if label=='root' else 1):
+                  start=time.monotonic()
+                  req=urllib.request.Request(root+path,headers={'User-Agent':'BlueSea-Root-Redirect-Deploy-Verification/1.0','Cache-Control':'no-cache'})
+                  try:
+                      with op.open(req,timeout=35) as r:
+                          code=r.status;headers=r.headers;r.read(1024)
+                  except urllib.error.HTTPError as e:
+                      code=e.code;headers=e.headers
+                  elapsed=round(time.monotonic()-start,3)
+                  target=urlsplit(headers.get('Location',''))
+                  location=target.path
+                  if code!=expected: raise SystemExit(f'{label}: unexpected HTTP {code}')
+                  if label=='root':
+                      if location!='/wp-admin/' or headers.get('X-Redirect-By'):
+                          raise SystemExit(f'Apache fast redirect not active: {location}, {headers.get("X-Redirect-By")}')
+                      if target.hostname and target.hostname!='admin.xuongmunonbaohiem.com':
+                          raise SystemExit('Redirect escaped target host')
+                  if label=='admin' and location!='/wp-login.php':
+                      raise SystemExit('Admin login redirect broken')
+                  samples.append(elapsed)
+              print('AFTER_REDIRECT='+json.dumps({'name':label,'http':expected,'seconds':samples,'mean_seconds':round(statistics.mean(samples),3)}),flush=True)
+          PY
+          echo 'Blue Sea WordPress fast root redirect, REST and login: PASS.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Roll back both hosting files if deployment or verification fails
+        if: ${{ failure() }}
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        run: |
+          set -euo pipefail
+          if test "$NEED_ROLLBACK" != 1; then echo 'No upload was attempted'; exit 0; fi
+          test -s /tmp/esc-root-htaccess.before
+          test -s /tmp/esc-root-theme-index.before
+          proto="$FTP_PROTOCOL"; if test -z "$proto"; then proto=ftp; fi
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$proto://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set ssl:verify-certificate no
+          cd "$REMOTE_ROOT"
+          put "/tmp/esc-root-htaccess.before" -o ".htaccess"
+          put "/tmp/esc-root-theme-index.before" -o "wp-content/themes/vibe-code-theme/inc/page/index.php"
+          get ".htaccess" -o "/tmp/esc-root-htaccess.restored"
+          get "wp-content/themes/vibe-code-theme/inc/page/index.php" -o "/tmp/esc-root-theme-index.restored"
+          bye
+          LFTP
+          cmp /tmp/esc-root-htaccess.before /tmp/esc-root-htaccess.restored
+          cmp /tmp/esc-root-theme-index.before /tmp/esc-root-theme-index.restored
+          echo 'Original hosting files restored and verified.'

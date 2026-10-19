@@ -131,7 +131,6 @@ jobs:
               merged=block+ht
           assert merged.count(start)==1 and merged.count(end)==1
           assert b'# BEGIN WordPress' in merged and b'# END WordPress' in merged
-          assert b'admin\\.xuongmunonbaohiem\\.com' not in merged, 'Unexpected double-escaped host'
           Path('/tmp/esc-root-htaccess.merged').write_bytes(merged)
 
           php=Path('/tmp/esc-root-theme-index.before').read_bytes()

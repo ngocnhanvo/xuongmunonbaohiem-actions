@@ -1,0 +1,58 @@
+name: Blue Sea WordPress root redirect audit
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/blue-sea-wp-root-redirect-audit.yml']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Inspect backend root and REST redirects (no credentials, read only)
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, re, time, json, statistics, urllib.request, urllib.error
+          from urllib.parse import urlsplit
+          vals=[]
+          for line in os.environ.get('ENV_FILE','').splitlines():
+              s=line.strip()
+              if s.startswith('export '): s=s[7:].strip()
+              if s.startswith('WC_URL='):
+                  v=s.split('=',1)[1].strip().strip('"\x27')
+                  vals.append(v)
+          if len(vals)!=1: raise SystemExit('Expected exactly one WC_URL')
+          p=urlsplit(vals[0])
+          host=(p.hostname or '').lower()
+          if p.scheme!='https' or not re.fullmatch(r'[a-z0-9.-]+',host) or '..' in host or not host.startswith('admin.') or host not in ('admin.xuongmunonbaohiem.com','admin.xuongmunonbaohiem.io.vn'):
+              raise SystemExit('Unexpected WordPress backend host (no requests)')
+          root='https://'+host
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self,req,fp,code,msg,headers,newurl):
+                  return None
+          opener=urllib.request.build_opener(NoRedirect)
+          for name,path in [('root','/'),('rest','/wp-json/'),('rest_query','/?rest_route=%2F'),('admin','/wp-admin/'),('login','/wp-login.php')]:
+              results=[]
+              for i in range(3):
+                  start=time.monotonic()
+                  req=urllib.request.Request(root+path,headers={'User-Agent':'BlueSea-Root-Redirect-Audit/1.0','Cache-Control':'no-cache'})
+                  try:
+                      with opener.open(req,timeout=28) as r:
+                          status=r.status; headers=r.headers; r.read(1024)
+                  except urllib.error.HTTPError as ex:
+                      status=ex.code; headers=ex.headers
+                  seconds=round(time.monotonic()-start,3)
+                  location=headers.get('Location','')
+                  if location:
+                      loc=urlsplit(location)
+                      location=(loc.path or '/') + ('?' + loc.query if loc.query else '')
+                  results.append(dict(status=status,seconds=seconds,location=location,redirect_by=headers.get('X-Redirect-By','')))
+              print('ROOT_REDIRECT_AUDIT='+json.dumps({'name':name,'host':host,'samples':results,'mean_seconds':round(statistics.mean(x['seconds'] for x in results),3)},ensure_ascii=False),flush=True)
+              if name in ('rest','rest_query') and not all(x['status']==200 for x in results):
+                  raise SystemExit('REST endpoint failed read-only baseline')
+          PY

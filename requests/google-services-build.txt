@@ -1,3 +1,5 @@
 Astro development branch: github. Validate CSP corrections for analytics.google.com, stats.g.doubleclick.net, ad.doubleclick.net, googleads.g.doubleclick.net, and 8s after load/user interaction delayed GTM with confirmed-form immediate bootstrap. Run focused unit tests plus production-like build from Actions ONLY. No FTP until all green. Deployment target: xuongmunonbaohiem.io.vn. Date 2026-10-09.
 
 Retry only because CSP test used incorrect relative fixture path; fix in Astro github 829e5bd1074a99e583eb097e1a6206ca9ccb3f8d. No FTP until suite and build pass.
+
+2026-10-19: Read-only pre-production regression and full Astro build for GTM Custom JavaScript + Preview Mode CSP change on Astro github commit a6947051fcdb17db1216843b0a6a39f48cf16892. Do not FTP; production deployment requested separately after CI PASS.

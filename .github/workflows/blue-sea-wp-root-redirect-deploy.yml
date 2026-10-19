@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/blue-sea-wp-root-redirect-deploy.yml']
+    paths: ['requests/blue-sea-wp-root-redirect-deploy.txt']
 permissions:
   contents: read
 concurrency:
@@ -234,7 +234,7 @@ jobs:
           FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
         run: |
           set -euo pipefail
-          if test "$NEED_ROLLBACK" != 1; then echo 'No upload was attempted'; exit 0; fi
+          if test "${NEED_ROLLBACK:-0}" != 1; then echo 'No upload was attempted'; exit 0; fi
           test -s /tmp/esc-root-htaccess.before
           test -s /tmp/esc-root-theme-index.before
           proto="$FTP_PROTOCOL"; if test -z "$proto"; then proto=ftp; fi

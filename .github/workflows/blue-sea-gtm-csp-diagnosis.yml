@@ -1,0 +1,43 @@
+name: Blue Sea GTM CSP Read-only Diagnosis
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/blue-sea-gtm-csp-diagnosis.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Inspect live response headers without touching hosting
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import urllib.request,urllib.error
+          sites=[
+            ('home','https://xuongmunonbaohiem.com/'),
+            ('products','https://xuongmunonbaohiem.com/san-pham/'),
+            ('contact','https://xuongmunonbaohiem.com/lien-he/'),
+          ]
+          for name,url in sites:
+              try:
+                  req=urllib.request.Request(url,headers={'User-Agent':'Mozilla/5.0 (compatible; ESC-GTM-CSP-ReadonlyAudit/1.0)','Cache-Control':'no-cache'})
+                  with urllib.request.urlopen(req,timeout=20) as response:
+                      headers=response.headers
+                      status=response.status
+                      html=response.read(100000).decode('utf-8','replace')
+                      policies=headers.get_all('Content-Security-Policy',[])
+                      ro=headers.get_all('Content-Security-Policy-Report-Only',[])
+                      scripts=[' '.join(part.strip().split()) for policy in policies for part in policy.split(';') if part.strip().lower().startswith('script-src ')]
+                      effective=' '.join(scripts)
+                      print(f'PAGE={name} STATUS={status} CSP_COUNT={len(policies)} CSP_REPORT_ONLY_COUNT={len(ro)}')
+                      print(f'PAGE={name} SCRIPT_SRC={effective if effective else "NOT_FOUND"}')
+                      print(f'PAGE={name} UNSAFE_EVAL={"PRESENT" if "'unsafe-eval'" in effective else "MISSING"}')
+                      print(f'PAGE={name} GTM_ALLOWLIST={"YES" if "www.googletagmanager.com" in effective else "NO"}')
+                      print(f'PAGE={name} HAS_GTM_URL={"YES" if "googletagmanager.com" in html else "NO"}')
+              except Exception as e:
+                  print(f'PAGE={name} ERROR_TYPE={type(e).__name__}')
+          PY

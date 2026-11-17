@@ -45,6 +45,17 @@ jobs:
               'orderby':'date',
               'order':'desc',
           })
+          # Verify the WordPress editor itself now stores the source of truth,
+          # rather than Astro silently replacing the legacy Product rows.
+          table=json.loads(fetch('https://admin.xuongmunonbaohiem.com/wp-json/tablepress/v1/table/home_04'))
+          expected_api='/wp-json/wp/v2/product?product_cat_slug=non-bao-hiem-nua-dau&product_lang=vi&status=publish&per_page=8&orderby=date&order=desc'
+          if table.get('meta',{}).get('api')!=expected_api:
+              raise RuntimeError('WordPress ESC Table still does not store the custom API')
+          if len(table.get('items',[]))!=1 or table['items'][0].get('api-key')!='auto':
+              raise RuntimeError('WordPress ESC Table must store exactly one api-key=auto row')
+          if table['items'][0].get('api-name')!='title.rendered' or table['items'][0].get('api-img')!='featured_media_url':
+              raise RuntimeError('WordPress ESC Table custom API mapping is incorrect')
+          print('PASS WordPress home_04 saved custom API + single auto mapping row')
           source=json.loads(fetch('https://admin.xuongmunonbaohiem.com/wp-json/wp/v2/product?'+params))
           if not isinstance(source,list) or len(source)!=8: raise RuntimeError('Expected exactly 8 WP products')
           expected=[html.unescape(str(item['title']['rendered'])).strip() for item in source]

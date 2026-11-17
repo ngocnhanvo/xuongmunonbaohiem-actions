@@ -1,5 +1,6 @@
 name: Astro TablePress Cache Regression (Development)
 # Benchmark gate: test bounded 3-worker TablePress concurrency, deterministic output and no partial cache on failures.
+# CI regression also validates opt-in five-worker processing and invalid-limit fallback.
 # Recheck home_04–home_08 remote API outage fail-closed logic after conversion.
 # Verify WordPress-stored home_04 API source, removing the Astro-only pilot override.
 

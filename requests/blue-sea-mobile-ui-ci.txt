@@ -2,3 +2,5 @@ Final QA after precise interpretation of user screenshot: the highlighted area i
 
 home_04 custom REST feed staging validation: 2026-11-17T04:05:00.000Z
 2026-11-17: Verify Astro github build after home_04 ESC Table switched to persisted custom API and pilot override removed. No deploy.
+
+2026-11-17: QA development Astro github latest-catalog home_04–home_08 after persisted WordPress migration run 44025184861. All custom APIs return 8; test build only before production merge. Verify no blank images/links and report timing.

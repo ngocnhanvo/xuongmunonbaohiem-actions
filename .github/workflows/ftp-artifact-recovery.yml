@@ -106,7 +106,7 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/esc-remote-unzip.py
           python3 scripts/esc-remote-unzip.py verify
-      - name: Resume FTP upload from archived ZIP
+      - name: Resume FTP upload from archived ZIP with Python reconnects
         shell: bash
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
@@ -114,9 +114,11 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
           ASTRO_FTP_TARGET: ${{ steps.ftp_target.outputs.path }}
           ZIP_PATH: source/upload/escvn.zip
+          FTP_PROTOCOL: ftp
         run: |
           set -euo pipefail
-          bash scripts/esc-resumable-ftp.sh
+          python3 -m py_compile scripts/esc-python-ftp-resume.py
+          python3 -u scripts/esc-python-ftp-resume.py
       - name: Trigger signed remote unzip and validate Astro artifact
         shell: bash
         env:

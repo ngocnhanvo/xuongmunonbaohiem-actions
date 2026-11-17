@@ -1,4 +1,5 @@
 name: Astro TablePress Cache Regression (Development)
+# Recheck home_04–home_08 remote API outage fail-closed logic after conversion.
 # Verify WordPress-stored home_04 API source, removing the Astro-only pilot override.
 
 on:

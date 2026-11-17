@@ -1,0 +1,57 @@
+name: Blue Sea Home Catalog API Discovery
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/home-catalog-api-discovery.yml']
+permissions:
+  contents: read
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read WordPress category names, ESC tables and API response sizes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,time,urllib.request,urllib.parse
+          host='https://admin.xuongmunonbaohiem.com'
+          def fetch(u):
+              start=time.monotonic()
+              req=urllib.request.Request(host+u, headers={'User-Agent':'BlueSea-HomeCatalog-Discovery/1','Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=40) as res:
+                  data=res.read()
+              t=round(time.monotonic()-start,3)
+              return json.loads(data),t,len(data)
+          paths=['/wp-json/astro/v1/get-product-categories',
+                 '/wp-json/wp/v2/product_cat?per_page=100']
+          for p in paths:
+              try:
+                  data,t,n=fetch(p)
+                  print('CATEGORIES ENDPOINT',p,'secs',t,'bytes',n,'type',type(data).__name__)
+                  if isinstance(data,list):
+                      for item in data[:100]:
+                          if isinstance(item,dict):
+                              print('CAT',json.dumps({k:item.get(k) for k in ['id','name','slug','parent','count']},ensure_ascii=False))
+                  else:print('CATEGORIES SHAPE',str(data)[:1600])
+              except Exception as e:print('CATEGORY ENDPOINT ERROR',p,type(e).__name__,str(e)[:200])
+          for sid in ['home_04','home_05','home_06','home_07','home_08']:
+              try:
+                  table,t,n=fetch('/wp-json/tablepress/v1/table/'+sid)
+                  items=table.get('items',[])
+                  print('TABLE',sid,json.dumps({'title':table.get('title'),'api':table.get('meta',{}).get('api'),
+                    'columns':table.get('settings',{}).get('columns'),'rows':len(items),
+                    'first':items[0] if items else None},ensure_ascii=False))
+                  if items and items[0].get('key','').isdigit():
+                      product,secs,bytes_=fetch('/wp-json/wp/v2/product/'+items[0]['key']+'?_fields=id,title,slug,product_categories')
+                      print('EXISTING_PRODUCT',sid,json.dumps(product,ensure_ascii=False)[:1300])
+              except Exception as e:print('TABLE ERROR',sid,type(e).__name__,str(e)[:500])
+          for slug in ['non-bao-hiem-nua-dau','non-bao-hiem-boc-da','non-bao-hiem-co-kinh','non-bao-hiem-3-4','mau-non-khac']:
+              url='/wp-json/wp/v2/product?'+urllib.parse.urlencode({'product_cat_slug':slug,'product_lang':'vi','status':'publish','per_page':'8','orderby':'date','order':'desc','_fields':'id,title,slug,featured_media_url,date'})
+              try:
+                  data,t,n=fetch(url)
+                  print('PROBE',slug,'count',len(data) if isinstance(data,list) else 'invalid','secs',t,'bytes',n,'first_id',data[0].get('id') if isinstance(data,list) and data else None)
+              except Exception as e:print('PROBE ERROR',slug,type(e).__name__,str(e)[:200])
+          PY

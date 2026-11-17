@@ -1,2 +1,2 @@
 44016430999
-# home_04: resume saved ZIP from failed FTP transfer without Astro rebuild (2026-11-17).
+# Retry using reconnecting Python FTP after two lftp 240s timeouts. User-approved home04 production build ZIP, no rebuild. 2026-11-17.

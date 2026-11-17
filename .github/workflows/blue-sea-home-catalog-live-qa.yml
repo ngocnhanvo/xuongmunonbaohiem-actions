@@ -1,4 +1,5 @@
 name: Blue Sea Home04-08 Production API Parity
+# Post-deploy QA for Astro master 79803369f263 and five WordPress saved latest-product URLs.
 on:
   workflow_dispatch:
   push:

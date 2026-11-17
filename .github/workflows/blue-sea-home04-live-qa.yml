@@ -1,0 +1,63 @@
+name: Blue Sea Home04 Production API Parity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/blue-sea-home04-live-qa.yml']
+permissions:
+  contents: read
+jobs:
+  verify-home04:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - name: Compare live home_04 with eight latest WordPress products
+        shell: bash
+        env:
+          CI_RUN: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import html
+          import json
+          import os
+          import re
+          import time
+          import urllib.parse
+          import urllib.request
+
+          def fetch(url):
+              for attempt in range(3):
+                  try:
+                      req=urllib.request.Request(url,headers={'User-Agent':'BlueSea-Home04-Production-Parity/1.0','Cache-Control':'no-cache'})
+                      with urllib.request.urlopen(req,timeout=45) as res:
+                          if res.status!=200: raise RuntimeError('Unexpected HTTP '+str(res.status))
+                          return res.read().decode('utf-8')
+                  except Exception:
+                      if attempt==2: raise
+                      time.sleep(3)
+
+          params=urllib.parse.urlencode({
+              'status':'publish',
+              'product_cat_slug':'non-bao-hiem-nua-dau',
+              'product_lang':'vi',
+              'per_page':'8',
+              'orderby':'date',
+              'order':'desc',
+          })
+          source=json.loads(fetch('https://admin.xuongmunonbaohiem.com/wp-json/wp/v2/product?'+params))
+          if not isinstance(source,list) or len(source)!=8: raise RuntimeError('Expected exactly 8 WP products')
+          expected=[html.unescape(str(item['title']['rendered'])).strip() for item in source]
+          page=fetch('https://xuongmunonbaohiem.com/?_home04_verify='+os.environ.get('CI_RUN','1'))
+          section=re.search(r'<section\\b[^>]*data-tablepress-preview=[\"\']home_04[\"\'][^>]*>(.*?)</section>',page,re.I|re.S)
+          if not section: raise RuntimeError('Homepage home_04 section missing')
+          cards=[html.unescape(x).strip() for x in re.findall(r'<a\\b[^>]*aria-label=\"([^\"]+)\"[^>]*>',section.group(1),re.I)]
+          if len(cards)!=8: raise RuntimeError('Expected 8 home_04 cards; got '+str(len(cards)))
+          if cards!=expected:
+              print('Expected newest:',json.dumps(expected,ensure_ascii=False))
+              print('Rendered:',json.dumps(cards,ensure_ascii=False))
+              raise RuntimeError('home_04 order or product list does not match WordPress latest feed')
+          print('PASS home_04 matches eight newest WordPress products:',json.dumps(cards,ensure_ascii=False))
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as summary:
+              summary.write('PASS: Home_04 shows all eight newest published VI products in WordPress API order.\\n')
+          PY

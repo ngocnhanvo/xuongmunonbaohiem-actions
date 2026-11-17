@@ -1,0 +1,169 @@
+name: Set Home Catalog ESC Table Custom API Source (One Time)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/home-catalog-esc-table-custom-api-migrate.yml'
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-home-catalog-esc-db-migration
+  cancel-in-progress: false
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout fixed migration code
+        uses: actions/checkout@v4
+      - name: Confirm WordPress production environment and save before-state
+        shell: bash
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,urllib.request
+          from urllib.parse import urlsplit
+          values=[]
+          for line in os.environ.get('ENV_FILE','').splitlines():
+              s=line.strip().removeprefix('export ').strip()
+              if s.startswith('WC_URL='):
+                  values.append(s.partition('=')[2].strip().strip('"').strip("'"))
+          if len(values)!=1:raise SystemExit('Missing or ambiguous WC_URL')
+          u=urlsplit(values[0])
+          if u.scheme!='https' or u.hostname!='admin.xuongmunonbaohiem.com' or u.path not in ('','/') or u.query or u.fragment or u.username or u.password:
+              raise SystemExit('Unexpected WordPress host; migration aborted')
+          base='https://admin.xuongmunonbaohiem.com'
+          for table in ['home_04','home_05','home_06','home_07','home_08']:
+              req=urllib.request.Request(base+'/wp-json/tablepress/v1/table/'+table,headers={'Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=35) as response:
+                  result=json.load(response)
+              if not result.get('success') or result.get('id')!=table:raise SystemExit('Cannot read ESC Table '+table)
+              with open(os.path.join(os.environ['RUNNER_TEMP'],table+'-before.json'),'w') as output:
+                  json.dump(result,output,ensure_ascii=False)
+              print(table,'source:',result.get('meta',{}).get('api'),'rows:',len(result.get('items',[])))
+          slugs={'home_04':'non-bao-hiem-nua-dau','home_05':'non-bao-hiem-boc-da',
+                 'home_06':'non-bao-hiem-co-kinh','home_07':'non-bao-hiem-3-4','home_08':'mau-non-khac'}
+          for id,slug in slugs.items():
+              source=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],id+'-before.json')))
+              original='/wp-json/wp/v2/product?product_cat_slug='+slug+'&product_lang=vi&status=publish&per_page=8&orderby=date&order=desc'
+              new=original+'&_fields=id,title,slug,featured_media_url,date'
+              allowed=[original,new] if id=='home_04' else ['Product',new]
+              if source.get('meta',{}).get('api') not in allowed:
+                  raise SystemExit('Unexpected source '+id)
+          PY
+      - name: Create one-time signed PHP request, lint, and prepare FTP
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          token="$(openssl rand -hex 32)"
+          nonce="$(openssl rand -hex 10)"
+          echo "::add-mask::$token"
+          echo "CATALOG_TOKEN=$token" >> "$GITHUB_ENV"
+          echo "CATALOG_SCRIPT=esc-home-catalog-once-${GITHUB_RUN_ID}-$nonce.php" >> "$GITHUB_ENV"
+          CATALOG_TOKEN="$token" python3 - <<'PY'
+          import hashlib,os,pathlib
+          source=pathlib.Path('scripts/home-catalog-esc-custom-api-once.php').read_text(encoding='utf-8')
+          marker='__AUTH_TOKEN_SHA256__'
+          assert source.count(marker)==1
+          source=source.replace(marker,hashlib.sha256(os.environ['CATALOG_TOKEN'].encode()).hexdigest())
+          dest=pathlib.Path(os.environ['RUNNER_TEMP'])/'esc-home-catalog-once.php'
+          dest.write_text(source,encoding='utf-8')
+          PY
+          php -l "$RUNNER_TEMP/esc-home-catalog-once.php"
+          if ! command -v lftp >/dev/null 2>&1; then sudo apt-get install -qq -y lftp; fi
+      - name: Upload temporary signed migration to WordPress root
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$CATALOG_SCRIPT"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 25
+          set ssl:verify-certificate no
+          cd /domains/admin.xuongmunonbaohiem.com/public_html
+          put "$RUNNER_TEMP/esc-home-catalog-once.php" -o "$CATALOG_SCRIPT"
+          get "$CATALOG_SCRIPT" -o "$RUNNER_TEMP/esc-home-catalog-uploaded.php"
+          bye
+          LFTP
+          cmp "$RUNNER_TEMP/esc-home-catalog-once.php" "$RUNNER_TEMP/esc-home-catalog-uploaded.php"
+      - name: Update ESC Table with authenticated request
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body -sS --connect-timeout 15 --max-time 80 \
+            -H "X-Esc-Home-Catalog-Token: $CATALOG_TOKEN" \
+            -H "Content-Type: application/json" \
+            -X POST "https://admin.xuongmunonbaohiem.com/$CATALOG_SCRIPT" \
+            -o "$RUNNER_TEMP/home-catalog-migrate-result.json"
+          python3 - <<'PY'
+          import json,os
+          data=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'home-catalog-migrate-result.json')))
+          required=['home_04','home_05','home_06','home_07','home_08']
+          if data.get('ok') is not True or sorted(data.get('sections',{}))!=required:
+              raise SystemExit('Migration response missing one or more sections')
+          for id,section in data['sections'].items():
+              if section.get('items')!=1:raise SystemExit('Expected auto row '+id)
+              print('SAVED',id,section['api'],'changed',section['changed'])
+          PY
+      - name: Verify all five ESC Tables retain configuration and auto rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,urllib.request
+          base='https://admin.xuongmunonbaohiem.com/wp-json/tablepress/v1/table/'
+          def read(name):
+              req=urllib.request.Request(base+name,headers={'Cache-Control':'no-cache'})
+              with urllib.request.urlopen(req,timeout=35) as res:return json.load(res)
+          mapping={'home_04':'non-bao-hiem-nua-dau','home_05':'non-bao-hiem-boc-da',
+                   'home_06':'non-bao-hiem-co-kinh','home_07':'non-bao-hiem-3-4','home_08':'mau-non-khac'}
+          for id,slug in mapping.items():
+              current=read(id)
+              old=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],id+'-before.json')))
+              want='/wp-json/wp/v2/product?product_cat_slug='+slug+'&product_lang=vi&status=publish&per_page=8&orderby=date&order=desc&_fields=id,title,slug,featured_media_url,date'
+              assert current.get('meta',{}).get('api')==want,(id,'API mismatch')
+              assert current['id']==id and current['title']==old['title']
+              assert current['settings']==old['settings'],(id,'Layout changed')
+              assert len(current['items'])==1,(id,'Expected single template row')
+              assert current['items'][0]=={
+                  'api-key':'auto','note':'','api-name':'title.rendered',
+                  'api-slug':'slug','api-img':'featured_media_url',
+              },(id,'Incorrect mapping')
+              assert [f['key'] for f in current['fields']]==['api-key','note','api-name','api-slug','api-img']
+              print('PASS WordPress ESC Table',id)
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as s:
+              s.write('PASS: All five home product ESC Tables use stored category APIs and one auto row, titles/layout preserved.\\n')
+          PY
+      - name: Remove temporary PHP script from WordPress root
+        if: always()
+        shell: bash
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CATALOG_SCRIPT:-}" ]; then exit 0; fi
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "ftp://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 25
+          set ssl:verify-certificate no
+          cd /domains/admin.xuongmunonbaohiem.com/public_html
+          rm -f "$CATALOG_SCRIPT"
+          bye
+          LFTP
+          echo 'Temporary WordPress migration entry point removed.' >> "$GITHUB_STEP_SUMMARY"

@@ -59,9 +59,9 @@ jobs:
               raise RuntimeError('home_04 order or product list does not match WordPress latest feed')
           # Also verify the canonical URL, without cache-busting parameters.
           canonical=fetch('https://xuongmunonbaohiem.com/')
-          plain_section=re.search(r'<section\b[^>]*data-tablepress-preview=[\\"\\']home_04[\\"\\'][^>]*>(.*?)</section>',canonical,re.I|re.S)
+          plain_section=re.search(r'<section\b[^>]*data-tablepress-preview=[\"\']home_04[\"\'][^>]*>(.*?)</section>',canonical,re.I|re.S)
           if not plain_section: raise RuntimeError('Canonical homepage home_04 section missing')
-          plain_cards=[html.unescape(x).strip() for x in re.findall(r'<a\b[^>]*aria-label=\\"([^\\"]+)\\"[^>]*>',plain_section.group(1),re.I)]
+          plain_cards=[html.unescape(x).strip() for x in re.findall(r'<a\b[^>]*aria-label=\"([^\"]+)\"[^>]*>',plain_section.group(1),re.I)]
           if plain_cards!=expected:
               print('Canonical URL cards:',json.dumps(plain_cards,ensure_ascii=False))
               raise RuntimeError('Canonical homepage still serves old home_04 products')

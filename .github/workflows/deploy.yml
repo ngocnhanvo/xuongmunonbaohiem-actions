@@ -146,7 +146,12 @@ jobs:
 
       - name: Build Project
         working-directory: source
-        run: pnpm run build-git
+        env:
+          TABLEPRESS_TRANSFORM_CONCURRENCY: '5'
+        run: |
+          set -euo pipefail
+          echo "Production TablePress concurrency: $TABLEPRESS_TRANSFORM_CONCURRENCY"
+          pnpm run build-git
 
       - name: Verify compiled standalone server parses before FTP
         working-directory: source

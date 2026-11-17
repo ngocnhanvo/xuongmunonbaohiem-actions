@@ -1,0 +1,68 @@
+name: Blue Sea Home04-08 Production API Parity
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/blue-sea-home-catalog-live-qa.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Verify five WordPress API sources and eight newest live homepage cards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import html,json,re,time,urllib.request
+          base='https://admin.xuongmunonbaohiem.com'
+          slugs={
+              'home_04':'non-bao-hiem-nua-dau',
+              'home_05':'non-bao-hiem-boc-da',
+              'home_06':'non-bao-hiem-co-kinh',
+              'home_07':'non-bao-hiem-3-4',
+              'home_08':'mau-non-khac',
+          }
+          def get(url):
+              start=time.monotonic()
+              for retry in range(3):
+                  try:
+                      req=urllib.request.Request(url,headers={
+                          'User-Agent':'BlueSea-HomeCatalog-Parity/1',
+                          'Cache-Control':'no-cache',
+                      })
+                      with urllib.request.urlopen(req,timeout=45) as res:
+                          if res.status!=200:raise RuntimeError('HTTP '+str(res.status))
+                          data=res.read().decode('utf-8')
+                      return data,round(time.monotonic()-start,3)
+                  except Exception:
+                      if retry==2:raise
+                      time.sleep(2)
+          homepage,ht=get('https://xuongmunonbaohiem.com/')
+          print('HOMEPAGE_FETCH_SECONDS',ht)
+          for section,slug in slugs.items():
+              api='/wp-json/wp/v2/product?product_cat_slug='+slug+'&product_lang=vi&status=publish&per_page=8&orderby=date&order=desc&_fields=id,title,slug,featured_media_url,date'
+              stored,_=get(base+'/wp-json/tablepress/v1/table/'+section)
+              table=json.loads(stored)
+              assert table['meta']['api']==api,(section,'API not stored')
+              assert len(table['items'])==1 and table['items'][0]=={
+                  'api-key':'auto','note':'','api-name':'title.rendered','api-slug':'slug','api-img':'featured_media_url',
+              },(section,'Auto row missing')
+              raw,seconds=get(base+api)
+              wp=json.loads(raw)
+              assert len(wp)==8,(section,'Wrong number of latest products',len(wp))
+              expected=[html.unescape(item['title']['rendered']).strip() for item in wp]
+              match=re.search(r'<section\\b[^>]*data-tablepress-preview=[\"\']'+section+r'[\"\'][^>]*>(.*?)</section>',homepage,re.I|re.S)
+              if not match:raise RuntimeError(section+' section absent')
+              actual=[html.unescape(x).strip() for x in re.findall(r'<a\\b[^>]*aria-label=\"([^\"]+)\"[^>]*>',match.group(1),re.I)]
+              if actual!=expected:
+                  print('EXPECTED',section,json.dumps(expected,ensure_ascii=False))
+                  print('ACTUAL',section,json.dumps(actual,ensure_ascii=False))
+                  raise RuntimeError(section+' not showing latest eight in API order')
+              print('PASS',section,'8 products','API seconds',seconds,'first',expected[0])
+          print('PASS_ALL_FIVE_HOME_CATALOG')
+          with open(__import__('os').environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('PASS all five ESC Table sources and eight newest live WordPress products in display order.\\n')
+          PY

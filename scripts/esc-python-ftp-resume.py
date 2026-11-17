@@ -115,7 +115,7 @@ for attempt in range(1, maximum_attempts + 1):
         except ftplib.all_errors:
             pass
         sys.exit(0)
-    except (OSError, TimeoutError, socket.timeout, ftplib.all_errors, RuntimeError) as error:
+    except (OSError, TimeoutError, socket.timeout, ftplib.Error, RuntimeError, EOFError) as error:
         print(f"FTP attempt {attempt} interrupted after {round(time.monotonic()-start,1)}s: {type(error).__name__}: {error}", flush=True)
         if attempt == maximum_attempts:
             raise SystemExit("FTP archive transfer failed after all reconnect attempts") from error

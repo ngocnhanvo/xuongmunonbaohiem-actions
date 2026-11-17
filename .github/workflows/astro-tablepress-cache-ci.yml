@@ -42,4 +42,4 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Regression tests
         working-directory: source
-        run: pnpm exec vitest run src/lib/wordpress/tablepress/processedCache.test.ts src/lib/wordpress/tablepress/getData.test.ts
+        run: pnpm exec vitest run src/lib/wordpress/tablepress/processedCache.test.ts src/lib/wordpress/tablepress/getData.test.ts src/lib/wordpress/tablepress/home04LatestProducts.test.ts src/lib/wordpress/products/categoryRoute.test.ts

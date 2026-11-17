@@ -1,0 +1,134 @@
+name: Blue Sea TablePress Concurrency 3 versus 5 Benchmark
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/tablepress-concurrency-benchmark.yml
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-tablepress-concurrency-benchmark
+  cancel-in-progress: false
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 23
+    steps:
+      - name: Checkout Astro development
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-astro
+          ref: github
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: source
+          persist-credentials: false
+      - name: Verify tested branch
+        working-directory: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = github
+          echo "Benchmarking Astro github $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '9'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: source
+        run: pnpm install --frozen-lockfile
+      - name: Load standard build environment
+        working-directory: source
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$ENV_FILE"
+          printf '%s\n' "$ENV_FILE" > .env
+      - name: Restore production-like Astro cache without saving
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: source/.cache
+          key: ${{ runner.os }}-xuongmunonbaohiem-dot-cache-readonly-benchmark-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-xuongmunonbaohiem-dot-cache-
+      - name: Benchmark 3 and 5 sequentially from same cache snapshot (no deploy)
+        shell: bash
+        env:
+          BENCH_CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,pathlib,re,shutil,subprocess,time,statistics,json
+          root=pathlib.Path.cwd()/'source'
+          original=root/'.cache'
+          snapshot=pathlib.Path(os.environ['RUNNER_TEMP'])/'tablepress-baseline-cache'
+          if original.exists():
+              shutil.copytree(original,snapshot,symlinks=True)
+          print('BENCHMARK_START source=github cache-restored=',snapshot.exists(),
+                'cache-size-bytes=',sum(p.stat().st_size for p in snapshot.rglob('*') if p.is_file()) if snapshot.exists() else 0,flush=True)
+          # Repeated pair balances differences from warm WordPress/network.
+          sequence=[3,5,5,3]
+          measurements=[]
+          for idx,level in enumerate(sequence,1):
+              if original.exists():
+                  shutil.rmtree(original)
+              if snapshot.exists():
+                  shutil.copytree(snapshot,original,symlinks=True)
+              for relative in ['dist','deploy','upload']:
+                  target=root/relative
+                  if target.exists():
+                      if target.is_dir():shutil.rmtree(target)
+                      else:target.unlink()
+              env=os.environ.copy()
+              env['TABLEPRESS_TRANSFORM_CONCURRENCY']=str(level)
+              print(f'BENCH_RUN_START level={level} iteration={idx}',flush=True)
+              start=time.monotonic()
+              lines=[]
+              proc=subprocess.Popen(
+                  ['pnpm','run','build-git'],cwd=root,env=env,
+                  stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                  text=True,bufsize=1,errors='replace'
+              )
+              try:
+                  for line in proc.stdout:
+                      print(line,end='',flush=True)
+                      lines.append(line)
+                  result=proc.wait(timeout=60)
+              finally:
+                  if proc.poll() is None:
+                      proc.kill()
+              duration=round(time.monotonic()-start,3)
+              content=''.join(lines)
+              found=re.findall(r'Tablepress.ts xong trong\s+([0-9.]+)\s+giây',content)
+              table_secs=float(found[-1]) if found else None
+              record={'level':level,'iteration':idx,'build_seconds':duration,
+                      'tablepress_seconds':table_secs,'exit_code':result}
+              measurements.append(record)
+              print('BENCH_RESULT',json.dumps(record),flush=True)
+              if result!=0 or table_secs is None:
+                  raise SystemExit(f'Benchmark failed at level={level} (exit {result})')
+          a={level:[x for x in measurements if x['level']==level] for level in (3,5)}
+          med=lambda level,key:round(statistics.median(x[key] for x in a[level]),3)
+          metrics={
+              'concurrency_3':{'build_seconds':med(3,'build_seconds'),'tablepress_seconds':med(3,'tablepress_seconds')},
+              'concurrency_5':{'build_seconds':med(5,'build_seconds'),'tablepress_seconds':med(5,'tablepress_seconds')},
+          }
+          metrics['build_improvement_percent']=round((metrics['concurrency_3']['build_seconds']-metrics['concurrency_5']['build_seconds'])/metrics['concurrency_3']['build_seconds']*100,1)
+          metrics['tablepress_improvement_percent']=round((metrics['concurrency_3']['tablepress_seconds']-metrics['concurrency_5']['tablepress_seconds'])/metrics['concurrency_3']['tablepress_seconds']*100,1)
+          print('BENCH_COMPARE',json.dumps(metrics),flush=True)
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f:
+              f.write('### Bounded concurrency comparison (same runner + same cache snapshot)\n\n')
+              f.write('Cache restored: '+str(snapshot.exists())+'\n\n')
+              f.write('| Concurrency | Median build-git | Median TablePress |\n|---|---:|---:|\n')
+              for level in [3,5]:
+                  f.write(f'| {level} | {metrics[f"concurrency_{level}"]["build_seconds"]}s | {metrics[f"concurrency_{level}"]["tablepress_seconds"]}s |\n')
+              f.write(f'\nBuild improvement (5 vs 3): {metrics["build_improvement_percent"]}%. TablePress improvement: {metrics["tablepress_improvement_percent"]}%.\n\n')
+              f.write('No FTP upload or production deployment.\n')
+          PY

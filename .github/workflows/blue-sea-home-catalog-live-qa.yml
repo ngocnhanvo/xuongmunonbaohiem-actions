@@ -54,9 +54,9 @@ jobs:
               wp=json.loads(raw)
               assert len(wp)==8,(section,'Wrong number of latest products',len(wp))
               expected=[html.unescape(item['title']['rendered']).strip() for item in wp]
-              match=re.search(r'<section\\b[^>]*data-tablepress-preview=[\"\']'+section+r'[\"\'][^>]*>(.*?)</section>',homepage,re.I|re.S)
+              match=re.search(r'<section\b[^>]*data-tablepress-preview=[\"\']'+section+r'[\"\'][^>]*>(.*?)</section>',homepage,re.I|re.S)
               if not match:raise RuntimeError(section+' section absent')
-              actual=[html.unescape(x).strip() for x in re.findall(r'<a\\b[^>]*aria-label=\"([^\"]+)\"[^>]*>',match.group(1),re.I)]
+              actual=[html.unescape(x).strip() for x in re.findall(r'<a\b[^>]*aria-label=\"([^\"]+)\"[^>]*>',match.group(1),re.I)]
               if actual!=expected:
                   print('EXPECTED',section,json.dumps(expected,ensure_ascii=False))
                   print('ACTUAL',section,json.dumps(actual,ensure_ascii=False))

@@ -49,9 +49,9 @@ jobs:
           if not isinstance(source,list) or len(source)!=8: raise RuntimeError('Expected exactly 8 WP products')
           expected=[html.unescape(str(item['title']['rendered'])).strip() for item in source]
           page=fetch('https://xuongmunonbaohiem.com/?_home04_verify='+os.environ.get('CI_RUN','1'))
-          section=re.search(r'<section\\b[^>]*data-tablepress-preview=[\"\']home_04[\"\'][^>]*>(.*?)</section>',page,re.I|re.S)
+          section=re.search(r'<section\b[^>]*data-tablepress-preview=[\"\']home_04[\"\'][^>]*>(.*?)</section>',page,re.I|re.S)
           if not section: raise RuntimeError('Homepage home_04 section missing')
-          cards=[html.unescape(x).strip() for x in re.findall(r'<a\\b[^>]*aria-label=\"([^\"]+)\"[^>]*>',section.group(1),re.I)]
+          cards=[html.unescape(x).strip() for x in re.findall(r'<a\b[^>]*aria-label=\"([^\"]+)\"[^>]*>',section.group(1),re.I)]
           if len(cards)!=8: raise RuntimeError('Expected 8 home_04 cards; got '+str(len(cards)))
           if cards!=expected:
               print('Expected newest:',json.dumps(expected,ensure_ascii=False))
@@ -59,5 +59,5 @@ jobs:
               raise RuntimeError('home_04 order or product list does not match WordPress latest feed')
           print('PASS home_04 matches eight newest WordPress products:',json.dumps(cards,ensure_ascii=False))
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as summary:
-              summary.write('PASS: Home_04 shows all eight newest published VI products in WordPress API order.\\n')
+              summary.write('PASS: Home_04 shows all eight newest published VI products in WordPress API order.\n')
           PY

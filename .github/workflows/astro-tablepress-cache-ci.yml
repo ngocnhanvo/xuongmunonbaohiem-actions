@@ -1,4 +1,5 @@
 name: Astro TablePress Cache Regression (Development)
+# Verify WordPress-stored home_04 API source, removing the Astro-only pilot override.
 
 on:
   workflow_dispatch:

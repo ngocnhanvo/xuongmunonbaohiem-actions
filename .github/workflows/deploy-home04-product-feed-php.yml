@@ -1,0 +1,120 @@
+name: Deploy Blue Sea Home04 Product Feed PHP
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/deploy-home04-product-feed-php.yml']
+permissions:
+  contents: read
+concurrency:
+  group: blue-sea-home04-php-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PHP production source
+        uses: actions/checkout@v4
+        with:
+          repository: ngocnhanvo/xuongmunonbaohiem-php
+          ref: master
+          token: ${{ secrets.SOURCE_REPO_PAT }}
+          path: php
+          persist-credentials: false
+      - name: Verify PHP source and target branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C php branch --show-current)" = master
+          php -l php/wp-content/themes/vibe-code-theme/inc/products/product_endpoint.php
+          grep -Fq "product_cat_slug" php/wp-content/themes/vibe-code-theme/inc/products/product_endpoint.php
+          grep -Fq "product_lang" php/wp-content/themes/vibe-code-theme/inc/products/product_endpoint.php
+          git -C php rev-parse HEAD
+      - name: Resolve WordPress backend host
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit
+          vals=[]
+          for line in os.environ['ENV_FILE'].splitlines():
+              line=line.strip().removeprefix('export ').strip()
+              if line.startswith('WC_URL='):
+                  vals.append(line.split('=',1)[1].strip().strip(chr(34)).strip(chr(39)))
+          if len(vals)!=1: raise SystemExit('Expected exactly one WC_URL')
+          url=urlsplit(vals[0])
+          if url.scheme!='https' or url.hostname!='admin.xuongmunonbaohiem.com' or url.port not in (None,443) or url.path not in ('','/') or url.username or url.password or url.query or url.fragment:
+              raise SystemExit('Unexpected WordPress origin, refusing deploy')
+          with open(os.environ['GITHUB_ENV'],'a') as env:
+              env.write('WP_ORIGIN=https://admin.xuongmunonbaohiem.com\n')
+              env.write('FTP_PATH=/domains/admin.xuongmunonbaohiem.com/public_html/wp-content/themes/vibe-code-theme/inc/products\n')
+          PY
+      - name: Deploy only product endpoint and verify uploaded bytes
+        env:
+          FTP_SERVER: ${{ secrets.FTP_SERVER }}
+          FTP_USERNAME: ${{ secrets.FTP_USERNAME }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_PROTOCOL: ${{ vars.FTP_PROTOCOL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$FTP_SERVER" && test -n "$FTP_USERNAME" && test -n "$FTP_PASSWORD"
+          sudo apt-get install -qq -y lftp
+          python3 - <<'PY'
+          import os
+          if os.getenv('FTP_PROTOCOL') not in ('', 'ftp', 'ftps', 'sftp', None):
+              raise SystemExit('Unsupported FTP protocol')
+          PY
+          ftp_protocol="$(python3 - <<'PY'
+          import os
+          print(os.getenv('FTP_PROTOCOL') or 'ftp')
+          PY
+          )"
+          SOURCE="php/wp-content/themes/vibe-code-theme/inc/products/product_endpoint.php"
+          REMOTE_FILE="product_endpoint.php"
+          lftp -u "$FTP_USERNAME","$FTP_PASSWORD" "$ftp_protocol://$FTP_SERVER" <<LFTP
+          set cmd:fail-exit yes
+          set net:max-retries 2
+          set net:timeout 20
+          set ssl:verify-certificate no
+          cd "$FTP_PATH"
+          get "$REMOTE_FILE" -o "$RUNNER_TEMP/product_endpoint.backup.php"
+          put "$SOURCE" -o ".product_endpoint.home04.uploading"
+          mv ".product_endpoint.home04.uploading" "$REMOTE_FILE"
+          get "$REMOTE_FILE" -o "$RUNNER_TEMP/product_endpoint.verify.php"
+          bye
+          LFTP
+          cmp "$SOURCE" "$RUNNER_TEMP/product_endpoint.verify.php"
+          php -l "$RUNNER_TEMP/product_endpoint.verify.php"
+          echo 'PHP product REST filter uploaded and byte-verified.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify live category feed and VI filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --retry 3 --retry-delay 2 -fsSL --connect-timeout 12 --max-time 40 \
+            "$WP_ORIGIN/wp-json/wp/v2/product?status=publish&product_cat_slug=non-bao-hiem-nua-dau&product_lang=vi&per_page=8&orderby=date&order=desc" \
+            -o "$RUNNER_TEMP/home04-feed.json"
+          python3 - <<'PY'
+          import json,os
+          p=os.path.join(os.environ['RUNNER_TEMP'],'home04-feed.json')
+          data=json.load(open(p,encoding='utf-8'))
+          if not isinstance(data,list) or not 1 <= len(data) <= 8:
+              raise SystemExit(f'Expected 1-8 products, received {type(data)} with {len(data) if isinstance(data,list) else "invalid"} entries')
+          for item in data:
+              if not isinstance(item,dict) or not item.get('id') or not item.get('slug'):
+                  raise SystemExit('Invalid REST product entry')
+              acf=item.get('acf') or {}
+              value=acf.get('product_lang','vi')
+              if isinstance(value,dict): value=value.get('value','vi')
+              if value and value != 'vi': raise SystemExit('Non-Vietnamese product leaked into home_04')
+          dates=[str(x.get('date','')) for x in data]
+          if dates != sorted(dates,reverse=True):
+              raise SystemExit('Feed products are not ordered by newest date')
+          print('HOME04_FEED_SUCCESS',len(data),'products, newest first; source date:',dates[0])
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as s:
+              s.write('Home04 live WordPress API: '+str(len(data))+' published VI products, newest first.\n')
+          PY
